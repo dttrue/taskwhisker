@@ -88,11 +88,7 @@ export default function LoginPage() {
             </div>
           </form>
 
-          <p className="mt-4 text-xs text-center text-base-content/60">
-            Bridget: {`therainbowniche@gmail.com`}
-            <br />
-            Daniel: {`dttruest@gmail.com`}
-          </p>
+          
         </div>
       </div>
     </main>

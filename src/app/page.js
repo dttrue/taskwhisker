@@ -27,8 +27,12 @@ export default function Home() {
 
         {/* Buttons */}
         <div className="flex justify-center gap-3">
-          <button className="btn btn-primary btn-sm">Operator Login</button>
-          <button className="btn btn-ghost btn-sm">Sitter Access</button>
+          <a
+            href="/login"
+            className="btn btn-primary"
+          >
+            Login
+          </a>
         </div>
       </div>
     </div>
