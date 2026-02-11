@@ -14,6 +14,7 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "TaskWhisker",
   description: "Internal operations dashboard for pet-sitting",
+  
 };
 
 
