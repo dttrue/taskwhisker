@@ -34,11 +34,12 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-base-200">
+    <main className="min-h-screen flex items-center justify-center bg-base-200 px-4 py-8">
       <div className="card w-full max-w-md bg-base-100 shadow-xl">
         <div className="card-body">
           <h2 className="card-title justify-center mb-2">TaskWhisker Login</h2>
-          <p className="text-center text-sm text-base-content/70">
+
+          <p className="text-center text-sm text-base-content/70 mb-4">
             Internal access only. Phase 1 operators & sitters.
           </p>
 
@@ -87,8 +88,6 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
-
-          
         </div>
       </div>
     </main>
