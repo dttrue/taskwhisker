@@ -1,35 +1,24 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
-/* -----------------------------
-   Phase 1: Force Light Mode
-   Operator-first readability
--------------------------------- */
-
+/* Phase 1: Force Light Mode */
 :root {
   --background: #ffffff;
   --foreground: #171717;
-
-  /* Optional: subtle UI neutrals for later use */
-  --muted: #f5f5f5;
-  --border: #e5e7eb;
 }
 
-/* Explicitly tell browsers we are light-mode only */
 html {
   color-scheme: light;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  background: #ffffff;
+  color: #171717;
   font-family: Arial, Helvetica, sans-serif;
-
-  /* Prevent mobile font resizing / weird zoom behavior */
   -webkit-text-size-adjust: 100%;
 }
 
-/* Defensive: ensure inputs don't auto-darken on mobile */
+/* Prevent mobile auto-dark inputs */
 input,
 textarea,
 select,
