@@ -1,20 +1,142 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
+model Client {
+  id           String    @id @default(cuid())
+  name         String
+  phone        String?
+  email        String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  bookings     Booking[]
+
+  @@index([name])
+  @@index([email])
+  @@index([phone])
+}
+
+model Booking {
+  id                String            @id @default(cuid())
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  clientId          String
+  sitterId          String?
+  clientLinkToken   String            @unique @default(cuid())
+  notes             String?
+  startTime         DateTime
+  endTime           DateTime
+  status            BookingStatus     @default(REQUESTED)
+  clientTotalCents  Int
+  platformFeeCents  Int
+  sitterPayoutCents Int
+  priceConfirmedAt  DateTime?
+  canceledAt        DateTime?
+  completedAt       DateTime?
+  confirmedAt       DateTime?
+  serviceSummary    String?
+  client            Client            @relation(fields: [clientId], references: [id])
+  sitter            User?             @relation("BookingSitter", fields: [sitterId], references: [id])
+  history           BookingHistory[]
+  lineItems         BookingLineItem[]
+
+  @@index([startTime])
+  @@index([status, startTime])
+  @@index([clientId, startTime])
+  @@index([sitterId, startTime])
+}
+
+model BookingLineItem {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  bookingId       String
+  label           String
+  quantity        Int      @default(1)
+  unitPriceCents  Int
+  totalPriceCents Int
+  booking         Booking  @relation(fields: [bookingId], references: [id])
+}
+
+model BookingHistory {
+  id              String         @id @default(cuid())
+  createdAt       DateTime       @default(now())
+  bookingId       String
+  changedByUserId String?
+  fromStatus      BookingStatus?
+  toStatus        BookingStatus?
+  fromSitterId    String?
+  toSitterId      String?
+  note            String?
+  booking         Booking        @relation(fields: [bookingId], references: [id])
+  changedBy       User?          @relation("HistoryChangedBy", fields: [changedByUserId], references: [id])
+  fromSitter      User?          @relation("HistoryFromSitter", fields: [fromSitterId], references: [id])
+  toSitter        User?          @relation("HistoryToSitter", fields: [toSitterId], references: [id])
+
+  @@index([bookingId, createdAt])
+}
+
+model User {
+  id                 String           @id @default(cuid())
+  email              String           @unique
+  name               String?
+  role               Role
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  emailVerified      DateTime?
+  hashedPassword     String?
+  mustChangePassword Boolean          @default(false)
+  accounts           Account[]
+  sitterBookings     Booking[]        @relation("BookingSitter")
+  historyEntries     BookingHistory[] @relation("HistoryChangedBy")
+  historyFromSitter  BookingHistory[] @relation("HistoryFromSitter")
+  historyToSitter    BookingHistory[] @relation("HistoryToSitter")
+  sessions           Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
 
 enum Role {
   OPERATOR
@@ -26,151 +148,4 @@ enum BookingStatus {
   CONFIRMED
   COMPLETED
   CANCELED
-}
-
-model Client {
-  id    String  @id @default(cuid())
-  name  String
-  phone String?
-  email String?
-
-  addressLine1 String?
-  addressLine2 String?
-  city         String?
-  state        String?
-  postalCode   String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  bookings Booking[]
-}
-
-model Booking {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Client + sitter linkage
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id])
-
-  sitterId String?
-  sitter   User?   @relation("BookingSitter", fields: [sitterId], references: [id])
-
-  // Client-facing link token (no account required)
-  clientLinkToken String @unique @default(cuid())
-
-  serviceName String
-  notes       String?
-
-  // Single contiguous time window (multi-day allowed by start/end)
-  startTime DateTime
-  endTime   DateTime
-
-  // Explicit status
-  status BookingStatus
-
-  // Price lock & math (in cents)
-  clientTotalCents  Int
-  platformFeeCents  Int
-  sitterPayoutCents Int
-
-  // When client explicitly confirmed the price
-  priceConfirmedAt DateTime?
-
-  // Relations
-  lineItems BookingLineItem[]
-  history   BookingHistory[]
-}
-
-model BookingLineItem {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-
-  bookingId String
-  booking   Booking @relation(fields: [bookingId], references: [id])
-
-  label           String
-  quantity        Int    @default(1)
-  unitPriceCents  Int
-  totalPriceCents Int
-}
-
-model BookingHistory {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-
-  bookingId String
-  booking   Booking @relation(fields: [bookingId], references: [id])
-
-  changedByUserId String?
-  changedBy       User?   @relation("HistoryChangedBy", fields: [changedByUserId], references: [id])
-
-  fromStatus BookingStatus?
-  toStatus   BookingStatus?
-
-  fromSitterId String?
-  toSitterId   String?
-
-  // Free-text explanation ("Client asked to move dates", "Bridget reassigned to Jamie", etc.)
-  note String?
-}
-
-// --- Auth-enabled User ---
-model User {
-  id    String  @id @default(cuid())
-  email String  @unique
-  name  String?
-  role  Role
-
-  // Credentials auth
-  hashedPassword String?
-  emailVerified  DateTime?
-
-  // Auth.js relations
-  accounts Account[]
-  sessions Session[]
-
-  // Existing app relations
-  sitterBookings Booking[]        @relation("BookingSitter")
-  historyEntries BookingHistory[] @relation("HistoryChangedBy")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// --- Auth.js adapter tables (standard) ---
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expires      DateTime
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
 }
