@@ -18,11 +18,15 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-/* Prevent mobile auto-dark inputs */
+/* Prevent mobile auto-dark inputs (don’t touch buttons) */
 input,
 textarea,
-select,
-button {
+select {
   background-color: #ffffff;
   color: #171717;
+}
+
+button {
+  -webkit-appearance: none;
+  appearance: none;
 }

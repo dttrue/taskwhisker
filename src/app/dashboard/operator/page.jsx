@@ -2,6 +2,32 @@
 import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
 import CreateTestBookingButton from "./CreateTestBookingButton";
+import { confirmBooking, cancelBooking } from "./actions";
+import Link from "next/link";
+function formatMoney(cents) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(cents / 100);
+}
+
+function StatusBadge({ status }) {
+  const base =
+    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border";
+
+  const map = {
+    REQUESTED: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    CONFIRMED: "bg-green-50 text-green-700 border-green-200",
+    CANCELED: "bg-red-50 text-red-700 border-red-200",
+    COMPLETED: "bg-blue-50 text-blue-700 border-blue-200",
+  };
+
+  return (
+    <span className={`${base} ${map[status] || "bg-zinc-100 text-zinc-700"}`}>
+      {status}
+    </span>
+  );
+}
 
 export default async function OperatorDashboard() {
   const session = await requireRole(["OPERATOR"]);
@@ -58,25 +84,75 @@ export default async function OperatorDashboard() {
                     <th className="p-3">Sitter</th>
                     <th className="p-3">Status</th>
                     <th className="p-3">Total</th>
+                    <th className="p-3 text-right">Actions</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {bookings.map((b) => (
                     <tr key={b.id} className="border-b border-zinc-100">
                       <td className="p-3 whitespace-nowrap">
                         {new Date(b.startTime).toLocaleString()}
                       </td>
+
                       <td className="p-3">{b.client?.name || "—"}</td>
+
                       <td className="p-3">
                         {b.sitter?.name || b.sitter?.email || "Unassigned"}
                       </td>
+
                       <td className="p-3">
-                        <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs">
-                          {b.status}
-                        </span>
+                        <StatusBadge status={b.status} />
                       </td>
-                      <td className="p-3 whitespace-nowrap">
-                        ${(b.clientTotalCents / 100).toFixed(2)}
+
+                      <td className="p-3 whitespace-nowrap font-medium text-zinc-900">
+                        {formatMoney(b.clientTotalCents)}
+                      </td>
+
+                      <td className="p-3 text-right">
+                        {b.status === "REQUESTED" && (
+                          <div className="flex items-center gap-2">
+                            <form action={confirmBooking.bind(null, b.id)}>
+                              <button
+                                type="submit"
+                                className="text-xs font-semibold px-3 py-1.5 rounded-md bg-transparent
+               border border-green-600 text-green-600
+               hover:bg-green-600 hover:text-white transition-colors"
+                              >
+                                Confirm
+                              </button>
+                            </form>
+
+                            <form action={cancelBooking.bind(null, b.id)}>
+                              <button
+                                type="submit"
+                                className="text-xs font-semibold px-3 py-1.5 rounded-md bg-transparent
+               border border-red-600 text-red-600
+               hover:bg-red-600 hover:text-white transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </form>
+                          </div>
+                        )}
+
+                        {(b.status === "CONFIRMED" ||
+                          b.status === "CANCELED") && (
+                          <span className="text-xs text-zinc-400">—</span>
+                        )}
+                      </td>
+
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <a
+                            href={`/dashboard/operator/bookings/${b.id}`}
+                            className="text-xs underline text-zinc-600 hover:text-zinc-900"
+                          >
+                            View
+                          </a>
+
+                          {/* keep your confirm/cancel forms here too if you want */}
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -59,17 +59,17 @@ export const authConfig = {
 
   callbacks: {
     async jwt({ token, user }) {
-      // On login, copy role into token
+      // On login, persist Prisma User.id into the token
       if (user) {
+        token.sub = user.id; // ✅ critical fix
         token.role = user.role;
       }
       return token;
     },
 
     async session({ session, token }) {
-      // Expose id + role to the client
-      if (session.user && token) {
-        session.user.id = token.sub;
+      if (session.user) {
+        session.user.id = token.sub; // ✅ now guaranteed to be Prisma user.id
         session.user.role = token.role;
       }
       return session;

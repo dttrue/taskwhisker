@@ -6,9 +6,8 @@ import { requireRole } from "@/auth";
 import { revalidatePath } from "next/cache";
 
 export async function createTestBooking() {
-  await requireRole(["OPERATOR"]);
+  const session = await requireRole(["OPERATOR"]);
 
-  // Ensure a client exists
   let client = await prisma.client.findFirst({ orderBy: { createdAt: "asc" } });
   if (!client) {
     client = await prisma.client.create({
@@ -22,13 +21,11 @@ export async function createTestBooking() {
     });
   }
 
-  // Optional sitter assignment (first sitter)
   const sitter = await prisma.user.findFirst({
     where: { role: "SITTER" },
     orderBy: { createdAt: "asc" },
   });
 
-  // Tomorrow 10:00–12:00
   const start = new Date();
   start.setDate(start.getDate() + 1);
   start.setHours(10, 0, 0, 0);
@@ -39,25 +36,19 @@ export async function createTestBooking() {
   const clientTotalCents = 8500;
   const platformFeeCents = 850;
   const sitterPayoutCents = clientTotalCents - platformFeeCents;
-
+ 
   await prisma.booking.create({
     data: {
       clientId: client.id,
       sitterId: sitter?.id ?? null,
-
       serviceSummary: "Drop-in visits (test)",
       notes: "Auto-created test booking",
-
       startTime: start,
       endTime: end,
-
-      // status has default REQUESTED in schema, but explicit is fine too:
       status: "REQUESTED",
-
       clientTotalCents,
       platformFeeCents,
       sitterPayoutCents,
-
       lineItems: {
         create: [
           {
@@ -74,19 +65,76 @@ export async function createTestBooking() {
           },
         ],
       },
-
       history: {
         create: {
           fromStatus: null,
           toStatus: "REQUESTED",
           note: "Test booking created",
-          // If you want this to be the operator instead of the sitter:
-          // changedByUserId: session.user.id
-          changedByUserId: sitter?.id ?? null,
+          changedByUserId: session.user.id,
         },
       },
     },
   });
 
   revalidatePath("/dashboard/operator");
+}
+
+export async function confirmBooking(bookingId) {
+  const session = await requireRole(["OPERATOR"]);
+
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking) throw new Error("Booking not found");
+
+  if (booking.status !== "REQUESTED") {
+    throw new Error(`Cannot confirm booking from status ${booking.status}`);
+  }
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      status: "CONFIRMED",
+      confirmedAt: new Date(),
+      history: {
+        create: {
+          fromStatus: booking.status,
+          toStatus: "CONFIRMED",
+          note: "Operator confirmed booking",
+          changedByUserId: session.user.id,
+        },
+      },
+    },
+  });
+
+  revalidatePath("/dashboard/operator");
+  revalidatePath(`/dashboard/operator/bookings/${bookingId}`);
+}
+
+export async function cancelBooking(bookingId) {
+  const session = await requireRole(["OPERATOR"]);
+
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking) throw new Error("Booking not found");
+
+  if (["CANCELED", "COMPLETED"].includes(booking.status)) {
+    throw new Error(`Cannot cancel booking from status ${booking.status}`);
+  }
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      status: "CANCELED",
+      canceledAt: new Date(),
+      history: {
+        create: {
+          fromStatus: booking.status,
+          toStatus: "CANCELED",
+          note: "Operator canceled booking",
+          changedByUserId: session.user.id,
+        },
+      },
+    },
+  });
+
+  revalidatePath("/dashboard/operator");
+  revalidatePath(`/dashboard/operator/bookings/${bookingId}`);
 }
