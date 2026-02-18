@@ -48,6 +48,13 @@ export default async function OperatorDashboard({ searchParams }) {
     return qs ? `/dashboard/operator?${qs}` : "/dashboard/operator";
   };
 
+  const u = new URLSearchParams();
+  if (status !== "ALL") u.set("status", status);
+  if (fromStr) u.set("from", fromStr);
+  if (toStr) u.set("to", toStr);
+  const listQs = u.toString();
+
+
   return (
     <main className="min-h-screen bg-zinc-50 p-6">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -89,6 +96,7 @@ export default async function OperatorDashboard({ searchParams }) {
             confirmBooking={confirmBooking}
             cancelBooking={cancelBooking}
             completeBooking={completeBooking}
+            listQs={listQs}
           />
         </section>
       </div>

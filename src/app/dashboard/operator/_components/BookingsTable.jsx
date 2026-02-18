@@ -24,6 +24,7 @@ export default function BookingsTable({
   confirmBooking,
   cancelBooking,
   completeBooking,
+  listQs = "",
 }) {
   if (!bookings?.length) {
     return <div className="p-6 text-sm text-zinc-600">No bookings found.</div>;
@@ -113,7 +114,11 @@ export default function BookingsTable({
                     </form>
 
                     <a
-                      href={`/dashboard/operator/bookings/${b.id}`}
+                      href={
+                        listQs
+                          ? `/dashboard/operator/bookings/${b.id}?${listQs}`
+                          : `/dashboard/operator/bookings/${b.id}`
+                      }
                       className="text-xs underline text-zinc-600 hover:text-zinc-900 ml-2"
                     >
                       View
