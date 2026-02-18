@@ -2,15 +2,28 @@
 import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import { confirmBooking, cancelBooking } from "../../actions";
+import { notFound } from "next/navigation";
+import {
+  confirmBooking,
+  cancelBooking,
+  completeBooking,
+  assignSitter,
+} from "../actions";
 
-export default async function OperatorBookingDetailPage({ params }) {
+export default async function OperatorBookingDetailPage({
+  params,
+  searchParams,
+}) {
   await requireRole(["OPERATOR"]);
 
-  // ✅ Works whether params is an object or a Promise
+  // ✅ unwrap (your Next build is passing Promises here)
   const { id } = await Promise.resolve(params);
+  const sp = await Promise.resolve(searchParams);
 
   if (!id) notFound();
+
+  const qs = new URLSearchParams(sp || {}).toString();
+  const backHref = qs ? `/dashboard/operator?${qs}` : "/dashboard/operator";
 
   const booking = await prisma.booking.findUnique({
     where: { id },
@@ -20,7 +33,8 @@ export default async function OperatorBookingDetailPage({ params }) {
       lineItems: true,
       history: {
         orderBy: { createdAt: "desc" },
-        include: { changedBy: true },      },
+        include: { changedBy: true, fromSitter: true, toSitter: true },
+      },
     },
   });
 
@@ -29,34 +43,63 @@ export default async function OperatorBookingDetailPage({ params }) {
       <main className="min-h-screen bg-zinc-50 p-6">
         <div className="max-w-4xl mx-auto">
           <p className="text-sm text-zinc-600">Booking not found.</p>
-          <Link className="text-sm underline" href="/dashboard/operator">
-            Back
+          <Link className="text-sm underline" href={backHref}>
+            Back to list
           </Link>
         </div>
       </main>
     );
   }
+  const sitters = await prisma.user.findMany({
+    where: { role: "SITTER" },
+    select: { id: true, name: true, email: true },
+    orderBy: { createdAt: "asc" },
+  });
+
   const canConfirm = booking.status === "REQUESTED";
   const canCancel = !["CANCELED", "COMPLETED"].includes(booking.status);
+  const canComplete = booking.status === "CONFIRMED";
 
   return (
     <main className="min-h-screen bg-zinc-50 p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         <header className="flex items-center justify-between">
-          <div className="space-y-1">
+          <div className="space-y-2">
             <div className="text-xs uppercase tracking-wide text-zinc-500">
               Operator · Booking
             </div>
+
             <h1 className="text-2xl font-semibold text-zinc-900">
-              {booking.client?.name || "Client"} ·{" "}
-              {new Date(booking.startTime).toLocaleString()}
+              {booking.client?.name || "Client"}
             </h1>
-            <p className="text-sm text-zinc-600">
-              Status:{" "}
-              <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs">
+
+            {/* Meta row */}
+            <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+              <span>ID: {booking.id.slice(0, 8)}</span>
+              <span>
+                {new Date(booking.startTime).toLocaleString()} →{" "}
+                {new Date(booking.endTime).toLocaleString()}
+              </span>
+              <span>Total: ${(booking.clientTotalCents / 100).toFixed(2)}</span>
+            </div>
+
+            {/* Status badge */}
+            <div className="flex items-center gap-3 pt-1">
+              <span className="text-sm text-zinc-500">Status</span>
+              <span
+                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                  {
+                    REQUESTED: "bg-yellow-50 text-yellow-700 border-yellow-200",
+                    CONFIRMED: "bg-blue-50 text-blue-700 border-blue-200",
+                    COMPLETED: "bg-green-50 text-green-700 border-green-200",
+                    CANCELED: "bg-red-50 text-red-700 border-red-200",
+                  }[booking.status] ||
+                  "bg-zinc-100 text-zinc-700 border-zinc-200"
+                }`}
+              >
                 {booking.status}
               </span>
-            </p>
+            </div>
           </div>
 
           <Link className="text-sm underline" href="/dashboard/operator">
@@ -81,6 +124,21 @@ export default async function OperatorBookingDetailPage({ params }) {
                     }`}
                 >
                   Confirm
+                </button>
+              </form>
+
+              <form action={completeBooking.bind(null, booking.id)}>
+                <button
+                  type="submit"
+                  disabled={!canComplete}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition
+      ${
+        canComplete
+          ? "border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
+          : "border border-zinc-200 text-zinc-400 cursor-not-allowed"
+      }`}
+                >
+                  Complete
                 </button>
               </form>
 
@@ -115,11 +173,40 @@ export default async function OperatorBookingDetailPage({ params }) {
 
               <div>
                 <div className="text-xs text-zinc-500">Sitter</div>
+
                 <div className="text-zinc-900">
                   {booking.sitter?.name ||
                     booking.sitter?.email ||
                     "Unassigned"}
                 </div>
+
+                <form
+                  action={assignSitter}
+                  className="mt-2 flex items-center gap-2"
+                >
+                  <input type="hidden" name="bookingId" value={booking.id} />
+
+                  <select
+                    name="sitterId"
+                    defaultValue={booking.sitterId || ""}
+                    className="text-xs rounded-md border border-zinc-200 bg-white px-2 py-1.5"
+                  >
+                    <option value="">Unassigned</option>
+                    {sitters.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name || s.email}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="submit"
+                    disabled={booking.status === "COMPLETED"}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-md border border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Save
+                  </button>
+                </form>
               </div>
 
               <div>
@@ -199,8 +286,30 @@ export default async function OperatorBookingDetailPage({ params }) {
               {booking.history.map((h) => (
                 <div key={h.id} className="text-sm">
                   <div className="text-zinc-900">
-                    <span className="font-medium">{h.fromStatus || "—"}</span> →{" "}
-                    <span className="font-medium">{h.toStatus}</span>
+                    {h.toStatus ? (
+                      <>
+                        <span className="font-medium">
+                          {h.fromStatus || "—"}
+                        </span>{" "}
+                        → <span className="font-medium">{h.toStatus}</span>
+                      </>
+                    ) : h.fromSitterId || h.toSitterId ? (
+                      <>
+                        <span className="font-medium">
+                          {h.fromSitter?.name || h.fromSitter?.email || "—"}
+                        </span>{" "}
+                        →{" "}
+                        <span className="font-medium">
+                          {h.toSitter?.name ||
+                            h.toSitter?.email ||
+                            "Unassigned"}
+                        </span>
+                        <span className="text-zinc-500"> · sitter</span>
+                      </>
+                    ) : (
+                      <span className="text-zinc-500">Unknown change</span>
+                    )}
+
                     {h.changedBy?.email ? (
                       <span className="text-zinc-500">
                         {" "}
