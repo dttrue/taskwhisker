@@ -1,4 +1,7 @@
 // src/app/dashboard/operator/_components/BookingsTable.jsx
+"use client";
+
+import { useActionState } from "react";
 import { formatMoney } from "../lib/format";
 
 function StatusBadge({ status }) {
@@ -16,6 +19,55 @@ function StatusBadge({ status }) {
     <span className={`${base} ${map[status] || "bg-zinc-100 text-zinc-700"}`}>
       {status}
     </span>
+  );
+}
+
+function CancelBookingForm({ bookingId, canCancel, cancelBooking }) {
+  const [state, formAction] = useActionState(cancelBooking, null);
+
+
+  return (
+    <div className="flex flex-col items-end">
+      <form action={formAction} className="flex items-center">
+        <input type="hidden" name="bookingId" value={bookingId} />
+
+        <select
+          name="cancelReason"
+          defaultValue=""
+          className="text-[11px] rounded-md border border-zinc-200 bg-white px-2 py-1 mr-2"
+          disabled={!canCancel}
+        >
+          <option value="">Reason…</option>
+          <option value="Client requested">Client requested</option>
+          <option value="No availability">No availability</option>
+          <option value="Weather">Weather</option>
+          <option value="OTHER">Other</option>
+        </select>
+
+        <input
+          name="cancelReasonOther"
+          placeholder="Other…"
+          className="text-[11px] rounded-md border border-zinc-200 bg-white px-2 py-1 mr-2 w-28 hidden sm:inline-block"
+          disabled={!canCancel}
+        />
+
+        <button
+          type="submit"
+          disabled={!canCancel}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-md transition ${
+            canCancel
+              ? "border border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
+              : "border border-zinc-200 text-zinc-400 cursor-not-allowed"
+          }`}
+        >
+          Cancel
+        </button>
+      </form>
+
+      {state?.error ? (
+        <div className="text-xs text-red-600 mt-1">{state.error}</div>
+      ) : null}
+    </div>
   );
 }
 
@@ -67,7 +119,7 @@ export default function BookingsTable({
                 </td>
 
                 <td className="p-3">
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-start justify-end gap-2">
                     <form action={confirmBooking}>
                       <input type="hidden" name="bookingId" value={b.id} />
                       <button
@@ -98,20 +150,11 @@ export default function BookingsTable({
                       </button>
                     </form>
 
-                    <form action={cancelBooking}>
-                      <input type="hidden" name="bookingId" value={b.id} />
-                      <button
-                        type="submit"
-                        disabled={!canCancel}
-                        className={`text-xs font-semibold px-3 py-1.5 rounded-md transition ${
-                          canCancel
-                            ? "border border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
-                            : "border border-zinc-200 text-zinc-400 cursor-not-allowed"
-                        }`}
-                      >
-                        Cancel
-                      </button>
-                    </form>
+                    <CancelBookingForm
+                      bookingId={b.id}
+                      canCancel={canCancel}
+                      cancelBooking={cancelBooking}
+                    />
 
                     <a
                       href={
@@ -119,7 +162,7 @@ export default function BookingsTable({
                           ? `/dashboard/operator/bookings/${b.id}?${listQs}`
                           : `/dashboard/operator/bookings/${b.id}`
                       }
-                      className="text-xs underline text-zinc-600 hover:text-zinc-900 ml-2"
+                      className="text-xs underline text-zinc-600 hover:text-zinc-900 ml-2 pt-2"
                     >
                       View
                     </a>

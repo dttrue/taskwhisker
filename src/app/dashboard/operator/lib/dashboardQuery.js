@@ -44,8 +44,16 @@ function safeSearchParams(searchParams) {
 
 export function resolveStatus(searchParams) {
   const sp = safeSearchParams(searchParams);
-  const raw = (sp.status || "ALL").toString().toUpperCase();
-  return ALLOWED.has(raw) ? raw : "ALL";
+
+  const raw =
+    typeof sp.status === "string"
+      ? sp.status
+      : Array.isArray(sp.status)
+      ? sp.status[0]
+      : "ALL";
+
+  const val = (raw || "ALL").toString().trim().toUpperCase();
+  return ALLOWED.has(val) ? val : "ALL";
 }
 
 /**

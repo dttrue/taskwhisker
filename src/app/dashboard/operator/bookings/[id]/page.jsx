@@ -102,7 +102,7 @@ export default async function OperatorBookingDetailPage({
             </div>
           </div>
 
-          <Link className="text-sm underline" href="/dashboard/operator">
+          <Link className="text-sm underline" href={backHref}>
             Back to list
           </Link>
         </header>

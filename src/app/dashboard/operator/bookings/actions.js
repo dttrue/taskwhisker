@@ -92,6 +92,20 @@ export async function cancelBooking(arg1, arg2) {
   const bookingId = resolveBookingId(arg1, arg2);
   if (!bookingId) return;
 
+  // --- extract cancel reason from FormData if present ---
+  const fd =
+    arg1 instanceof FormData ? arg1 : arg2 instanceof FormData ? arg2 : null;
+
+  let reason = "";
+
+  if (fd) {
+    const preset = (fd.get("cancelReason") || "").toString().trim();
+    const other = (fd.get("cancelReasonOther") || "").toString().trim();
+
+    const raw = preset === "OTHER" ? other : preset;
+    reason = raw.slice(0, 140); // safety cap
+  }
+
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     select: { id: true, status: true },
@@ -99,6 +113,15 @@ export async function cancelBooking(arg1, arg2) {
   if (!booking) return;
 
   if (booking.status === "CANCELED" || booking.status === "COMPLETED") return;
+
+  // If booking was already confirmed, require reason
+  if (booking.status === "CONFIRMED" && !reason) {
+    return {
+      error: "Cancel reason required for confirmed bookings.",
+    };
+  }
+
+
 
   await prisma.$transaction([
     prisma.booking.update({
@@ -110,7 +133,9 @@ export async function cancelBooking(arg1, arg2) {
         bookingId,
         fromStatus: booking.status,
         toStatus: "CANCELED",
-        note: "Operator canceled booking",
+        note: reason
+          ? `Operator canceled booking · ${reason}`
+          : "Operator canceled booking",
         changedByUserId: actorId,
       },
     }),
@@ -118,6 +143,7 @@ export async function cancelBooking(arg1, arg2) {
 
   revalidateOperator(bookingId);
 }
+
 
 export async function completeBooking(arg1, arg2) {
   const session = await requireRole(["OPERATOR"]);
@@ -205,3 +231,5 @@ export async function assignSitter(arg1, arg2) {
 
   revalidateOperator(bookingId);
 }
+
+

@@ -27,7 +27,9 @@ export default async function OperatorDashboard({ searchParams }) {
   // normalize: object OR Promise
   const sp = await Promise.resolve(searchParams);
 
-  const { from, to, hasRange } = resolveDateRange(sp);
+  const { from, to, isDefault } = resolveDateRange(sp);
+  const hasRange = !isDefault; // or: Boolean(sp.from || sp.to)
+
   const status = resolveStatus(sp);
 
   const { bookings, metrics } = await getOperatorDashboardData({
@@ -53,7 +55,6 @@ export default async function OperatorDashboard({ searchParams }) {
   if (fromStr) u.set("from", fromStr);
   if (toStr) u.set("to", toStr);
   const listQs = u.toString();
-
 
   return (
     <main className="min-h-screen bg-zinc-50 p-6">
