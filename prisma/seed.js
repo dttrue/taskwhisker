@@ -205,24 +205,21 @@ async function main() {
     },
   });
 
-  // ---- CLIENTS ----
-  const sarah = await upsertClient({
-    name: "Sarah Johnson",
-    email: "sarah@example.com",
-    phone: "555-111-2222",
-    city: "Princeton",
-    state: "NJ",
+  // ---- CLEANUP (so re-seeding doesn't duplicate your test set) ----
+  // Only deletes bookings that match this seed's "signature"
+  await prisma.bookingHistory.deleteMany({
+    where: { note: { startsWith: "Seeded cancel-test" } },
   });
 
-  const mike = await upsertClient({
-    name: "Mike Davis",
-    email: "mike@example.com",
-    phone: "555-333-4444",
-    city: "New Brunswick",
-    state: "NJ",
+  await prisma.bookingLineItem.deleteMany({
+    where: { booking: { notes: { startsWith: "Seeded cancel-test" } } },
   });
 
-  // ---- BOOKINGS ----
+  await prisma.booking.deleteMany({
+    where: { notes: { startsWith: "Seeded cancel-test" } },
+  });
+
+  // ---- COMMON LINE ITEMS ----
   const commonLineItems = [
     {
       label: "Visit",
@@ -238,44 +235,71 @@ async function main() {
     },
   ];
 
-  await createSeedBooking({
-    clientId: sarah.id,
-    sitterId: daniel.id,
-    status: BookingStatus.REQUESTED,
-    startTime: dayAt(1, 10),
-    endTime: dayAt(1, 12),
-    operatorId: bridget.id,
-    serviceSummary: "Drop-in visits (seeded)",
-    notes: "Seeded booking for testing",
-    lineItems: commonLineItems,
-  });
+  // ---- 6 CANCEL-TEST BOOKINGS (all CONFIRMED) ----
+  const cancelTestClients = [
+    {
+      name: "Sarah Johnson",
+      email: "sarah@example.com",
+      phone: "555-111-2222",
+      city: "Princeton",
+      state: "NJ",
+    },
+    {
+      name: "Mike Davis",
+      email: "mike@example.com",
+      phone: "555-333-4444",
+      city: "New Brunswick",
+      state: "NJ",
+    },
+    {
+      name: "Ava Martinez",
+      email: "ava@example.com",
+      phone: "555-555-1111",
+      city: "Jersey City",
+      state: "NJ",
+    },
+    {
+      name: "Noah Kim",
+      email: "noah@example.com",
+      phone: "555-555-2222",
+      city: "Hoboken",
+      state: "NJ",
+    },
+    {
+      name: "Emma Chen",
+      email: "emma@example.com",
+      phone: "555-555-3333",
+      city: "Brooklyn",
+      state: "NY",
+    },
+    {
+      name: "Liam Patel",
+      email: "liam@example.com",
+      phone: "555-555-4444",
+      city: "Manhattan",
+      state: "NY",
+    },
+  ];
 
-  await createSeedBooking({
-    clientId: sarah.id,
-    sitterId: daniel.id,
-    status: BookingStatus.CONFIRMED,
-    startTime: dayAt(2, 10),
-    endTime: dayAt(2, 12),
-    operatorId: bridget.id,
-    serviceSummary: "Drop-in visits (seeded)",
-    notes: "Seeded confirmed booking for testing",
-    lineItems: commonLineItems,
-  });
+  for (let i = 0; i < cancelTestClients.length; i++) {
+    const client = await upsertClient(cancelTestClients[i]);
 
-  await createSeedBooking({
-    clientId: mike.id,
-    sitterId: daniel.id,
-    status: BookingStatus.CANCELED,
-    startTime: dayAt(4, 10),
-    endTime: dayAt(4, 12),
-    operatorId: bridget.id,
-    serviceSummary: "Drop-in visits (seeded)",
-    notes: "Seeded canceled booking for testing",
-    lineItems: commonLineItems,
-  });
+    await createSeedBooking({
+      clientId: client.id,
+      sitterId: daniel.id,
+      status: BookingStatus.CONFIRMED, // ✅ best for cancel-reason testing
+      startTime: dayAt(i + 1, 10),
+      endTime: dayAt(i + 1, 12),
+      operatorId: bridget.id,
+      serviceSummary: "Drop-in visits (cancel test)",
+      notes: `Seeded cancel-test booking #${i + 1}`,
+      lineItems: commonLineItems,
+    });
+  }
 
-  console.log("Seed complete.");
+  console.log("Seed complete (6 CONFIRMED cancel-test bookings).");
 }
+
 
 main()
   .catch((e) => {

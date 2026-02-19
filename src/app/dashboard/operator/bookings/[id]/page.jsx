@@ -9,14 +9,14 @@ import {
   completeBooking,
   assignSitter,
 } from "../actions";
-
+import CancelBookingDetailForm from "@/app/dashboard/operator/_components/CancelBookingDetailForm";
 export default async function OperatorBookingDetailPage({
   params,
   searchParams,
 }) {
   await requireRole(["OPERATOR"]);
 
-  // ✅ unwrap (your Next build is passing Promises here)
+  // Next is passing Promises here, so unwrap
   const { id } = await Promise.resolve(params);
   const sp = await Promise.resolve(searchParams);
 
@@ -50,6 +50,7 @@ export default async function OperatorBookingDetailPage({
       </main>
     );
   }
+
   const sitters = await prisma.user.findMany({
     where: { role: "SITTER" },
     select: { id: true, name: true, email: true },
@@ -63,6 +64,7 @@ export default async function OperatorBookingDetailPage({
   return (
     <main className="min-h-screen bg-zinc-50 p-6">
       <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
         <header className="flex items-center justify-between">
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-wide text-zinc-500">
@@ -107,58 +109,52 @@ export default async function OperatorBookingDetailPage({
           </Link>
         </header>
 
+        {/* Details + actions */}
         <section className="rounded-xl border border-zinc-200 bg-white shadow-sm">
           <div className="p-4 border-b border-zinc-200 flex items-center justify-between">
             <h2 className="font-semibold text-zinc-900">Details</h2>
 
             <div className="flex items-center gap-2">
+              {/* Confirm */}
               <form action={confirmBooking.bind(null, booking.id)}>
                 <button
                   type="submit"
                   disabled={!canConfirm}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition
-                    ${
-                      canConfirm
-                        ? "border border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
-                        : "border border-zinc-200 text-zinc-400 cursor-not-allowed"
-                    }`}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition ${
+                    canConfirm
+                      ? "border border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
+                      : "border border-zinc-200 text-zinc-400 cursor-not-allowed"
+                  }`}
                 >
                   Confirm
                 </button>
               </form>
 
+              {/* Complete */}
               <form action={completeBooking.bind(null, booking.id)}>
                 <button
                   type="submit"
                   disabled={!canComplete}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition
-      ${
-        canComplete
-          ? "border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
-          : "border border-zinc-200 text-zinc-400 cursor-not-allowed"
-      }`}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition ${
+                    canComplete
+                      ? "border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
+                      : "border border-zinc-200 text-zinc-400 cursor-not-allowed"
+                  }`}
                 >
                   Complete
                 </button>
               </form>
 
-              <form action={cancelBooking.bind(null, booking.id)}>
-                <button
-                  type="submit"
-                  disabled={!canCancel}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition
-                    ${
-                      canCancel
-                        ? "border border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
-                        : "border border-zinc-200 text-zinc-400 cursor-not-allowed"
-                    }`}
-                >
-                  Cancel
-                </button>
-              </form>
+              {/* Cancel – same UX rules as list view */}
+              <CancelBookingDetailForm
+                bookingId={booking.id}
+                canCancel={canCancel}
+                cancelBooking={cancelBooking}
+              />
             </div>
           </div>
 
+          {/* Details grid */}
           <div className="p-4 grid gap-4 text-sm">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -173,7 +169,6 @@ export default async function OperatorBookingDetailPage({
 
               <div>
                 <div className="text-xs text-zinc-500">Sitter</div>
-
                 <div className="text-zinc-900">
                   {booking.sitter?.name ||
                     booking.sitter?.email ||
@@ -237,6 +232,7 @@ export default async function OperatorBookingDetailPage({
           </div>
         </section>
 
+        {/* Line items */}
         <section className="rounded-xl border border-zinc-200 bg-white shadow-sm">
           <div className="p-4 border-b border-zinc-200">
             <h2 className="font-semibold text-zinc-900">Line items</h2>
@@ -274,6 +270,7 @@ export default async function OperatorBookingDetailPage({
           )}
         </section>
 
+        {/* History */}
         <section className="rounded-xl border border-zinc-200 bg-white shadow-sm">
           <div className="p-4 border-b border-zinc-200">
             <h2 className="font-semibold text-zinc-900">History</h2>
