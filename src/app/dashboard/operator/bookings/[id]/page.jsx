@@ -3,20 +3,51 @@ import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  confirmBooking,
-  cancelBooking,
-  completeBooking,
-  assignSitter,
-} from "../actions";
+import { cancelBooking } from "../actions";
+
 import CancelBookingDetailForm from "@/app/dashboard/operator/_components/CancelBookingDetailForm";
+import {
+  ConfirmBookingForm,
+  CompleteBookingForm,
+} from "@/app/dashboard/operator/_components/BookingStatusActions";
+import AssignSitterForm from "@/app/dashboard/operator/_components/AssignSitterForm";
+
+// Shared status display helpers – keep in sync with BookingsTable / MetricsBar
+const STATUS_LABELS = {
+  ALL: "All",
+  REQUESTED: "Requested",
+  CONFIRMED: "Confirmed",
+  COMPLETED: "Completed",
+  CANCELED: "Canceled",
+};
+
+const STATUS_DOT_CLASSES = {
+  REQUESTED: "bg-yellow-500",
+  CONFIRMED: "bg-green-600",
+  COMPLETED: "bg-blue-600",
+  CANCELED: "bg-red-600",
+};
+
+const STATUS_PILL_CLASSES = {
+  REQUESTED: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  CONFIRMED: "bg-green-50 text-green-700 border-green-200",
+  COMPLETED: "bg-blue-50 text-blue-700 border-blue-200",
+  CANCELED: "bg-red-50 text-red-700 border-red-200",
+};
+
+const STATUS_CARD_BORDER_CLASSES = {
+  REQUESTED: "border-l-[6px] border-l-yellow-400",
+  CONFIRMED: "border-l-[6px] border-l-green-500",
+  COMPLETED: "border-l-[6px] border-l-blue-500",
+  CANCELED: "border-l-[6px] border-l-red-500",
+};
+
 export default async function OperatorBookingDetailPage({
   params,
   searchParams,
 }) {
   await requireRole(["OPERATOR"]);
 
-  // Next is passing Promises here, so unwrap
   const { id } = await Promise.resolve(params);
   const sp = await Promise.resolve(searchParams);
 
@@ -62,10 +93,10 @@ export default async function OperatorBookingDetailPage({
   const canComplete = booking.status === "CONFIRMED";
 
   return (
-    <main className="min-h-screen bg-zinc-50 p-6">
+    <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <header className="flex items-center justify-between">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-wide text-zinc-500">
               Operator · Booking
@@ -75,8 +106,7 @@ export default async function OperatorBookingDetailPage({
               {booking.client?.name || "Client"}
             </h1>
 
-            {/* Meta row */}
-            <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
               <span>ID: {booking.id.slice(0, 8)}</span>
               <span>
                 {new Date(booking.startTime).toLocaleString()} →{" "}
@@ -85,67 +115,54 @@ export default async function OperatorBookingDetailPage({
               <span>Total: ${(booking.clientTotalCents / 100).toFixed(2)}</span>
             </div>
 
-            {/* Status badge */}
-            <div className="flex items-center gap-3 pt-1">
-              <span className="text-sm text-zinc-500">Status</span>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-xs text-zinc-500">Status</span>
               <span
-                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
-                  {
-                    REQUESTED: "bg-yellow-50 text-yellow-700 border-yellow-200",
-                    CONFIRMED: "bg-blue-50 text-blue-700 border-blue-200",
-                    COMPLETED: "bg-green-50 text-green-700 border-green-200",
-                    CANCELED: "bg-red-50 text-red-700 border-red-200",
-                  }[booking.status] ||
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
+                  STATUS_PILL_CLASSES[booking.status] ||
                   "bg-zinc-100 text-zinc-700 border-zinc-200"
                 }`}
               >
-                {booking.status}
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    STATUS_DOT_CLASSES[booking.status] || "bg-zinc-400"
+                  }`}
+                />
+                <span>{STATUS_LABELS[booking.status] || booking.status}</span>
               </span>
             </div>
           </div>
 
-          <Link className="text-sm underline" href={backHref}>
-            Back to list
-          </Link>
+          <div className="flex items-start justify-end">
+            <Link
+              className="text-xs sm:text-sm underline text-zinc-600 hover:text-zinc-900"
+              href={backHref}
+            >
+              Back to list
+            </Link>
+          </div>
         </header>
 
         {/* Details + actions */}
-        <section className="rounded-xl border border-zinc-200 bg-white shadow-sm">
-          <div className="p-4 border-b border-zinc-200 flex items-center justify-between">
+        <section
+          className={`rounded-xl border bg-white shadow-sm ${
+            STATUS_CARD_BORDER_CLASSES[booking.status] || "border-zinc-200"
+          }`}
+        >
+          <div className="p-4 border-b border-zinc-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-semibold text-zinc-900">Details</h2>
 
-            <div className="flex items-center gap-2">
-              {/* Confirm */}
-              <form action={confirmBooking.bind(null, booking.id)}>
-                <button
-                  type="submit"
-                  disabled={!canConfirm}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition ${
-                    canConfirm
-                      ? "border border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
-                      : "border border-zinc-200 text-zinc-400 cursor-not-allowed"
-                  }`}
-                >
-                  Confirm
-                </button>
-              </form>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <ConfirmBookingForm
+                bookingId={booking.id}
+                canConfirm={canConfirm}
+              />
 
-              {/* Complete */}
-              <form action={completeBooking.bind(null, booking.id)}>
-                <button
-                  type="submit"
-                  disabled={!canComplete}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition ${
-                    canComplete
-                      ? "border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
-                      : "border border-zinc-200 text-zinc-400 cursor-not-allowed"
-                  }`}
-                >
-                  Complete
-                </button>
-              </form>
+              <CompleteBookingForm
+                bookingId={booking.id}
+                canComplete={canComplete}
+              />
 
-              {/* Cancel – same UX rules as list view */}
               <CancelBookingDetailForm
                 bookingId={booking.id}
                 canCancel={canCancel}
@@ -154,7 +171,6 @@ export default async function OperatorBookingDetailPage({
             </div>
           </div>
 
-          {/* Details grid */}
           <div className="p-4 grid gap-4 text-sm">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -175,33 +191,12 @@ export default async function OperatorBookingDetailPage({
                     "Unassigned"}
                 </div>
 
-                <form
-                  action={assignSitter}
-                  className="mt-2 flex items-center gap-2"
-                >
-                  <input type="hidden" name="bookingId" value={booking.id} />
-
-                  <select
-                    name="sitterId"
-                    defaultValue={booking.sitterId || ""}
-                    className="text-xs rounded-md border border-zinc-200 bg-white px-2 py-1.5"
-                  >
-                    <option value="">Unassigned</option>
-                    {sitters.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name || s.email}
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="submit"
-                    disabled={booking.status === "COMPLETED"}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-md border border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Save
-                  </button>
-                </form>
+                <AssignSitterForm
+                  bookingId={booking.id}
+                  currentSitterId={booking.sitterId}
+                  sitters={sitters}
+                  bookingStatus={booking.status}
+                />
               </div>
 
               <div>
@@ -223,12 +218,12 @@ export default async function OperatorBookingDetailPage({
               </div>
             </div>
 
-            {booking.notes ? (
+            {booking.notes && (
               <div>
                 <div className="text-xs text-zinc-500">Notes</div>
                 <div className="text-zinc-900">{booking.notes}</div>
               </div>
-            ) : null}
+            )}
           </div>
         </section>
 
@@ -241,7 +236,7 @@ export default async function OperatorBookingDetailPage({
           {booking.lineItems.length === 0 ? (
             <div className="p-4 text-sm text-zinc-600">No line items.</div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="hidden sm:block overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="text-left text-zinc-500">
                   <tr className="border-b border-zinc-200">
@@ -266,6 +261,32 @@ export default async function OperatorBookingDetailPage({
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Mobile-friendly line items */}
+          {booking.lineItems.length > 0 && (
+            <div className="sm:hidden p-4 space-y-3">
+              {booking.lineItems.map((li) => (
+                <div
+                  key={li.id}
+                  className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium text-zinc-900">{li.label}</div>
+                    <div className="text-xs text-zinc-500">
+                      Qty: {li.quantity}
+                    </div>
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    Unit: ${(li.unitPriceCents / 100).toFixed(2)}
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">Total</div>
+                  <div className="text-sm font-semibold text-zinc-900">
+                    ${(li.totalPriceCents / 100).toFixed(2)}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>
@@ -307,12 +328,12 @@ export default async function OperatorBookingDetailPage({
                       <span className="text-zinc-500">Unknown change</span>
                     )}
 
-                    {h.changedBy?.email ? (
+                    {h.changedBy?.email && (
                       <span className="text-zinc-500">
                         {" "}
                         · by {h.changedBy.email}
                       </span>
-                    ) : null}
+                    )}
                   </div>
 
                   <div className="text-xs text-zinc-500">

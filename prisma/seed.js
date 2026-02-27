@@ -95,75 +95,14 @@ async function createSeedBooking({
 
       // ✅ This is what makes your UI show: "by therainbowniche@gmail.com"
       history: {
-        create:
-          status === BookingStatus.REQUESTED
-            ? [
-                {
-                  fromStatus: null,
-                  toStatus: BookingStatus.REQUESTED,
-                  note: "Seeded booking",
-                  changedByUserId: operatorId,
-                },
-              ]
-            : status === BookingStatus.CONFIRMED
-            ? [
-                {
-                  fromStatus: null,
-                  toStatus: BookingStatus.REQUESTED,
-                  note: "Seeded booking",
-                  changedByUserId: operatorId,
-                },
-                {
-                  fromStatus: BookingStatus.REQUESTED,
-                  toStatus: BookingStatus.CONFIRMED,
-                  note: "Seeded confirm transition",
-                  changedByUserId: operatorId,
-                },
-              ]
-            : status === BookingStatus.CANCELED
-            ? [
-                {
-                  fromStatus: null,
-                  toStatus: BookingStatus.REQUESTED,
-                  note: "Seeded booking",
-                  changedByUserId: operatorId,
-                },
-                {
-                  fromStatus: BookingStatus.REQUESTED,
-                  toStatus: BookingStatus.CANCELED,
-                  note: "Seeded cancel transition",
-                  changedByUserId: operatorId,
-                },
-              ]
-            : status === BookingStatus.COMPLETED
-            ? [
-                {
-                  fromStatus: null,
-                  toStatus: BookingStatus.REQUESTED,
-                  note: "Seeded booking",
-                  changedByUserId: operatorId,
-                },
-                {
-                  fromStatus: BookingStatus.REQUESTED,
-                  toStatus: BookingStatus.CONFIRMED,
-                  note: "Seeded confirm transition",
-                  changedByUserId: operatorId,
-                },
-                {
-                  fromStatus: BookingStatus.CONFIRMED,
-                  toStatus: BookingStatus.COMPLETED,
-                  note: "Seeded complete transition",
-                  changedByUserId: operatorId,
-                },
-              ]
-            : [
-                {
-                  fromStatus: null,
-                  toStatus: status,
-                  note: "Seeded booking",
-                  changedByUserId: operatorId,
-                },
-              ],
+        create: [
+          {
+            fromStatus: null,
+            toStatus: status,
+            note: "Seeded booking",
+            changedByUserId: operatorId,
+          },
+        ],
       },
     },
   });
@@ -287,7 +226,7 @@ async function main() {
     await createSeedBooking({
       clientId: client.id,
       sitterId: daniel.id,
-      status: BookingStatus.CONFIRMED, // ✅ best for cancel-reason testing
+      status: BookingStatus.REQUESTED, // ✅ best for cancel-reason testing
       startTime: dayAt(i + 1, 10),
       endTime: dayAt(i + 1, 12),
       operatorId: bridget.id,

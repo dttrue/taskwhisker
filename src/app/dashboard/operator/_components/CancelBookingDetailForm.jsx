@@ -1,23 +1,38 @@
+// src/app/dashboard/operator/_components/CancelBookingDetailForm.jsx
+
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState, useEffect } from "react";
+import { useActionState } from "react";
+import toast from "react-hot-toast";
+
+const initialState = { ok: null, error: null };
 
 export default function CancelBookingDetailForm({
   bookingId,
   canCancel,
   cancelBooking,
 }) {
-  const [state, formAction] = useActionState(cancelBooking, null);
-
   const [reason, setReason] = useState("");
   const [other, setOther] = useState("");
 
+  const [state, formAction] = useActionState(cancelBooking, initialState);
+
   const isOther = reason === "OTHER";
 
-  // Require a reason for CONFIRMED / REQUESTED on this page
+  // Detail page: require a reason for both REQUESTED and CONFIRMED
   const missingReason = !reason || (isOther && !other.trim());
-
   const disableSubmit = !canCancel || missingReason;
+
+  useEffect(() => {
+    if (!state) return;
+
+    if (state.ok) {
+      toast.success("Booking canceled.");
+    } else if (state.error) {
+      toast.error(state.error || "Could not cancel booking.");
+    }
+  }, [state]);
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -46,7 +61,7 @@ export default function CancelBookingDetailForm({
           className={`text-[11px] rounded-md border border-zinc-200 bg-white px-2 py-1 w-32 ${
             isOther ? "inline-block" : "hidden sm:inline-block"
           }`}
-          disabled={!canCancel}
+          disabled={!canCancel || !isOther}
         />
 
         <button

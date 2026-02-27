@@ -1,18 +1,25 @@
+// src/app/dashboard/operator/_components/CancelBookingForm.jsx
+
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState, useEffect } from "react";
+import { useActionState } from "react";
+import toast from "react-hot-toast";
+
+const initialState = { ok: null, error: null };
 
 export default function CancelBookingForm({
   bookingId,
   status,
   canCancel,
   cancelBooking,
-  // detail page can flip this on if you want REQUESTED to also require a reason
+  // list view can flip this on if you want REQUESTED to also require a reason
   requireReasonForRequested = false,
 }) {
   const [reason, setReason] = useState("");
   const [otherText, setOtherText] = useState("");
-  const [state, formAction] = useActionState(cancelBooking, null);
+
+  const [state, formAction] = useActionState(cancelBooking, initialState);
 
   const isOther = reason === "OTHER";
 
@@ -26,6 +33,16 @@ export default function CancelBookingForm({
     requiresReason && (!reason || (isOther && !otherText.trim()));
 
   const disableSubmit = !canCancel || missingReason;
+
+  useEffect(() => {
+    if (!state) return;
+
+    if (state.ok) {
+      toast.success("Booking canceled.");
+    } else if (state.error) {
+      toast.error(state.error || "Could not cancel booking.");
+    }
+  }, [state]);
 
   return (
     <div className="flex flex-col items-end">
