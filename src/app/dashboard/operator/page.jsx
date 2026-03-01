@@ -23,21 +23,21 @@ function formatDateOnly(d) {
 
 export default async function OperatorDashboard({ searchParams }) {
   const session = await requireRole(["OPERATOR"]);
+  const operatorId = session.user.id; // 🔑 this operator
 
-  // normalize: object OR Promise
   const sp = await Promise.resolve(searchParams);
 
   const { from, to, isDefault } = resolveDateRange(sp);
-  const hasRange = !isDefault; // or: Boolean(sp.from || sp.to)
+  const hasRange = !isDefault;
 
   const status = resolveStatus(sp);
 
   const { bookings, metrics } = await getOperatorDashboardData({
+    operatorId,
     status,
     from,
     to,
   });
-
   const fromStr = formatDateOnly(from);
   const toStr = formatDateOnly(to);
 

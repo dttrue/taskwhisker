@@ -28,16 +28,21 @@ model Client {
 }
 
 model Booking {
-  id                String            @id @default(cuid())
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  clientId          String
-  sitterId          String?
-  clientLinkToken   String            @unique @default(cuid())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientId String
+  sitterId String?
+
+  // 🔹 NEW: which operator "owns" this booking (Bridget)
+  operatorId String?
+
+  clientLinkToken   String        @unique @default(cuid())
   notes             String?
   startTime         DateTime
   endTime           DateTime
-  status            BookingStatus     @default(REQUESTED)
+  status            BookingStatus @default(REQUESTED)
   clientTotalCents  Int
   platformFeeCents  Int
   sitterPayoutCents Int
@@ -45,16 +50,31 @@ model Booking {
   canceledAt        DateTime?
   completedAt       DateTime?
   confirmedAt       DateTime?
-  serviceSummary    String?
-  client            Client            @relation(fields: [clientId], references: [id])
-  sitter            User?             @relation("BookingSitter", fields: [sitterId], references: [id])
-  history           BookingHistory[]
-  lineItems         BookingLineItem[]
+
+  // 🔹 rename or keep: this is your high-level summary
+  serviceSummary String?
+
+  // 🔹 NEW: drives calendar behavior (range vs multiple)
+  serviceType ServiceType?
+
+  client Client @relation(fields: [clientId], references: [id])
+  sitter User?  @relation("BookingSitter", fields: [sitterId], references: [id])
+
+  // 🔹 NEW: operator relation
+  operator User? @relation("BookingOperator", fields: [operatorId], references: [id])
+
+  history   BookingHistory[]
+  lineItems BookingLineItem[]
+
+  // 🔹 NEW: child visits
+  visits Visit[]
 
   @@index([startTime])
   @@index([status, startTime])
   @@index([clientId, startTime])
   @@index([sitterId, startTime])
+  // 🔹 NEW: useful for operator calendar queries
+  @@index([operatorId, startTime])
 }
 
 model BookingLineItem {
@@ -66,6 +86,35 @@ model BookingLineItem {
   unitPriceCents  Int
   totalPriceCents Int
   booking         Booking  @relation(fields: [bookingId], references: [id])
+}
+
+model Visit {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id])
+
+  // 🔹 We keep operator + sitter here for fast queries and future scaling
+  operatorId String
+  operator   User   @relation("VisitOperator", fields: [operatorId], references: [id])
+
+  sitterId String?
+  sitter   User?   @relation("VisitSitter", fields: [sitterId], references: [id])
+
+  // 🔹 Date + time window
+  // date: stored at midnight for the calendar "day"
+  date      DateTime
+  startTime DateTime
+  endTime   DateTime
+
+  status VisitStatus @default(CONFIRMED)
+
+  @@index([bookingId])
+  @@index([operatorId, date])
+  @@index([sitterId, date])
+  @@index([startTime, endTime])
 }
 
 model BookingHistory {
@@ -102,6 +151,13 @@ model User {
   historyFromSitter  BookingHistory[] @relation("HistoryFromSitter")
   historyToSitter    BookingHistory[] @relation("HistoryToSitter")
   sessions           Session[]
+
+  // 🔹 NEW: bookings where this user is the OPERATOR
+  operatorBookings Booking[] @relation("BookingOperator")
+
+  // 🔹 NEW: visit relations
+  visitsAsOperator Visit[] @relation("VisitOperator")
+  visitsAsSitter   Visit[] @relation("VisitSitter")
 }
 
 model Account {
@@ -145,6 +201,19 @@ enum Role {
 
 enum BookingStatus {
   REQUESTED
+  CONFIRMED
+  COMPLETED
+  CANCELED
+}
+
+enum ServiceType {
+  OVERNIGHT
+  WALK
+  DROP_IN
+}
+
+enum VisitStatus {
+  PENDING
   CONFIRMED
   COMPLETED
   CANCELED

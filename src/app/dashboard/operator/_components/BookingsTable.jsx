@@ -3,21 +3,23 @@
 
 import { formatMoney } from "../lib/format";
 import CancelBookingForm from "./CancelBookingForm";
+import {
+  STATUS_LABELS,
+  STATUS_DOT_CLASSES,
+  STATUS_PILL_CLASSES,
+  STATUS_CARD_BORDER_CLASSES,
+} from "@/lib/statusStyles";
 
 function StatusBadge({ status }) {
   const base =
     "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border";
 
-  const map = {
-    REQUESTED: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    CONFIRMED: "bg-green-50 text-green-700 border-green-200",
-    CANCELED: "bg-red-50 text-red-700 border-red-200",
-    COMPLETED: "bg-blue-50 text-blue-700 border-blue-200",
-  };
+  const pillClasses =
+    STATUS_PILL_CLASSES[status] || "bg-zinc-100 text-zinc-700 border-zinc-200";
 
   return (
-    <span className={`${base} ${map[status] || "bg-zinc-100 text-zinc-700"}`}>
-      {status}
+    <span className={`${base} ${pillClasses}`}>
+      {STATUS_LABELS[status] || status}
     </span>
   );
 }
@@ -120,15 +122,7 @@ export default function BookingsTable({
           <div
             key={b.id}
             className={`rounded-lg border bg-white p-3 shadow-sm transition md:hover:shadow-md ${
-              b.status === "CONFIRMED"
-                ? "border-l-[6px] border-l-green-500"
-                : b.status === "REQUESTED"
-                ? "border-l-[6px] border-l-yellow-400"
-                : b.status === "CANCELED"
-                ? "border-l-[6px] border-l-red-500"
-                : b.status === "COMPLETED"
-                ? "border-l-[6px] border-l-blue-500"
-                : "border-zinc-200"
+              STATUS_CARD_BORDER_CLASSES[b.status] || "border-zinc-200"
             }`}
           >
             <div className="flex items-start justify-between gap-3">
@@ -150,24 +144,11 @@ export default function BookingsTable({
                 <div className="inline-flex items-center gap-1 justify-end">
                   <span
                     className={`h-1.5 w-1.5 rounded-full ${
-                      b.status === "CONFIRMED"
-                        ? "bg-green-600"
-                        : b.status === "REQUESTED"
-                        ? "bg-yellow-500"
-                        : b.status === "CANCELED"
-                        ? "bg-red-600"
-                        : b.status === "COMPLETED"
-                        ? "bg-blue-600"
-                        : "bg-zinc-400"
+                      STATUS_DOT_CLASSES[b.status] || "bg-zinc-400"
                     }`}
                   />
-                  <span className="text-xs font-medium text-zinc-700">
-                    {{
-                      REQUESTED: "Requested",
-                      CONFIRMED: "Confirmed",
-                      CANCELED: "Canceled",
-                      COMPLETED: "Completed",
-                    }[b.status] || b.status}
+                  <span className="text-xs font-medium text-zinc-800">
+                    {STATUS_LABELS[b.status] || b.status}
                   </span>
                 </div>
 

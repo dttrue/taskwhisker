@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @plugin "daisyui";
-
+@import "react-day-picker/dist/style.css";
 /* Phase 1: Force Light Mode */
 :root {
   --background: #ffffff;

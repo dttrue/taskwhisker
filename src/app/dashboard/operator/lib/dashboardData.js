@@ -34,10 +34,16 @@ export function normalizeMetrics(grouped) {
   return base;
 }
 
-export async function getOperatorDashboardData({ status, from, to }) {
+export async function getOperatorDashboardData({
+  operatorId,
+  status,
+  from,
+  to,
+}) {
   const dateWhere = buildDateWhere({ from, to });
 
   const where = {
+    operatorId, // 🔑 critical
     ...dateWhere,
     ...(status !== "ALL" ? { status } : {}),
   };
@@ -51,7 +57,10 @@ export async function getOperatorDashboardData({ status, from, to }) {
     }),
     prisma.booking.groupBy({
       by: ["status"],
-      where: dateWhere, // metrics respect date range, not status filter
+      where: {
+        operatorId, // 🔑 metrics must also be scoped
+        ...dateWhere,
+      },
       _count: { _all: true },
       _sum: { clientTotalCents: true },
     }),
