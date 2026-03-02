@@ -32,11 +32,9 @@ model Booking {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  clientId String
-  sitterId String?
-
-  // 🔹 NEW: which operator "owns" this booking (Bridget)
-  operatorId String?
+  clientId   String
+  sitterId   String?
+  operatorId String // 🔹 who owns this booking
 
   clientLinkToken   String        @unique @default(cuid())
   notes             String?
@@ -51,29 +49,28 @@ model Booking {
   completedAt       DateTime?
   confirmedAt       DateTime?
 
-  // 🔹 rename or keep: this is your high-level summary
   serviceSummary String?
 
-  // 🔹 NEW: drives calendar behavior (range vs multiple)
-  serviceType ServiceType?
+  // 🔹 optional service reference
+  serviceId String?
+  service   Service? @relation("BookingService", fields: [serviceId], references: [id])
 
   client Client @relation(fields: [clientId], references: [id])
-  sitter User?  @relation("BookingSitter", fields: [sitterId], references: [id])
 
-  // 🔹 NEW: operator relation
-  operator User? @relation("BookingOperator", fields: [operatorId], references: [id])
+  // 🔹 OPERATOR + SITTER relations
+  operator User  @relation("BookingOperator", fields: [operatorId], references: [id])
+  sitter   User? @relation("BookingSitter", fields: [sitterId], references: [id])
+
+  // 🔹 CHILD VISITS (the missing side)
+  visits Visit[] // <— THIS is what Prisma wants
 
   history   BookingHistory[]
   lineItems BookingLineItem[]
-
-  // 🔹 NEW: child visits
-  visits Visit[]
 
   @@index([startTime])
   @@index([status, startTime])
   @@index([clientId, startTime])
   @@index([sitterId, startTime])
-  // 🔹 NEW: useful for operator calendar queries
   @@index([operatorId, startTime])
 }
 
@@ -136,28 +133,35 @@ model BookingHistory {
 }
 
 model User {
-  id                 String           @id @default(cuid())
-  email              String           @unique
+  id                 String    @id @default(cuid())
+  email              String    @unique
   name               String?
   role               Role
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
   emailVerified      DateTime?
   hashedPassword     String?
-  mustChangePassword Boolean          @default(false)
-  accounts           Account[]
-  sitterBookings     Booking[]        @relation("BookingSitter")
-  historyEntries     BookingHistory[] @relation("HistoryChangedBy")
-  historyFromSitter  BookingHistory[] @relation("HistoryFromSitter")
-  historyToSitter    BookingHistory[] @relation("HistoryToSitter")
-  sessions           Session[]
+  mustChangePassword Boolean   @default(false)
 
-  // 🔹 NEW: bookings where this user is the OPERATOR
+  accounts Account[]
+  sessions Session[]
+
+  // 🔹 Bookings where this user is the SITTER
+  sitterBookings Booking[] @relation("BookingSitter")
+
+  // 🔹 Bookings where this user is the OPERATOR (Bridget)
   operatorBookings Booking[] @relation("BookingOperator")
 
-  // 🔹 NEW: visit relations
+  // 🔹 Visits where this user is the OPERATOR
   visitsAsOperator Visit[] @relation("VisitOperator")
-  visitsAsSitter   Visit[] @relation("VisitSitter")
+
+  // 🔹 Visits where this user is the SITTER
+  visitsAsSitter Visit[] @relation("VisitSitter")
+
+  // History relations unchanged
+  historyEntries    BookingHistory[] @relation("HistoryChangedBy")
+  historyFromSitter BookingHistory[] @relation("HistoryFromSitter")
+  historyToSitter   BookingHistory[] @relation("HistoryToSitter")
 }
 
 model Account {
@@ -192,6 +196,20 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model Service {
+  id              String  @id @default(cuid())
+  name            String // e.g. "Dog Overnight (in your home)"
+  code            String  @unique // e.g. "DOG_OVERNIGHT_HOME"
+  species         String // "DOG", "CAT", "MIXED"
+  category        String // "OVERNIGHT", "DROP_IN", "WALK", "EXTRA"
+  durationMinutes Int? // null for overnights, 15/30/60 for drop-ins/walks
+  basePriceCents  Int // price per visit/night in cents
+  notes           String? // any extra explanation
+  isActive        Boolean @default(true)
+
+  bookings Booking[] @relation("BookingService")
 }
 
 enum Role {

@@ -1,5 +1,4 @@
 // src/app/dashboard/operator/lib/dashboardData.js
-
 import { prisma } from "@/lib/db";
 import { buildDateWhere } from "./dashboardQuery";
 
@@ -40,13 +39,16 @@ export async function getOperatorDashboardData({
   from,
   to,
 }) {
+  // Defensive date where – using your existing helper
   const dateWhere = buildDateWhere({ from, to });
 
   const where = {
-    operatorId, // 🔑 critical
+    ...(operatorId ? { operatorId } : {}), // be defensive
     ...dateWhere,
-    ...(status !== "ALL" ? { status } : {}),
+    ...(status && status !== "ALL" ? { status } : {}),
   };
+
+  console.log("OP DASH final where:", JSON.stringify(where, null, 2));
 
   const [bookings, grouped] = await Promise.all([
     prisma.booking.findMany({
@@ -58,13 +60,15 @@ export async function getOperatorDashboardData({
     prisma.booking.groupBy({
       by: ["status"],
       where: {
-        operatorId, // 🔑 metrics must also be scoped
+        ...(operatorId ? { operatorId } : {}),
         ...dateWhere,
       },
       _count: { _all: true },
       _sum: { clientTotalCents: true },
     }),
   ]);
+
+  console.log("OP DASH bookings count:", bookings.length);
 
   return { bookings, metrics: normalizeMetrics(grouped) };
 }
