@@ -5,19 +5,24 @@ import { useState, useTransition } from "react";
 import { createPublicBooking } from "./actions";
 import AdaptiveCalendar from "@/components/AdaptiveCalendar";
 
-export function PublicBookingForm() {
+export function PublicBookingForm({ serviceOptions = [] }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState(null);
   const [booking, setBooking] = useState(null);
 
-  // For now we hard-lock this to OVERNIGHT.
-  // Later you can add a selector to switch to WALK / DROP_IN.
-  const [serviceType] = useState("OVERNIGHT");
+  // Guard: no services configured
+  const firstService = serviceOptions[0] || null;
+
+  const [serviceCode, setServiceCode] = useState(firstService?.code || "");
+  const [serviceType, setServiceType] = useState(
+    firstService?.serviceType || "OVERNIGHT"
+  );
 
   // Calendar state (controlled by this form, rendered by AdaptiveCalendar)
   const [range, setRange] = useState();
   const [dates, setDates] = useState([]);
 
+  // Overnight => date RANGE, everything else => individual date(s)
   const isRange = serviceType === "OVERNIGHT";
 
   const handleSubmit = (event) => {
@@ -25,12 +30,18 @@ export function PublicBookingForm() {
     setError(null);
     setBooking(null);
 
+    if (!serviceCode) {
+      setError("Please select a service.");
+      return;
+    }
+
     const formData = new FormData(event.currentTarget);
 
+    // Work out the dates based on mode
     let mode;
-    let startDate; // undefined by default
-    let endDate; // undefined by default
-    let datesArray; // undefined by default
+    let startDate;
+    let endDate;
+    let datesArray;
 
     if (isRange) {
       mode = "RANGE";
@@ -40,7 +51,7 @@ export function PublicBookingForm() {
         return;
       }
 
-      startDate = range.from.toISOString().slice(0, 10);
+      startDate = range.from.toISOString().slice(0, 10); // YYYY-MM-DD
       endDate = range.to.toISOString().slice(0, 10);
     } else {
       mode = "MULTIPLE";
@@ -53,12 +64,20 @@ export function PublicBookingForm() {
       datesArray = dates.map((d) => d.toISOString().slice(0, 10));
     }
 
-    const payload = {
-      operatorId: "cmm43zvb60000a9uffinuugnr",
+    // Selected service meta
+    const payloadService =
+      serviceOptions.find((s) => s.code === serviceCode) || firstService;
 
-      serviceType,
-      serviceSummary: "Overnight House Sitting",
-      basePriceCentsPerVisit: 8000,
+    if (!payloadService) {
+      setError("Service configuration is missing.");
+      return;
+    }
+
+    const payload = {
+      // Service info – matches Zod schema + Prisma enum
+      serviceType: payloadService.serviceType,
+      serviceCode: payloadService.code,
+      serviceSummary: payloadService.label,
 
       client: {
         name: formData.get("name"),
@@ -72,9 +91,9 @@ export function PublicBookingForm() {
       },
 
       mode,
-      startDate: startDate || undefined, // only send when set
+      startDate: startDate || undefined,
       endDate: endDate || undefined,
-      dates: datesArray || undefined, // <-- key change
+      dates: datesArray || undefined,
 
       startTime: formData.get("startTime"),
       endTime: formData.get("endTime"),
@@ -83,6 +102,7 @@ export function PublicBookingForm() {
 
     startTransition(async () => {
       try {
+        console.log("📤 Submitting public booking payload:", payload);
         const res = await createPublicBooking(payload);
 
         if (!res.ok) {
@@ -96,6 +116,18 @@ export function PublicBookingForm() {
       }
     });
   };
+
+  // If there are literally no services, show a simple message
+  if (!firstService) {
+    return (
+      <div className="max-w-md mx-auto">
+        <h1 className="text-xl font-semibold mb-4">Request a Booking</h1>
+        <p className="text-sm text-red-600">
+          No services are configured yet. Please add services in the dashboard.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto">
@@ -130,7 +162,29 @@ export function PublicBookingForm() {
           />
         </div>
 
-        {/* 🔥 React Day Picker instead of native date inputs */}
+        {/* Service selector */}
+        <div>
+          <label className="block text-sm font-medium">Service</label>
+          <select
+            className="mt-1 block w-full border rounded px-2 py-1 bg-white"
+            value={serviceCode}
+            onChange={(e) => {
+              const nextCode = e.target.value;
+              setServiceCode(nextCode);
+              const svc =
+                serviceOptions.find((s) => s.code === nextCode) || firstService;
+              setServiceType(svc.serviceType);
+            }}
+          >
+            {serviceOptions.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Calendar */}
         <div>
           <p className="text-sm font-medium mb-1">Select dates</p>
           <AdaptiveCalendar

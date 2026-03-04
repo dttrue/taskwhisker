@@ -6,12 +6,13 @@ import { BookingStatus, ServiceType, VisitStatus } from "@prisma/client";
 import { z } from "zod";
 
 const publicBookingSchema = z.object({
-  operatorId: z.string().min(1, "operatorId is required"),
+  // operatorId now decided on the server
+  serviceType: z.string().optional(),
 
-  serviceType: z.nativeEnum(ServiceType),
-  serviceSummary: z.string().min(1, "Service summary is required"),
+  serviceCode: z.string().min(1, "Service code is required"),
+  serviceSummary: z.string().optional(),
 
-  basePriceCentsPerVisit: z.number().int().nonnegative().default(0),
+  basePriceCentsPerVisit: z.number().int().nonnegative().optional().default(0),
 
   client: z.object({
     name: z.string().min(1, "Name is required"),
@@ -25,12 +26,11 @@ const publicBookingSchema = z.object({
   }),
 
   mode: z.enum(["RANGE", "MULTIPLE"]),
-
-  startDate: z.string().optional(), // "YYYY-MM-DD"
+  startDate: z.string().optional(),
   endDate: z.string().optional(),
-  dates: z.array(z.string()).optional(), // ["YYYY-MM-DD", ...]
+  dates: z.array(z.string()).optional(),
 
-  startTime: z.string().min(1, "Start time is required"), // "HH:mm"
+  startTime: z.string().min(1, "Start time is required"),
   endTime: z.string().min(1, "End time is required"),
 
   notes: z.string().max(1000).optional(),
@@ -95,12 +95,43 @@ async function checkConflictsForOperator(params) {
   };
 }
 
+/**
+ * 🔍 Public services for the booking form
+ * (pulled from DB instead of hard-coding)
+ */
+export async function getPublicServices() {
+  const services = await prisma.service.findMany({
+    orderBy: [{ species: "asc" }, { category: "asc" }, { name: "asc" }],
+  });
+
+  return services.map((s) => ({
+    id: s.id,
+    code: s.code,
+    name: s.name,
+    species: s.species,
+    category: s.category,
+    serviceType: s.serviceType,
+    basePriceCents: s.basePriceCents,
+  }));
+}
+
 export async function createPublicBooking(rawInput) {
   const input = publicBookingSchema.parse(rawInput);
 
+  const operator = await prisma.user.findFirst({
+    where: { email: "therainbowniche@gmail.com" }, // Bridget
+  });
+
+  if (!operator) {
+    throw new Error("Operator user not found in DB. Check your seed data.");
+  }
+
+  const operatorId = operator.id;
+  console.log("📌 Using operatorId:", operatorId);
+
   const {
-    operatorId,
     serviceType,
+    serviceCode,
     serviceSummary,
     basePriceCentsPerVisit,
     client,
@@ -131,6 +162,23 @@ export async function createPublicBooking(rawInput) {
   if (dayList.length === 0) {
     throw new Error("No valid dates selected.");
   }
+
+  // 1.5) Look up service pricing from DB
+  const service = await prisma.service.findUnique({
+    where: { code: serviceCode },
+  });
+
+  if (!service) {
+    throw new Error("Selected service is not available.");
+  }
+
+  const pricePerVisitCents =
+    typeof basePriceCentsPerVisit === "number" && basePriceCentsPerVisit > 0
+      ? basePriceCentsPerVisit
+      : service.basePriceCents;
+
+  const effectiveSummary = serviceSummary || service.name;
+  const effectiveServiceType = serviceType || service.serviceType;
 
   // 2) Build visit windows
   const visitWindows = dayList.map((d) => {
@@ -163,16 +211,14 @@ export async function createPublicBooking(rawInput) {
 
   // 4) Pricing
   const visitsCount = visitWindows.length;
-  const clientTotalCents = basePriceCentsPerVisit * visitsCount;
+  const clientTotalCents = pricePerVisitCents * visitsCount;
   const platformFeeCents = Math.round(clientTotalCents * 0.1); // 10% platform fee
   const sitterPayoutCents = clientTotalCents - platformFeeCents;
 
   // 5) Transaction
   const fullBooking = await prisma.$transaction(async (tx) => {
     const dbClient = await tx.client.upsert({
-      where: {
-        email: client.email,
-      },
+      where: { email: client.email },
       update: {
         name: client.name,
         phone: client.phone,
@@ -199,9 +245,14 @@ export async function createPublicBooking(rawInput) {
 
     const booking = await tx.booking.create({
       data: {
-        clientId: dbClient.id,
-        operatorId,
-        sitterId: null,
+        client: {
+          connect: { id: dbClient.id },
+        },
+
+        operator: {
+          connect: { id: operatorId },
+        },
+
         startTime: earliestStart,
         endTime: latestEnd,
 
@@ -212,13 +263,31 @@ export async function createPublicBooking(rawInput) {
         platformFeeCents,
         sitterPayoutCents,
 
-        serviceSummary,
-        serviceType,
+        // 🔹 service fields
+        service: {
+          connect: { id: service.id },
+        },
+        serviceSummary: effectiveSummary,
+        serviceType: effectiveServiceType,
 
         notes: notes || null,
       },
     });
 
+    // line item (so operator sees proper breakdown)
+    if (pricePerVisitCents > 0) {
+      await tx.bookingLineItem.create({
+        data: {
+          bookingId: booking.id,
+          label: effectiveSummary,
+          quantity: visitsCount,
+          unitPriceCents: pricePerVisitCents,
+          totalPriceCents: clientTotalCents,
+        },
+      });
+    }
+
+    // visits
     const visitCreates = visitWindows.map((v) =>
       tx.visit.create({
         data: {
@@ -232,21 +301,9 @@ export async function createPublicBooking(rawInput) {
         },
       })
     );
-
     await Promise.all(visitCreates);
 
-    if (basePriceCentsPerVisit > 0) {
-      await tx.bookingLineItem.create({
-        data: {
-          bookingId: booking.id,
-          label: serviceSummary,
-          quantity: visitsCount,
-          unitPriceCents: basePriceCentsPerVisit,
-          totalPriceCents: clientTotalCents,
-        },
-      });
-    }
-
+    // history
     await tx.bookingHistory.create({
       data: {
         bookingId: booking.id,

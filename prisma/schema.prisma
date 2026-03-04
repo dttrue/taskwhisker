@@ -34,7 +34,7 @@ model Booking {
 
   clientId   String
   sitterId   String?
-  operatorId String // 🔹 who owns this booking
+  operatorId String // who owns this booking
 
   clientLinkToken   String        @unique @default(cuid())
   notes             String?
@@ -52,8 +52,9 @@ model Booking {
   serviceSummary String?
 
   // 🔹 optional service reference
-  serviceId String?
-  service   Service? @relation("BookingService", fields: [serviceId], references: [id])
+  serviceId   String?
+  service     Service?     @relation("BookingService", fields: [serviceId], references: [id])
+  serviceType ServiceType?
 
   client Client @relation(fields: [clientId], references: [id])
 
@@ -61,8 +62,8 @@ model Booking {
   operator User  @relation("BookingOperator", fields: [operatorId], references: [id])
   sitter   User? @relation("BookingSitter", fields: [sitterId], references: [id])
 
-  // 🔹 CHILD VISITS (the missing side)
-  visits Visit[] // <— THIS is what Prisma wants
+  // 🔹 CHILD VISITS
+  visits Visit[]
 
   history   BookingHistory[]
   lineItems BookingLineItem[]
