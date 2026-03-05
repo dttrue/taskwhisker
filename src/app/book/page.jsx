@@ -4,6 +4,7 @@ import PublicBookingForm from "./PublicBookingForm";
 
 export default async function BookPage() {
   const services = await prisma.service.findMany({
+    where: { isActive: true },
     orderBy: [{ species: "asc" }, { category: "asc" }, { name: "asc" }],
   });
 
