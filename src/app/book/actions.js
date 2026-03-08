@@ -225,6 +225,20 @@ const publicBookingSchema = z
     }
   });
 
+  export async function getPublicServices() {
+    return prisma.service.findMany({
+      where: {
+        isActive: true,
+        category: {
+          in: ["DROP_IN", "WALK", "OVERNIGHT"],
+        },
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+  }
+
 export async function createPublicBooking(rawInput) {
   const input = publicBookingSchema.parse(rawInput);
 
