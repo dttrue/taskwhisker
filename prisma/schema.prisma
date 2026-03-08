@@ -201,16 +201,29 @@ model VerificationToken {
 
 model Service {
   id              String  @id @default(cuid())
-  name            String // e.g. "Dog Overnight (in your home)"
-  code            String  @unique // e.g. "DOG_OVERNIGHT_HOME"
-  species         String // "DOG", "CAT", "MIXED"
-  category        String // "OVERNIGHT", "DROP_IN", "WALK", "EXTRA"
-  durationMinutes Int? // null for overnights, 15/30/60 for drop-ins/walks
-  basePriceCents  Int // price per visit/night in cents
-  notes           String? // any extra explanation
+  name            String
+  code            String  @unique
+  species         String
+  category        String
+  durationMinutes Int?
+  basePriceCents  Int
+  notes           String?
   isActive        Boolean @default(true)
 
-  bookings Booking[] @relation("BookingService")
+  bookings Booking[]      @relation("BookingService")
+  addOns   ServiceAddOn[]
+}
+
+model ServiceAddOn {
+  id          String  @id @default(cuid())
+  name        String
+  code        String  @unique
+  description String?
+  priceCents  Int
+  isActive    Boolean @default(true)
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
 }
 
 enum Role {

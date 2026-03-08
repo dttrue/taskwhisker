@@ -18,6 +18,71 @@ import {
   STATUS_CARD_BORDER_CLASSES,
 } from "@/lib/statusStyles";
 
+function formatMoney(cents) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function formatDateTime(value) {
+  return new Date(value).toLocaleString();
+}
+
+function formatDateOnly(value) {
+  return new Date(value).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatTimeOnly(value) {
+  return new Date(value).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function groupVisitsByDate(visits = []) {
+  const grouped = new Map();
+
+  for (const visit of visits) {
+    const key = new Date(visit.date).toISOString().slice(0, 10);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(visit);
+  }
+
+  return Array.from(grouped.entries())
+    .map(([dateKey, dayVisits]) => ({
+      dateKey,
+      label: formatDateOnly(`${dateKey}T00:00:00`),
+      visits: dayVisits.sort(
+        (a, b) => new Date(a.startTime) - new Date(b.startTime)
+      ),
+    }))
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+}
+
+function getScheduleSummary(visits = [], booking) {
+  if (!visits.length) {
+    return `${formatDateTime(booking.startTime)} → ${formatDateTime(
+      booking.endTime
+    )}`;
+  }
+
+  const grouped = groupVisitsByDate(visits);
+
+  if (grouped.length === 1 && grouped[0].visits.length === 1) {
+    const visit = grouped[0].visits[0];
+    return `${grouped[0].label} · ${formatTimeOnly(
+      visit.startTime
+    )} → ${formatTimeOnly(visit.endTime)}`;
+  }
+
+  return `${grouped.length} day${grouped.length === 1 ? "" : "s"} · ${
+    visits.length
+  } visit${visits.length === 1 ? "" : "s"}`;
+}
+
 export default async function OperatorBookingDetailPage({
   params,
   searchParams,
@@ -38,6 +103,9 @@ export default async function OperatorBookingDetailPage({
       client: true,
       sitter: true,
       lineItems: true,
+      visits: {
+        orderBy: [{ date: "asc" }, { startTime: "asc" }],
+      },
       history: {
         orderBy: { createdAt: "desc" },
         include: { changedBy: true, fromSitter: true, toSitter: true },
@@ -68,6 +136,9 @@ export default async function OperatorBookingDetailPage({
   const canCancel = !["CANCELED", "COMPLETED"].includes(booking.status);
   const canComplete = booking.status === "CONFIRMED";
 
+  const groupedVisits = groupVisitsByDate(booking.visits);
+  const scheduleSummary = getScheduleSummary(booking.visits, booking);
+
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -84,11 +155,8 @@ export default async function OperatorBookingDetailPage({
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
               <span>ID: {booking.id.slice(0, 8)}</span>
-              <span>
-                {new Date(booking.startTime).toLocaleString()} →{" "}
-                {new Date(booking.endTime).toLocaleString()}
-              </span>
-              <span>Total: ${(booking.clientTotalCents / 100).toFixed(2)}</span>
+              <span>{scheduleSummary}</span>
+              <span>Total: {formatMoney(booking.clientTotalCents)}</span>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -155,8 +223,11 @@ export default async function OperatorBookingDetailPage({
                   {booking.client?.name || "—"}
                 </div>
                 <div className="text-zinc-600">
-                  {booking.client?.email || ""}
+                  {booking.client?.email || "—"}
                 </div>
+                {booking.client?.phone ? (
+                  <div className="text-zinc-600">{booking.client.phone}</div>
+                ) : null}
               </div>
 
               <div>
@@ -183,24 +254,94 @@ export default async function OperatorBookingDetailPage({
               </div>
 
               <div>
-                <div className="text-xs text-zinc-500">Total</div>
+                <div className="text-xs text-zinc-500">Schedule</div>
+                <div className="text-zinc-900">{scheduleSummary}</div>
+                <div className="text-zinc-600">
+                  Parent window: {formatDateTime(booking.startTime)} →{" "}
+                  {formatDateTime(booking.endTime)}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-zinc-500">Visits</div>
                 <div className="text-zinc-900">
-                  ${(booking.clientTotalCents / 100).toFixed(2)}
+                  {booking.visits.length} visit
+                  {booking.visits.length === 1 ? "" : "s"}
                 </div>
                 <div className="text-zinc-600">
-                  Fee: ${(booking.platformFeeCents / 100).toFixed(2)} · Payout:
-                  ${(booking.sitterPayoutCents / 100).toFixed(2)}
+                  {groupedVisits.length} day
+                  {groupedVisits.length === 1 ? "" : "s"}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-zinc-500">Total</div>
+                <div className="text-zinc-900">
+                  {formatMoney(booking.clientTotalCents)}
+                </div>
+                <div className="text-zinc-600">
+                  Fee: {formatMoney(booking.platformFeeCents)} · Payout:{" "}
+                  {formatMoney(booking.sitterPayoutCents)}
                 </div>
               </div>
             </div>
 
             {booking.notes && (
               <div>
-                <div className="text-xs text-zinc-500">Notes</div>
-                <div className="text-zinc-900">{booking.notes}</div>
+                <div className="text-xs text-zinc-500">Notes / Add-ons</div>
+                <div className="whitespace-pre-wrap text-zinc-900">
+                  {booking.notes}
+                </div>
               </div>
             )}
           </div>
+        </section>
+
+        {/* Visit schedule */}
+        <section className="rounded-xl border border-zinc-200 bg-white shadow-sm">
+          <div className="p-4 border-b border-zinc-200">
+            <h2 className="font-semibold text-zinc-900">Visit schedule</h2>
+          </div>
+
+          {booking.visits.length === 0 ? (
+            <div className="p-4 text-sm text-zinc-600">No visits found.</div>
+          ) : (
+            <div className="p-4 space-y-4">
+              {groupedVisits.map((group) => (
+                <div
+                  key={group.dateKey}
+                  className="rounded-lg border border-zinc-200"
+                >
+                  <div className="border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-900">
+                    {group.label}
+                  </div>
+
+                  <div className="divide-y divide-zinc-100">
+                    {group.visits.map((visit, idx) => (
+                      <div
+                        key={visit.id}
+                        className="px-3 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <div className="text-sm font-medium text-zinc-900">
+                            Visit {idx + 1}
+                          </div>
+                          <div className="text-sm text-zinc-600">
+                            {formatTimeOnly(visit.startTime)} →{" "}
+                            {formatTimeOnly(visit.endTime)}
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-zinc-500">
+                          Status: {visit.status}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Line items */}
@@ -227,12 +368,8 @@ export default async function OperatorBookingDetailPage({
                     <tr key={li.id} className="border-b border-zinc-100">
                       <td className="p-3">{li.label}</td>
                       <td className="p-3">{li.quantity}</td>
-                      <td className="p-3">
-                        ${(li.unitPriceCents / 100).toFixed(2)}
-                      </td>
-                      <td className="p-3">
-                        ${(li.totalPriceCents / 100).toFixed(2)}
-                      </td>
+                      <td className="p-3">{formatMoney(li.unitPriceCents)}</td>
+                      <td className="p-3">{formatMoney(li.totalPriceCents)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -240,7 +377,6 @@ export default async function OperatorBookingDetailPage({
             </div>
           )}
 
-          {/* Mobile-friendly line items */}
           {booking.lineItems.length > 0 && (
             <div className="sm:hidden p-4 space-y-3">
               {booking.lineItems.map((li) => (
@@ -255,11 +391,11 @@ export default async function OperatorBookingDetailPage({
                     </div>
                   </div>
                   <div className="mt-1 text-xs text-zinc-500">
-                    Unit: ${(li.unitPriceCents / 100).toFixed(2)}
+                    Unit: {formatMoney(li.unitPriceCents)}
                   </div>
                   <div className="mt-1 text-xs text-zinc-500">Total</div>
                   <div className="text-sm font-semibold text-zinc-900">
-                    ${(li.totalPriceCents / 100).toFixed(2)}
+                    {formatMoney(li.totalPriceCents)}
                   </div>
                 </div>
               ))}

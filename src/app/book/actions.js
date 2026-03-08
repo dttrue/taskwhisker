@@ -2,39 +2,40 @@
 "use server";
 
 import { prisma } from "@/lib/db";
-import { BookingStatus, ServiceType, VisitStatus } from "@prisma/client";
+import { BookingStatus, VisitStatus } from "@prisma/client";
 import { z } from "zod";
 
-const publicBookingSchema = z.object({
-  // operatorId now decided on the server
-  serviceType: z.string().optional(),
+const BOOKING_WINDOW_START = "07:00";
+const BOOKING_WINDOW_END = "22:00";
 
-  serviceCode: z.string().min(1, "Service code is required"),
-  serviceSummary: z.string().optional(),
+function timeToMinutes(t) {
+  if (!t || typeof t !== "string" || !t.includes(":")) return null;
+  const [hh, mm] = t.split(":").map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+  return hh * 60 + mm;
+}
 
-  basePriceCentsPerVisit: z.number().int().nonnegative().optional().default(0),
+function assertValidTimeRange(startTime, endTime, context = "") {
+  const s = timeToMinutes(startTime);
+  const e = timeToMinutes(endTime);
 
-  client: z.object({
-    name: z.string().min(1, "Name is required"),
-    email: z.string().email("Valid email is required"),
-    phone: z.string().optional(),
-    addressLine1: z.string().optional(),
-    addressLine2: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    postalCode: z.string().optional(),
-  }),
+  if (s == null || e == null) {
+    throw new Error(`${context}Invalid time format.`);
+  }
 
-  mode: z.enum(["RANGE", "MULTIPLE"]),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  dates: z.array(z.string()).optional(),
+  if (e <= s) {
+    throw new Error(`${context}End time must be after start time.`);
+  }
 
-  startTime: z.string().min(1, "Start time is required"),
-  endTime: z.string().min(1, "End time is required"),
+  const ws = timeToMinutes(BOOKING_WINDOW_START);
+  const we = timeToMinutes(BOOKING_WINDOW_END);
 
-  notes: z.string().max(1000).optional(),
-});
+  if (s < ws || e > we) {
+    throw new Error(
+      `${context}Bookings are only available between 7:00 AM and 10:00 PM.`
+    );
+  }
+}
 
 function combineDateTime(dateStr, timeStr) {
   return new Date(`${dateStr}T${timeStr}:00`);
@@ -54,72 +55,181 @@ function getDateListFromRange(start, end) {
   }
 
   const cursor = new Date(startDate);
+
   while (cursor < endDate) {
-    result.push(cursor.toISOString().slice(0, 10)); // "YYYY-MM-DD"
+    result.push(cursor.toISOString().slice(0, 10));
     cursor.setDate(cursor.getDate() + 1);
   }
 
   return result;
 }
 
-async function checkConflictsForOperator(params) {
-  const { operatorId, visits } = params;
-
+async function checkConflictsForOperator({ operatorId, visits }) {
   for (const v of visits) {
     const conflict = await prisma.visit.findFirst({
       where: {
         operatorId,
-        status: {
-          not: VisitStatus.CANCELED,
-        },
-        startTime: {
-          lt: v.endTime,
-        },
-        endTime: {
-          gt: v.startTime,
-        },
+        status: { not: VisitStatus.CANCELED },
+        startTime: { lt: v.endTime },
+        endTime: { gt: v.startTime },
       },
     });
 
     if (conflict) {
-      return {
-        hasConflict: true,
-        conflictVisitId: conflict.id,
-      };
+      return { hasConflict: true, conflictVisitId: conflict.id };
     }
   }
 
-  return {
-    hasConflict: false,
-    conflictVisitId: null,
-  };
+  return { hasConflict: false, conflictVisitId: null };
 }
 
-/**
- * 🔍 Public services for the booking form
- * (pulled from DB instead of hard-coding)
- */
-export async function getPublicServices() {
-  const services = await prisma.service.findMany({
-    orderBy: [{ species: "asc" }, { category: "asc" }, { name: "asc" }],
+const timeStr = z.string().regex(/^\d{2}:\d{2}$/, "Time must be HH:MM (24h)");
+
+const slotSchema = z.object({
+  startTime: timeStr,
+  endTime: timeStr,
+});
+
+const addOnSchema = z.object({
+  code: z.string().min(1, "Add-on code is required"),
+  appliesTo: z.enum(["ONCE", "EACH_VISIT"]).optional().default("ONCE"),
+  quantity: z.number().int().positive().optional().default(1),
+  smallDogs: z.number().int().nonnegative().optional(),
+  largeDogs: z.number().int().nonnegative().optional(),
+});
+
+const publicBookingSchema = z
+  .object({
+    serviceType: z.string().optional(),
+    serviceCode: z.string().min(1, "Service code is required"),
+    serviceSummary: z.string().optional(),
+    basePriceCentsPerVisit: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .default(0),
+
+    client: z.object({
+      name: z.string().min(1, "Name is required"),
+      email: z.string().email("Valid email is required"),
+      phone: z.string().optional(),
+      addressLine1: z.string().optional(),
+      addressLine2: z.string().optional(),
+      city: z.string().optional(),
+      state: z.string().optional(),
+      postalCode: z.string().optional(),
+    }),
+
+    mode: z.enum(["RANGE", "MULTIPLE"]),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    dates: z.array(z.string()).optional(),
+
+    scheduleMode: z.enum(["SAME", "CUSTOM"]).optional().default("SAME"),
+
+    startTime: timeStr.optional(),
+    endTime: timeStr.optional(),
+
+    slotsByDate: z
+      .record(z.string(), z.array(slotSchema))
+      .optional()
+      .default({}),
+
+    addOns: z.array(addOnSchema).optional().default([]),
+
+    notes: z.string().max(1000).optional(),
+  })
+  .superRefine((val, ctx) => {
+    const isOvernight = val.serviceType === "OVERNIGHT";
+
+    if (val.mode === "RANGE") {
+      if (!val.startDate) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "startDate is required for RANGE mode.",
+          path: ["startDate"],
+        });
+      }
+
+      if (!val.endDate) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "endDate is required for RANGE mode.",
+          path: ["endDate"],
+        });
+      }
+    } else {
+      if (!val.dates || val.dates.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "At least one date is required for MULTIPLE mode.",
+          path: ["dates"],
+        });
+      }
+    }
+
+    if (isOvernight && val.scheduleMode === "CUSTOM") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Overnight bookings cannot use custom per-date time slots.",
+        path: ["scheduleMode"],
+      });
+    }
+
+    if (val.scheduleMode === "SAME") {
+      if (!val.startTime) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "startTime is required when scheduleMode is SAME.",
+          path: ["startTime"],
+        });
+      }
+
+      if (!val.endTime) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "endTime is required when scheduleMode is SAME.",
+          path: ["endTime"],
+        });
+      }
+    }
+
+    if (val.scheduleMode === "CUSTOM") {
+      const totalSlots = Object.values(val.slotsByDate || {}).reduce(
+        (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
+        0
+      );
+
+      if (totalSlots === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please add at least one time slot.",
+          path: ["slotsByDate"],
+        });
+      }
+
+      for (const [dateStr, slots] of Object.entries(val.slotsByDate || {})) {
+        if (!Array.isArray(slots)) continue;
+
+        slots.forEach((slot, i) => {
+          if (slot.endTime <= slot.startTime) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Invalid slot on ${dateStr}: endTime must be after startTime.`,
+              path: ["slotsByDate", dateStr, i, "endTime"],
+            });
+          }
+        });
+      }
+    }
   });
-
-  return services.map((s) => ({
-    id: s.id,
-    code: s.code,
-    name: s.name,
-    species: s.species,
-    category: s.category,
-    serviceType: s.serviceType,
-    basePriceCents: s.basePriceCents,
-  }));
-}
 
 export async function createPublicBooking(rawInput) {
   const input = publicBookingSchema.parse(rawInput);
 
   const operator = await prisma.user.findFirst({
-    where: { email: "therainbowniche@gmail.com" }, // Bridget
+    where: { email: "therainbowniche@gmail.com" },
   });
 
   if (!operator) {
@@ -127,7 +237,6 @@ export async function createPublicBooking(rawInput) {
   }
 
   const operatorId = operator.id;
-  console.log("📌 Using operatorId:", operatorId);
 
   const {
     serviceType,
@@ -139,12 +248,15 @@ export async function createPublicBooking(rawInput) {
     startDate,
     endDate,
     dates,
+    scheduleMode,
     startTime,
     endTime,
+    slotsByDate,
     notes,
+    addOns = [],
   } = input;
 
-  // 1) Normalize dates
+  // Normalize date list
   let dayList = [];
 
   if (mode === "RANGE") {
@@ -159,11 +271,11 @@ export async function createPublicBooking(rawInput) {
     dayList = dates;
   }
 
-  if (dayList.length === 0) {
+  if (!dayList.length) {
     throw new Error("No valid dates selected.");
   }
 
-  // 1.5) Look up service pricing from DB
+  // Service lookup
   const service = await prisma.service.findUnique({
     where: { code: serviceCode },
   });
@@ -178,21 +290,56 @@ export async function createPublicBooking(rawInput) {
       : service.basePriceCents;
 
   const effectiveSummary = serviceSummary || service.name;
-  const effectiveServiceType = serviceType || service.serviceType;
+  const effectiveServiceType = serviceType || service.category;
 
-  // 2) Build visit windows
-  const visitWindows = dayList.map((d) => {
-    const visitStart = combineDateTime(d, startTime);
-    const visitEnd = combineDateTime(d, endTime);
+  // Build visit windows
+  let visitWindows = [];
 
-    if (visitEnd <= visitStart) {
-      throw new Error("End time must be after start time.");
+  const isOvernight = effectiveServiceType === "OVERNIGHT";
+  const effectiveScheduleMode = isOvernight ? "SAME" : scheduleMode || "SAME";
+
+  if (effectiveScheduleMode === "SAME") {
+    if (!startTime || !endTime) {
+      throw new Error("Start time and end time are required.");
     }
 
-    return { dateStr: d, startTime: visitStart, endTime: visitEnd };
-  });
+    assertValidTimeRange(startTime, endTime);
 
-  // 3) Conflict detection
+    visitWindows = dayList.map((d) => {
+      const visitStart = combineDateTime(d, startTime);
+      const visitEnd = combineDateTime(d, endTime);
+
+      return {
+        dateStr: d,
+        startTime: visitStart,
+        endTime: visitEnd,
+      };
+    });
+  } else {
+    if (!slotsByDate) {
+      throw new Error("slotsByDate is required for CUSTOM schedule mode.");
+    }
+
+    for (const d of dayList) {
+      const slots = slotsByDate[d];
+
+      if (!slots || !slots.length) {
+        throw new Error(`At least one time slot is required for ${d}.`);
+      }
+
+      for (const s of slots) {
+        assertValidTimeRange(s.startTime, s.endTime, `${d}: `);
+
+        visitWindows.push({
+          dateStr: d,
+          startTime: combineDateTime(d, s.startTime),
+          endTime: combineDateTime(d, s.endTime),
+        });
+      }
+    }
+  }
+
+  // Conflict detection
   const conflictCheck = await checkConflictsForOperator({
     operatorId,
     visits: visitWindows.map((v) => ({
@@ -209,13 +356,61 @@ export async function createPublicBooking(rawInput) {
     };
   }
 
-  // 4) Pricing
+  // Pricing
   const visitsCount = visitWindows.length;
-  const clientTotalCents = pricePerVisitCents * visitsCount;
-  const platformFeeCents = Math.round(clientTotalCents * 0.1); // 10% platform fee
+  const baseServiceTotalCents = pricePerVisitCents * visitsCount;
+
+  const submittedAddOns = Array.isArray(addOns) ? addOns : [];
+  const selectedAddOnCodes = submittedAddOns
+    .map((addOn) => addOn?.code)
+    .filter(Boolean);
+
+  const dbAddOnServices =
+    selectedAddOnCodes.length > 0
+      ? await prisma.service.findMany({
+          where: {
+            code: { in: selectedAddOnCodes },
+            category: "EXTRA",
+            isActive: true,
+          },
+        })
+      : [];
+
+  const addOnByCode = new Map(dbAddOnServices.map((item) => [item.code, item]));
+
+  const resolvedAddOns = submittedAddOns.map((submitted) => {
+    const dbAddOn = addOnByCode.get(submitted.code);
+
+    if (!dbAddOn) {
+      throw new Error(`Selected add-on is not available: ${submitted.code}`);
+    }
+
+    const quantity =
+      typeof submitted.quantity === "number" && submitted.quantity > 0
+        ? submitted.quantity
+        : 1;
+
+    return {
+      code: dbAddOn.code,
+      name: dbAddOn.name,
+      priceCents: dbAddOn.basePriceCents,
+      quantity,
+      totalPriceCents: dbAddOn.basePriceCents * quantity,
+      appliesTo: submitted.appliesTo || "ONCE",
+      smallDogs: submitted.smallDogs ?? null,
+      largeDogs: submitted.largeDogs ?? null,
+    };
+  });
+
+  const addOnTotalCents = resolvedAddOns.reduce(
+    (sum, addOn) => sum + addOn.totalPriceCents,
+    0
+  );
+
+  const clientTotalCents = baseServiceTotalCents + addOnTotalCents;
+  const platformFeeCents = Math.round(clientTotalCents * 0.1);
   const sitterPayoutCents = clientTotalCents - platformFeeCents;
 
-  // 5) Transaction
   const fullBooking = await prisma.$transaction(async (tx) => {
     const dbClient = await tx.client.upsert({
       where: { email: client.email },
@@ -240,18 +435,21 @@ export async function createPublicBooking(rawInput) {
       },
     });
 
-    const earliestStart = visitWindows[0].startTime;
-    const latestEnd = visitWindows[visitWindows.length - 1].endTime;
+    // Booking window = earliest start to latest end across all visits
+    const sorted = [...visitWindows].sort(
+      (a, b) => a.startTime.getTime() - b.startTime.getTime()
+    );
+
+    const earliestStart = sorted[0].startTime;
+    const latestEnd = sorted.reduce(
+      (max, v) => (v.endTime > max ? v.endTime : max),
+      sorted[0].endTime
+    );
 
     const booking = await tx.booking.create({
       data: {
-        client: {
-          connect: { id: dbClient.id },
-        },
-
-        operator: {
-          connect: { id: operatorId },
-        },
+        client: { connect: { id: dbClient.id } },
+        operator: { connect: { id: operatorId } },
 
         startTime: earliestStart,
         endTime: latestEnd,
@@ -263,10 +461,7 @@ export async function createPublicBooking(rawInput) {
         platformFeeCents,
         sitterPayoutCents,
 
-        // 🔹 service fields
-        service: {
-          connect: { id: service.id },
-        },
+        service: { connect: { id: service.id } },
         serviceSummary: effectiveSummary,
         serviceType: effectiveServiceType,
 
@@ -274,36 +469,52 @@ export async function createPublicBooking(rawInput) {
       },
     });
 
-    // line item (so operator sees proper breakdown)
-    if (pricePerVisitCents > 0) {
-      await tx.bookingLineItem.create({
-        data: {
-          bookingId: booking.id,
-          label: effectiveSummary,
-          quantity: visitsCount,
-          unitPriceCents: pricePerVisitCents,
-          totalPriceCents: clientTotalCents,
-        },
-      });
-    }
+    // Build line items
+        const lineItemsToCreate = [];
 
-    // visits
-    const visitCreates = visitWindows.map((v) =>
-      tx.visit.create({
-        data: {
-          bookingId: booking.id,
-          operatorId,
-          sitterId: null,
-          date: new Date(`${v.dateStr}T00:00:00`),
-          startTime: v.startTime,
-          endTime: v.endTime,
-          status: VisitStatus.CONFIRMED,
-        },
-      })
+        if (pricePerVisitCents > 0) {
+          lineItemsToCreate.push({
+            bookingId: booking.id,
+            label: effectiveSummary,
+            quantity: visitsCount,
+            unitPriceCents: pricePerVisitCents,
+            totalPriceCents: baseServiceTotalCents,
+          });
+        }
+
+        for (const addOn of resolvedAddOns) {
+          lineItemsToCreate.push({
+            bookingId: booking.id,
+            label: addOn.name,
+            quantity: addOn.quantity,
+            unitPriceCents: addOn.priceCents,
+            totalPriceCents: addOn.totalPriceCents,
+          });
+        }
+
+        if (lineItemsToCreate.length > 0) {
+          await tx.bookingLineItem.createMany({
+            data: lineItemsToCreate,
+          });
+        }
+
+    // Visits
+    await Promise.all(
+      visitWindows.map((v) =>
+        tx.visit.create({
+          data: {
+            bookingId: booking.id,
+            operatorId,
+            sitterId: null,
+            date: new Date(`${v.dateStr}T00:00:00`),
+            startTime: v.startTime,
+            endTime: v.endTime,
+            status: VisitStatus.CONFIRMED,
+          },
+        })
+      )
     );
-    await Promise.all(visitCreates);
 
-    // history
     await tx.bookingHistory.create({
       data: {
         bookingId: booking.id,
@@ -330,7 +541,6 @@ export async function createPublicBooking(rawInput) {
     return result;
   });
 
-  // 6) Response
   return {
     ok: true,
     booking: {

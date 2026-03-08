@@ -3,7 +3,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import pkg from "@prisma/client";
 
-const { PrismaClient, Role, BookingStatus } = pkg;
+const { PrismaClient, Role, BookingStatus, VisitStatus } = pkg;
 const prisma = new PrismaClient();
 
 function dayAt(daysFromNow, hour = 10, minute = 0) {
@@ -13,10 +13,18 @@ function dayAt(daysFromNow, hour = 10, minute = 0) {
   return d;
 }
 
+function dayOnlyFromDate(date) {
+  return new Date(
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(date.getDate()).padStart(2, "0")}T00:00:00`
+  );
+}
+
 // Because Client.email is optional-but-unique, upsert-by-email only works if email exists.
 async function upsertClient({ name, email, phone, city, state }) {
   if (email) {
-    // email is unique; safe to upsert when present
     return prisma.client.upsert({
       where: { email },
       update: { name, phone, city, state },
@@ -24,7 +32,6 @@ async function upsertClient({ name, email, phone, city, state }) {
     });
   }
 
-  // If no email, try to "de-dupe" by name+phone as a reasonable seed heuristic
   const existing = await prisma.client.findFirst({
     where: {
       name,
@@ -52,14 +59,87 @@ async function upsertClient({ name, email, phone, city, state }) {
 async function createSeedBooking({
   clientId,
   sitterId,
-  status,
-  startTime,
-  endTime,
   operatorId,
-  serviceSummary,
+  status = BookingStatus.REQUESTED,
+  serviceCode,
   notes,
-  lineItems,
+  visits,
+  addOnCodes = [],
 }) {
+  if (!serviceCode) {
+    throw new Error("createSeedBooking requires serviceCode");
+  }
+
+  if (!Array.isArray(visits) || visits.length === 0) {
+    throw new Error("createSeedBooking requires at least one visit");
+  }
+
+  const service = await prisma.service.findUnique({
+    where: { code: serviceCode },
+  });
+
+  if (!service) {
+    throw new Error(`Service not found for code: ${serviceCode}`);
+  }
+
+  const addOnServices =
+    addOnCodes.length > 0
+      ? await prisma.service.findMany({
+          where: {
+            code: { in: addOnCodes },
+            category: "EXTRA",
+            isActive: true,
+          },
+        })
+      : [];
+
+  const addOnMap = new Map(addOnServices.map((s) => [s.code, s]));
+
+  const visitRows = visits.map((visit) => ({
+    startTime: visit.startTime,
+    endTime: visit.endTime,
+    date: dayOnlyFromDate(visit.startTime),
+    status:
+      status === BookingStatus.CANCELED
+        ? VisitStatus.CANCELED
+        : status === BookingStatus.COMPLETED
+        ? VisitStatus.COMPLETED
+        : VisitStatus.CONFIRMED,
+  }));
+
+  const earliestStart = [...visitRows].sort(
+    (a, b) => a.startTime.getTime() - b.startTime.getTime()
+  )[0].startTime;
+
+  const latestEnd = visitRows.reduce(
+    (max, v) => (v.endTime > max ? v.endTime : max),
+    visitRows[0].endTime
+  );
+
+  const baseServiceLineItem = {
+    label: service.name,
+    quantity: visitRows.length,
+    unitPriceCents: service.basePriceCents,
+    totalPriceCents: service.basePriceCents * visitRows.length,
+  };
+
+  const addOnLineItems = addOnCodes.map((code) => {
+    const addOn = addOnMap.get(code);
+
+    if (!addOn) {
+      throw new Error(`Add-on not found or inactive: ${code}`);
+    }
+
+    return {
+      label: addOn.name,
+      quantity: 1,
+      unitPriceCents: addOn.basePriceCents,
+      totalPriceCents: addOn.basePriceCents,
+    };
+  });
+
+  const lineItems = [baseServiceLineItem, ...addOnLineItems];
+
   const clientTotalCents = lineItems.reduce(
     (sum, li) => sum + li.totalPriceCents,
     0
@@ -69,7 +149,10 @@ async function createSeedBooking({
   const sitterPayoutCents = clientTotalCents - platformFeeCents;
 
   const now = new Date();
-  const confirmedAt = status === BookingStatus.CONFIRMED ? now : null;
+  const confirmedAt =
+    status === BookingStatus.CONFIRMED || status === BookingStatus.COMPLETED
+      ? now
+      : null;
   const canceledAt = status === BookingStatus.CANCELED ? now : null;
   const completedAt = status === BookingStatus.COMPLETED ? now : null;
 
@@ -77,12 +160,15 @@ async function createSeedBooking({
     data: {
       clientId,
       sitterId: sitterId ?? null,
-      operatorId, // REQUIRED now that Booking has operatorId
+      operatorId,
 
-      serviceSummary: serviceSummary ?? null,
+      serviceId: service.id,
+      serviceSummary: service.name,
+      serviceType: service.category,
+
       notes: notes ?? null,
-      startTime,
-      endTime,
+      startTime: earliestStart,
+      endTime: latestEnd,
       status,
       clientTotalCents,
       platformFeeCents,
@@ -95,7 +181,17 @@ async function createSeedBooking({
         create: lineItems,
       },
 
-      // This is what makes your UI show "by therainbowniche@gmail.com"
+      visits: {
+        create: visitRows.map((visit) => ({
+          operatorId,
+          sitterId: sitterId ?? null,
+          date: visit.date,
+          startTime: visit.startTime,
+          endTime: visit.endTime,
+          status: visit.status,
+        })),
+      },
+
       history: {
         create: [
           {
@@ -146,34 +242,29 @@ async function main() {
     },
   });
 
-  // ---- SERVICES (pricing from flyer) ----
-  await prisma.service.deleteMany(); // optional reset while iterating
+  // ---- SERVICES ----
+  await prisma.service.deleteMany();
 
   await prisma.service.createMany({
     data: [
-      // DOG OVERNIGHT
       {
         name: "Dog Overnight (in your home)",
         code: "DOG_OVERNIGHT_HOME",
         species: "DOG",
         category: "OVERNIGHT",
         durationMinutes: null,
-        basePriceCents: 6000, // $60/night
+        basePriceCents: 6000,
         notes: "+$20 per additional dog, +$8 per cat",
       },
-
-      // CAT OVERNIGHT
       {
         name: "Cat Overnight",
         code: "CAT_OVERNIGHT",
         species: "CAT",
         category: "OVERNIGHT",
         durationMinutes: null,
-        basePriceCents: 4200, // $42/night
+        basePriceCents: 4200,
         notes: "+$8 per additional cat",
       },
-
-      // DOG DROP-INS – single dog
       {
         name: "Dog Drop-In (single dog, 15 min)",
         code: "DOG_DROPIN_SINGLE_15",
@@ -198,8 +289,6 @@ async function main() {
         durationMinutes: 60,
         basePriceCents: 3000,
       },
-
-      // DOG DROP-INS – two dogs
       {
         name: "Dog Drop-In (two dogs, 15 min)",
         code: "DOG_DROPIN_DOUBLE_15",
@@ -224,8 +313,6 @@ async function main() {
         durationMinutes: 60,
         basePriceCents: 3500,
       },
-
-      // DOG WALKS – single dog
       {
         name: "Dog Walk (single dog, 15 min)",
         code: "DOG_WALK_SINGLE_15",
@@ -250,8 +337,6 @@ async function main() {
         durationMinutes: 60,
         basePriceCents: 3000,
       },
-
-      // ADDITIONAL SERVICES
       {
         name: "Dog Bath (at home)",
         code: "DOG_BATH",
@@ -276,8 +361,6 @@ async function main() {
         durationMinutes: null,
         basePriceCents: 2000,
       },
-
-      // CAT DROP-INS – one cat
       {
         name: "Cat Drop-In (one cat, 15 min)",
         code: "CAT_DROPIN_SINGLE_15",
@@ -302,8 +385,6 @@ async function main() {
         durationMinutes: 60,
         basePriceCents: 2500,
       },
-
-      // CAT DROP-INS – two cats
       {
         name: "Cat Drop-In (two cats, 15 min)",
         code: "CAT_DROPIN_DOUBLE_15",
@@ -334,101 +415,146 @@ async function main() {
     ],
   });
 
-  // ---- CLEANUP for cancel-test bookings ----
-await prisma.bookingHistory.deleteMany({
-  where: {
-    booking: {
-      notes: { startsWith: "Seeded cancel-test" },
-    },
-  },
-});
+  // ---- CLEANUP SEEDED BOOKINGS ----
+  await prisma.bookingHistory.deleteMany({
+    where: { booking: { notes: { startsWith: "Seeded booking:" } } },
+  });
 
-await prisma.bookingLineItem.deleteMany({
-  where: {
-    booking: {
-      notes: { startsWith: "Seeded cancel-test" },
-    },
-  },
-});
+  await prisma.bookingLineItem.deleteMany({
+    where: { booking: { notes: { startsWith: "Seeded booking:" } } },
+  });
 
-await prisma.booking.deleteMany({
-  where: {
-    notes: { startsWith: "Seeded cancel-test" },
-  },
-});
-  // ---- COMMON LINE ITEMS ----
-  const commonLineItems = [
-    {
-      label: "Visit",
-      quantity: 2,
-      unitPriceCents: 4000,
-      totalPriceCents: 8000,
-    },
-  ];
+  await prisma.visit.deleteMany({
+    where: { booking: { notes: { startsWith: "Seeded booking:" } } },
+  });
 
-  // ---- CANCEL-TEST CLIENTS ----
-  const cancelTestClients = [
-    {
-      name: "Sarah Johnson",
-      email: "sarah@example.com",
-      phone: "555-111-2222",
-      city: "Princeton",
-      state: "NJ",
-    },
-    {
-      name: "Mike Davis",
-      email: "mike@example.com",
-      phone: "555-333-4444",
-      city: "New Brunswick",
-      state: "NJ",
-    },
-    {
-      name: "Ava Martinez",
-      email: "ava@example.com",
-      phone: "555-555-1111",
-      city: "Jersey City",
-      state: "NJ",
-    },
-    {
-      name: "Noah Kim",
-      email: "noah@example.com",
-      phone: "555-555-2222",
-      city: "Hoboken",
-      state: "NJ",
-    },
-    {
-      name: "Emma Chen",
-      email: "emma@example.com",
-      phone: "555-555-3333",
-      city: "Brooklyn",
-      state: "NY",
-    },
-    {
-      name: "Liam Patel",
-      email: "liam@example.com",
-      phone: "555-555-4444",
-      city: "Manhattan",
-      state: "NY",
-    },
-  ];
+  await prisma.booking.deleteMany({
+    where: { notes: { startsWith: "Seeded booking:" } },
+  });
 
-  for (let i = 0; i < cancelTestClients.length; i++) {
-    const client = await upsertClient(cancelTestClients[i]);
+  // ---- CLIENTS ----
+  const sarah = await upsertClient({
+    name: "Sarah Johnson",
+    email: "sarah@example.com",
+    phone: "555-111-2222",
+    city: "Princeton",
+    state: "NJ",
+  });
 
-    await createSeedBooking({
-      clientId: client.id,
-      sitterId: daniel.id,
-      status: BookingStatus.REQUESTED,
-      startTime: dayAt(i + 1, 10),
-      endTime: dayAt(i + 1, 12),
-      operatorId: bridget.id,
-      serviceSummary: "Drop-in visits (cancel test)",
-      notes: `Seeded cancel-test booking #${i + 1}`,
-      lineItems: commonLineItems,
-    });
-  }
+  const mike = await upsertClient({
+    name: "Mike Davis",
+    email: "mike@example.com",
+    phone: "555-333-4444",
+    city: "New Brunswick",
+    state: "NJ",
+  });
 
-  console.log("Seed complete: services + cancel-test bookings.");
+  const ava = await upsertClient({
+    name: "Ava Martinez",
+    email: "ava@example.com",
+    phone: "555-555-1111",
+    city: "Jersey City",
+    state: "NJ",
+  });
+
+  const noah = await upsertClient({
+    name: "Noah Kim",
+    email: "noah@example.com",
+    phone: "555-555-2222",
+    city: "Hoboken",
+    state: "NJ",
+  });
+
+  const emma = await upsertClient({
+    name: "Emma Chen",
+    email: "emma@example.com",
+    phone: "555-555-3333",
+    city: "Brooklyn",
+    state: "NY",
+  });
+
+  const liam = await upsertClient({
+    name: "Liam Patel",
+    email: "liam@example.com",
+    phone: "555-555-4444",
+    city: "Manhattan",
+    state: "NY",
+  });
+
+  // ---- SEEDED BOOKINGS ----
+  await createSeedBooking({
+    clientId: sarah.id,
+    sitterId: daniel.id,
+    operatorId: bridget.id,
+    status: BookingStatus.CONFIRMED,
+    serviceCode: "CAT_DROPIN_SINGLE_30",
+    notes: "Seeded booking: cat drop-in with nail trim",
+    visits: [
+      { startTime: dayAt(1, 10, 0), endTime: dayAt(1, 10, 30) },
+      { startTime: dayAt(3, 10, 0), endTime: dayAt(3, 10, 30) },
+    ],
+    addOnCodes: ["CAT_NAIL_CUT"],
+  });
+
+  await createSeedBooking({
+    clientId: mike.id,
+    sitterId: daniel.id,
+    operatorId: bridget.id,
+    status: BookingStatus.REQUESTED,
+    serviceCode: "DOG_WALK_SINGLE_30",
+    notes: "Seeded booking: dog walk requested",
+    visits: [
+      { startTime: dayAt(2, 9, 0), endTime: dayAt(2, 9, 30) },
+      { startTime: dayAt(2, 15, 0), endTime: dayAt(2, 15, 30) },
+    ],
+  });
+
+  await createSeedBooking({
+    clientId: ava.id,
+    sitterId: daniel.id,
+    operatorId: bridget.id,
+    status: BookingStatus.COMPLETED,
+    serviceCode: "DOG_DROPIN_SINGLE_60",
+    notes: "Seeded booking: completed dog drop-in with bath",
+    visits: [{ startTime: dayAt(-1, 12, 0), endTime: dayAt(-1, 13, 0) }],
+    addOnCodes: ["DOG_BATH"],
+  });
+
+  await createSeedBooking({
+    clientId: noah.id,
+    sitterId: daniel.id,
+    operatorId: bridget.id,
+    status: BookingStatus.CANCELED,
+    serviceCode: "CAT_OVERNIGHT",
+    notes: "Seeded booking: canceled cat overnight",
+    visits: [{ startTime: dayAt(4, 20, 0), endTime: dayAt(5, 8, 0) }],
+  });
+
+  await createSeedBooking({
+    clientId: emma.id,
+    sitterId: null,
+    operatorId: bridget.id,
+    status: BookingStatus.REQUESTED,
+    serviceCode: "DOG_DROPIN_DOUBLE_30",
+    notes: "Seeded booking: unassigned double dog drop-in",
+    visits: [
+      { startTime: dayAt(5, 11, 30), endTime: dayAt(5, 12, 0) },
+      { startTime: dayAt(6, 11, 30), endTime: dayAt(6, 12, 0) },
+    ],
+    addOnCodes: ["DOG_NAIL_GRIND"],
+  });
+
+  await createSeedBooking({
+    clientId: liam.id,
+    sitterId: daniel.id,
+    operatorId: bridget.id,
+    status: BookingStatus.CONFIRMED,
+    serviceCode: "DOG_OVERNIGHT_HOME",
+    notes: "Seeded booking: confirmed dog overnight",
+    visits: [{ startTime: dayAt(7, 20, 0), endTime: dayAt(8, 8, 0) }],
+  });
+
+  console.log("Seed complete: services + bookings created.");
 }
 
 main()
