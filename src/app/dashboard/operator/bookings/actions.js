@@ -278,16 +278,16 @@ export async function assignSitter(arg1, arg2) {
   const session = await requireRole(["OPERATOR"]);
   const actorId = await getActorId(session);
 
-  const formData = arg2 ?? arg1;
-  const bookingId =
-    (arg2 ? arg1 : null) ?? formData.get("bookingId")?.toString();
-
-  const nextSitterIdRaw = formData.get("sitterId")?.toString();
+  const bookingId = resolveBookingId(arg1, arg2);
   if (!bookingId) {
     return { ok: false, error: "Missing booking id." };
   }
 
-  const nextSitterId = nextSitterIdRaw ? nextSitterIdRaw : null;
+  const formData =
+    arg1 instanceof FormData ? arg1 : arg2 instanceof FormData ? arg2 : null;
+
+  const nextSitterIdRaw = formData?.get("sitterId")?.toString() || "";
+  const nextSitterId = nextSitterIdRaw || null;
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
