@@ -10,6 +10,27 @@ import {
   STATUS_CARD_BORDER_CLASSES,
 } from "@/lib/statusStyles";
 
+
+
+function formatVisitSummary(visits = []) {
+  if (!visits.length) return "No visits";
+
+  const firstTwo = visits.slice(0, 2).map((v) =>
+    new Date(v.startTime).toLocaleString(undefined, {
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })
+  );
+
+  if (visits.length <= 2) {
+    return firstTwo.join(" • ");
+  }
+
+  return `${firstTwo.join(" • ")} • +${visits.length - 2} more`;
+}
+
 function StatusBadge({ status }) {
   const base =
     "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border";
@@ -135,7 +156,9 @@ export default function BookingsTable({
                   {b.sitter?.name || b.sitter?.email || "Unassigned"}
                 </div>
                 <div className="text-xs text-zinc-500 mt-1">
-                  {new Date(b.startTime).toLocaleString()}
+                  {b.visits?.length
+                    ? formatVisitSummary(b.visits)
+                    : new Date(b.startTime).toLocaleString()}
                 </div>
               </div>
 
@@ -178,7 +201,7 @@ export default function BookingsTable({
         <table className="min-w-full text-sm">
           <thead className="text-left text-zinc-500">
             <tr className="border-b border-zinc-200">
-              <th className="p-3">Start</th>
+              <th className="p-3">Visits</th>
               <th className="p-3">Client</th>
               <th className="p-3">Sitter</th>
               <th className="p-3">Status</th>
@@ -190,8 +213,16 @@ export default function BookingsTable({
           <tbody>
             {bookings.map((b) => (
               <tr key={b.id} className="border-b border-zinc-100">
-                <td className="p-3 whitespace-nowrap">
-                  {new Date(b.startTime).toLocaleString()}
+                <td className="p-3">
+                  <div className="text-sm text-zinc-900">
+                    {b.visits?.length || 0} visit
+                    {b.visits?.length === 1 ? "" : "s"}
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    {b.visits?.length
+                      ? formatVisitSummary(b.visits)
+                      : new Date(b.startTime).toLocaleString()}
+                  </div>
                 </td>
                 <td className="p-3">{b.client?.name || "—"}</td>
                 <td className="p-3">

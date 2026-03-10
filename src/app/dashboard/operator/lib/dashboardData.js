@@ -39,11 +39,10 @@ export async function getOperatorDashboardData({
   from,
   to,
 }) {
-  // Defensive date where – using your existing helper
   const dateWhere = buildDateWhere({ from, to });
 
   const where = {
-    ...(operatorId ? { operatorId } : {}), // be defensive
+    ...(operatorId ? { operatorId } : {}),
     ...dateWhere,
     ...(status && status !== "ALL" ? { status } : {}),
   };
@@ -53,7 +52,14 @@ export async function getOperatorDashboardData({
   const [bookings, grouped] = await Promise.all([
     prisma.booking.findMany({
       where,
-      include: { client: true, sitter: true, lineItems: true },
+      include: {
+        client: true,
+        sitter: true,
+        lineItems: true,
+        visits: {
+          orderBy: { startTime: "asc" },
+        },
+      },
       orderBy: { startTime: "asc" },
       take: 50,
     }),

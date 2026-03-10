@@ -208,15 +208,18 @@ async function createSeedBooking({
 
 async function main() {
   const bridgetPassword = process.env.BRIDGET_PASSWORD;
+  const bridgetSitterPassword = process.env.BRIDGET_SITTER_PASSWORD;
   const danielPassword = process.env.DANIEL_PASSWORD;
 
-  if (!bridgetPassword || !danielPassword) {
-    throw new Error("Missing BRIDGET_PASSWORD or DANIEL_PASSWORD in .env");
+  if (!bridgetPassword || !bridgetSitterPassword || !danielPassword) {
+    throw new Error(
+      "Missing BRIDGET_PASSWORD, BRIDGET_SITTER_PASSWORD, or DANIEL_PASSWORD in .env"
+    );
   }
-
-  const [bridgetHash, danielHash] = await Promise.all([
+  const [bridgetHash, danielHash, bridgetSitterHash] = await Promise.all([
     bcrypt.hash(bridgetPassword, 12),
     bcrypt.hash(danielPassword, 12),
+    bcrypt.hash(bridgetSitterPassword, 12),
   ]);
 
   // ---- USERS ----
@@ -228,6 +231,17 @@ async function main() {
       name: "Bridget",
       role: Role.OPERATOR,
       hashedPassword: bridgetHash,
+    },
+  });
+
+  const bridgetSitter = await prisma.user.upsert({
+    where: { email: "lunajobs13@gmail.com" },
+    update: {},
+    create: {
+      email: "lunajobs13@gmail.com",
+      name: "Bridget",
+      role: Role.SITTER,
+      hashedPassword: bridgetSitterHash,
     },
   });
 
@@ -498,7 +512,7 @@ async function main() {
 
   await createSeedBooking({
     clientId: mike.id,
-    sitterId: daniel.id,
+    sitterId: bridgetSitter.id,
     operatorId: bridget.id,
     status: BookingStatus.REQUESTED,
     serviceCode: "DOG_WALK_SINGLE_30",

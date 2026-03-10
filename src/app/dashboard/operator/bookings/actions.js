@@ -25,6 +25,29 @@ async function getActorId(session) {
   throw new Error("Stale session: user not found. Sign out and sign back in.");
 }
 
+async function resolveAssignableSitterIdForOperator(session) {
+  const operatorEmail = session?.user?.email;
+  if (!operatorEmail) return null;
+
+  let sitterEmail = null;
+
+  if (operatorEmail === "therainbowniche@gmail.com") {
+    sitterEmail = "lunajobs13@gmail.com";
+  }
+
+  if (!sitterEmail) return null;
+
+  const sitter = await prisma.user.findFirst({
+    where: {
+      role: "SITTER",
+      email: sitterEmail,
+    },
+    select: { id: true },
+  });
+
+  return sitter?.id ?? null;
+}
+
 function revalidateOperator(bookingId) {
   revalidatePath("/dashboard/operator");
   revalidatePath(`/dashboard/operator/bookings/${bookingId}`);
@@ -32,15 +55,12 @@ function revalidateOperator(bookingId) {
 
 // ✅ Supports (bookingId) OR (formData) OR (bookingId, formData)
 function resolveBookingId(arg1, arg2) {
-  // confirmBooking(formData) / cancelBooking(formData)
   if (arg1 instanceof FormData) {
     return arg1.get("bookingId")?.toString() || null;
   }
 
-  // confirmBooking(bookingId) / completeBooking(bookingId) / cancelBooking(bookingId)
   if (typeof arg1 === "string") return arg1;
 
-  // confirmBooking(_, formData) OR cancelBooking(prevState, formData)
   if (arg2 instanceof FormData) {
     return arg2.get("bookingId")?.toString() || null;
   }
@@ -66,6 +86,14 @@ export async function confirmBooking(arg1, arg2) {
       sitterId: true,
       startTime: true,
       endTime: true,
+      visits: {
+        select: {
+          id: true,
+          startTime: true,
+          endTime: true,
+        },
+        orderBy: { startTime: "asc" },
+      },
     },
   });
 
@@ -73,7 +101,6 @@ export async function confirmBooking(arg1, arg2) {
     return { ok: false, error: "Booking not found." };
   }
 
-  // Block terminal states
   if (booking.status === "CANCELED" || booking.status === "COMPLETED") {
     return {
       ok: false,
@@ -88,24 +115,31 @@ export async function confirmBooking(arg1, arg2) {
     };
   }
 
-  // Optional: basic sitter conflict check if a sitter is already assigned
   if (booking.sitterId) {
-    const conflict = await prisma.booking.findFirst({
-      where: {
-        id: { not: booking.id },
-        sitterId: booking.sitterId,
-        status: "CONFIRMED",
-        startTime: { lt: booking.endTime },
-        endTime: { gt: booking.startTime },
-      },
-    });
+    for (const visit of booking.visits) {
+      const conflict = await prisma.visit.findFirst({
+        where: {
+          bookingId: { not: booking.id },
+          sitterId: booking.sitterId,
+          status: "CONFIRMED",
+          startTime: { lt: visit.endTime },
+          endTime: { gt: visit.startTime },
+        },
+        select: {
+          id: true,
+          bookingId: true,
+          startTime: true,
+          endTime: true,
+        },
+      });
 
-    if (conflict) {
-      return {
-        ok: false,
-        error:
-          "This sitter already has a confirmed booking that overlaps this time.",
-      };
+      if (conflict) {
+        return {
+          ok: false,
+          error:
+            "This sitter already has a confirmed visit that overlaps one of this booking’s visit times.",
+        };
+      }
     }
   }
 
@@ -113,6 +147,10 @@ export async function confirmBooking(arg1, arg2) {
     prisma.booking.update({
       where: { id: bookingId },
       data: { status: "CONFIRMED", confirmedAt: new Date() },
+    }),
+    prisma.visit.updateMany({
+      where: { bookingId },
+      data: { status: "CONFIRMED" },
     }),
     prisma.bookingHistory.create({
       data: {
@@ -152,8 +190,6 @@ export async function cancelBooking(arg1, arg2) {
     reason = raw.slice(0, 140);
   }
 
- 
-
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     select: { id: true, status: true },
@@ -163,7 +199,6 @@ export async function cancelBooking(arg1, arg2) {
     return { ok: false, error: "Booking not found." };
   }
 
-  // Already terminal
   if (booking.status === "CANCELED" || booking.status === "COMPLETED") {
     return {
       ok: false,
@@ -171,7 +206,6 @@ export async function cancelBooking(arg1, arg2) {
     };
   }
 
-  // If booking was already confirmed, require reason
   if (booking.status === "CONFIRMED" && !reason) {
     return {
       ok: false,
@@ -226,7 +260,6 @@ export async function completeBooking(arg1, arg2) {
     return { ok: false, error: "Booking not found." };
   }
 
-  // Terminal states: no further transitions
   if (booking.status === "CANCELED") {
     return { ok: false, error: "Cannot complete a canceled booking." };
   }
@@ -235,7 +268,6 @@ export async function completeBooking(arg1, arg2) {
     return { ok: false, error: "Booking is already completed." };
   }
 
-  // Only confirmed bookings can be completed
   if (booking.status !== "CONFIRMED") {
     return {
       ok: false,
@@ -243,7 +275,6 @@ export async function completeBooking(arg1, arg2) {
     };
   }
 
-  // Sanity check: fee + payout must equal total
   const expected = booking.platformFeeCents + booking.sitterPayoutCents;
   if (expected !== booking.clientTotalCents) {
     return {
@@ -286,8 +317,24 @@ export async function assignSitter(arg1, arg2) {
   const formData =
     arg1 instanceof FormData ? arg1 : arg2 instanceof FormData ? arg2 : null;
 
-  const nextSitterIdRaw = formData?.get("sitterId")?.toString() || "";
-  const nextSitterId = nextSitterIdRaw || null;
+  const assignToMe = formData?.get("assignToMe")?.toString() === "true";
+
+  let nextSitterId = null;
+
+  if (assignToMe) {
+    nextSitterId = await resolveAssignableSitterIdForOperator(session);
+
+    if (!nextSitterId) {
+      return {
+        ok: false,
+        error:
+          "No linked sitter account was found for this operator. Make sure your sitter account exists and uses the same email.",
+      };
+    }
+  } else {
+    const nextSitterIdRaw = formData?.get("sitterId")?.toString() || "";
+    nextSitterId = nextSitterIdRaw || null;
+  }
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -297,6 +344,14 @@ export async function assignSitter(arg1, arg2) {
       status: true,
       startTime: true,
       endTime: true,
+      visits: {
+        select: {
+          id: true,
+          startTime: true,
+          endTime: true,
+        },
+        orderBy: { startTime: "asc" },
+      },
     },
   });
 
@@ -304,7 +359,6 @@ export async function assignSitter(arg1, arg2) {
     return { ok: false, error: "Booking not found." };
   }
 
-  // No sitter edits on terminal bookings
   if (booking.status === "CANCELED" || booking.status === "COMPLETED") {
     return {
       ok: false,
@@ -319,37 +373,53 @@ export async function assignSitter(arg1, arg2) {
     return { ok: true };
   }
 
-  // Optional: sitter conflict check when assigning
   if (toSitterId) {
-    const conflict = await prisma.booking.findFirst({
+    const sitterExists = await prisma.user.findFirst({
       where: {
-        id: { not: booking.id },
-        sitterId: toSitterId,
-        status: "CONFIRMED",
-        startTime: { lt: booking.endTime },
-        endTime: { gt: booking.startTime },
+        id: toSitterId,
+        role: "SITTER",
       },
+      select: { id: true },
     });
 
-    if (conflict) {
-      return {
-        ok: false,
-        error:
-          "This sitter already has a confirmed booking that overlaps this time.",
-      };
+    if (!sitterExists) {
+      return { ok: false, error: "Selected sitter was not found." };
+    }
+
+    for (const visit of booking.visits) {
+      const conflict = await prisma.visit.findFirst({
+        where: {
+          bookingId: { not: booking.id },
+          sitterId: toSitterId,
+          status: "CONFIRMED",
+          startTime: { lt: visit.endTime },
+          endTime: { gt: visit.startTime },
+        },
+        select: {
+          id: true,
+          bookingId: true,
+          startTime: true,
+          endTime: true,
+        },
+      });
+
+      if (conflict) {
+        return {
+          ok: false,
+          error:
+            "This sitter already has a confirmed visit that overlaps one of this booking’s visit times.",
+        };
+      }
     }
   }
-
-  const note =
-    !fromSitterId && toSitterId
-      ? "Operator assigned sitter"
-      : fromSitterId && !toSitterId
-      ? "Operator unassigned sitter"
-      : "Operator reassigned sitter";
 
   await prisma.$transaction([
     prisma.booking.update({
       where: { id: bookingId },
+      data: { sitterId: toSitterId },
+    }),
+    prisma.visit.updateMany({
+      where: { bookingId },
       data: { sitterId: toSitterId },
     }),
     prisma.bookingHistory.create({
@@ -357,7 +427,13 @@ export async function assignSitter(arg1, arg2) {
         bookingId,
         fromSitterId,
         toSitterId,
-        note,
+        note: assignToMe
+          ? "Operator assigned booking to self"
+          : !fromSitterId && toSitterId
+          ? "Operator assigned sitter"
+          : fromSitterId && !toSitterId
+          ? "Operator unassigned sitter"
+          : "Operator reassigned sitter",
         changedByUserId: actorId,
       },
     }),
