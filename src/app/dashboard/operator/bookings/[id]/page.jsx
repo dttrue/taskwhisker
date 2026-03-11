@@ -5,6 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cancelBooking } from "../actions";
 
+import CollapsibleCard from "@/components/ui/CollapsibleCard";
 import CancelBookingDetailForm from "@/app/dashboard/operator/_components/CancelBookingDetailForm";
 import {
   ConfirmBookingForm,
@@ -393,26 +394,19 @@ export default async function OperatorBookingDetailPage({
 
         {/* Notes */}
         {booking.notes ? (
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-              Notes / Add-ons
-            </div>
-            <div className="mt-3 whitespace-pre-wrap text-sm text-zinc-900">
+          <CollapsibleCard title="Notes / Add-ons" defaultOpen={false}>
+            <div className="whitespace-pre-wrap text-sm text-zinc-900">
               {booking.notes}
             </div>
-          </section>
+          </CollapsibleCard>
         ) : null}
 
         {/* Visit schedule */}
-        <section className="rounded-xl border border-zinc-200 bg-white shadow-sm">
-          <div className="border-b border-zinc-200 p-4">
-            <h2 className="font-semibold text-zinc-900">Visit schedule</h2>
-          </div>
-
+        <CollapsibleCard title="Visit schedule" defaultOpen={true}>
           {booking.visits.length === 0 ? (
-            <div className="p-4 text-sm text-zinc-600">No visits found.</div>
+            <div className="text-sm text-zinc-600">No visits found.</div>
           ) : (
-            <div className="space-y-4 p-4">
+            <div className="space-y-4">
               {groupedVisits.map((group) => (
                 <div
                   key={group.dateKey}
@@ -448,10 +442,13 @@ export default async function OperatorBookingDetailPage({
               ))}
             </div>
           )}
-        </section>
+        </CollapsibleCard>
 
         {/* Secondary details */}
-        <details className="rounded-xl border border-zinc-200 bg-white shadow-sm">
+        <CollapsibleCard
+          title={`Line items (${booking.lineItems.length})`}
+          defaultOpen={false}
+        >
           <summary className="cursor-pointer list-none border-b border-zinc-200 p-4 font-semibold text-zinc-900">
             <div className="flex items-center justify-between">
               <span>Line items</span>
@@ -518,9 +515,12 @@ export default async function OperatorBookingDetailPage({
               </div>
             </>
           )}
-        </details>
+        </CollapsibleCard>
 
-        <details className="rounded-xl border border-zinc-200 bg-white shadow-sm">
+        <CollapsibleCard
+          title={`History (${booking.history.length})`}
+          defaultOpen={false}
+        >
           <summary className="cursor-pointer list-none border-b border-zinc-200 p-4 font-semibold text-zinc-900">
             <div className="flex items-center justify-between">
               <span>History</span>
@@ -577,7 +577,7 @@ export default async function OperatorBookingDetailPage({
               ))}
             </div>
           )}
-        </details>
+        </CollapsibleCard>
       </div>
     </main>
   );

@@ -10,118 +10,17 @@ import MetricsBar from "./_components/MetricsBar";
 import DateRangeFilter from "./_components/DateRangeFilter";
 import BookingsTable from "./_components/BookingsTable";
 
+import CollapsibleCard from "@/components/ui/CollapsibleCard";
 import { resolveStatus, resolveDateRange } from "./lib/dashboardQuery";
 import { getOperatorDashboardData } from "./lib/dashboardData";
-
-function formatDateOnly(d) {
-  if (!d) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function formatMoney(cents = 0) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function isSameDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function getTodayVisitCount(bookings, now = new Date()) {
-  return bookings.reduce((count, booking) => {
-    const todayVisits =
-      booking.visits?.filter((visit) =>
-        isSameDay(new Date(visit.startTime), now)
-      ) || [];
-
-    return count + todayVisits.length;
-  }, 0);
-}
-
-function getConfirmedRevenue(bookings) {
-  return bookings
-    .filter((b) => b.status === "CONFIRMED")
-    .reduce((sum, b) => sum + (b.clientTotalCents || 0), 0);
-}
-
-function getBookingNextVisit(booking, now = new Date()) {
-  if (!booking?.visits?.length) return null;
-
-  return (
-    booking.visits.find((visit) => new Date(visit.endTime) >= now) ||
-    booking.visits[0]
-  );
-}
-
-function groupBookings(bookings, now = new Date()) {
-  const requested = [];
-  const today = [];
-  const upcoming = [];
-  const completed = [];
-  const canceled = [];
-
-  for (const booking of bookings) {
-    if (booking.status === "REQUESTED") {
-      requested.push(booking);
-      continue;
-    }
-
-    if (booking.status === "COMPLETED") {
-      completed.push(booking);
-      continue;
-    }
-
-    if (booking.status === "CANCELED") {
-      canceled.push(booking);
-      continue;
-    }
-
-    const hasVisitToday =
-      booking.visits?.some((visit) =>
-        isSameDay(new Date(visit.startTime), now)
-      ) || false;
-
-    if (hasVisitToday) {
-      today.push(booking);
-    } else {
-      upcoming.push(booking);
-    }
-  }
-
-  return { requested, today, upcoming, completed, canceled };
-}
-
-function getNeedsAttentionBooking(bookings, now = new Date()) {
-  const priorityPool = bookings
-    .filter(
-      (b) =>
-        b.status === "REQUESTED" || (b.status === "CONFIRMED" && !b.sitterId)
-    )
-    .map((booking) => ({
-      booking,
-      nextVisit: getBookingNextVisit(booking, now),
-    }));
-
-  priorityPool.sort((a, b) => {
-    const aTime = a.nextVisit
-      ? new Date(a.nextVisit.startTime).getTime()
-      : new Date(a.booking.startTime).getTime();
-
-    const bTime = b.nextVisit
-      ? new Date(b.nextVisit.startTime).getTime()
-      : new Date(b.booking.startTime).getTime();
-
-    return aTime - bTime;
-  });
-
-  return priorityPool[0] || null;
-}
+import {
+  formatDateOnly,
+  formatMoney,
+  getTodayVisitCount,
+  getConfirmedRevenue,
+  groupBookings,
+  getNeedsAttentionBooking,
+} from "./lib/dashboardUtils";
 
 function StatCard({ label, value, subtext }) {
   return (
@@ -157,67 +56,63 @@ function Section({
   const hiddenCount = Math.max(bookings.length - visibleBookings.length, 0);
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-zinc-900">{title}</h2>
-          {description ? (
-            <p className="mt-1 text-sm text-zinc-600">{description}</p>
-          ) : null}
-        </div>
+    <CollapsibleCard
+      title={`${title} (${bookings.length})`}
+      defaultOpen={!collapsedByDefault}
+    >
+      <div className="space-y-3">
+        {description ? (
+          <p className="text-sm text-zinc-600">{description}</p>
+        ) : null}
 
-        <div className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600">
-          {bookings.length}
-        </div>
-      </div>
-
-      {collapsedByDefault ? (
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="text-sm text-zinc-600">
-            {bookings.length} booking{bookings.length === 1 ? "" : "s"} hidden
-            in this section.
-          </div>
-
-          {viewAllHref ? (
-            <a
-              href={viewAllHref}
-              className="mt-3 inline-flex text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
-            >
-              View all {title.toLowerCase()}
-            </a>
-          ) : null}
-        </div>
-      ) : (
-        <>
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm">
-            <BookingsTable
-              bookings={visibleBookings}
-              confirmBooking={confirmBooking}
-              cancelBooking={cancelBooking}
-              completeBooking={completeBooking}
-              listQs={listQs}
-            />
-          </div>
-
-          {(hiddenCount > 0 || viewAllHref) && (
-            <div className="flex items-center justify-between px-1">
-              <div className="text-xs text-zinc-500">
-                Showing {visibleBookings.length} of {bookings.length}
-              </div>
-
-              {viewAllHref ? (
-                <a
-                  href={viewAllHref}
-                  className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
-                >
-                  View all
-                </a>
-              ) : null}
+        {collapsedByDefault ? (
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="text-sm text-zinc-600">
+              {bookings.length} booking{bookings.length === 1 ? "" : "s"} hidden
+              in this section.
             </div>
-          )}
-        </>
-      )}
-    </section>
+
+            {viewAllHref ? (
+              <a
+                href={viewAllHref}
+                className="mt-3 inline-flex text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
+              >
+                View all {title.toLowerCase()}
+              </a>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <div className="rounded-lg border border-zinc-200 bg-white">
+              <BookingsTable
+                bookings={visibleBookings}
+                confirmBooking={confirmBooking}
+                cancelBooking={cancelBooking}
+                completeBooking={completeBooking}
+                listQs={listQs}
+              />
+            </div>
+
+            {(hiddenCount > 0 || viewAllHref) && (
+              <div className="flex items-center justify-between px-1">
+                <div className="text-xs text-zinc-500">
+                  Showing {visibleBookings.length} of {bookings.length}
+                </div>
+
+                {viewAllHref ? (
+                  <a
+                    href={viewAllHref}
+                    className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
+                  >
+                    View all
+                  </a>
+                ) : null}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </CollapsibleCard>
   );
 }
 
