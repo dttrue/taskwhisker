@@ -38,6 +38,7 @@ model Booking {
 
   clientLinkToken   String        @unique @default(cuid())
   notes             String?
+  petDetails        Json?
   startTime         DateTime
   endTime           DateTime
   status            BookingStatus @default(REQUESTED)
@@ -56,6 +57,28 @@ model Booking {
   service     Service?     @relation("BookingService", fields: [serviceId], references: [id])
   serviceType ServiceType?
 
+  // -----------------------------
+  // SERVICE LOCATION SNAPSHOT
+  // -----------------------------
+  serviceAddressLine1 String?
+  serviceAddressLine2 String?
+  serviceCity         String?
+  serviceState        String?
+  servicePostalCode   String?
+  serviceCountry      String? @default("US")
+
+  // -----------------------------
+  // GEOCOORDINATES (future maps)
+  // -----------------------------
+  serviceLat Decimal? @db.Decimal(10, 7)
+  serviceLng Decimal? @db.Decimal(10, 7)
+
+  // -----------------------------
+  // ARRIVAL / PROPERTY NOTES
+  // -----------------------------
+  accessInstructions String?
+  locationNotes      String?
+
   client Client @relation(fields: [clientId], references: [id])
 
   // 🔹 OPERATOR + SITTER relations
@@ -73,6 +96,7 @@ model Booking {
   @@index([clientId, startTime])
   @@index([sitterId, startTime])
   @@index([operatorId, startTime])
+  @@index([serviceLat, serviceLng])
 }
 
 model BookingLineItem {

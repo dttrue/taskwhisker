@@ -2,15 +2,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import AdaptiveCalendar from "@/components/AdaptiveCalendar";
 import { createPublicBooking } from "../actions";
+
+import BookingStepSchedule from "../ steps/BookingStepSchedule";
+import BookingStepClientInfo from "../ steps/BookingStepClientInfo";
+import BookingStepAddOns from "../ steps/BookingStepAddOns";
+import BookingStepReview from "../ steps/BookingStepReview";
 
 const BOOKING_START_MIN = 7 * 60; // 07:00
 const BOOKING_END_MIN = 22 * 60; // 22:00
 
-function toISODate(d) {
-  return d.toISOString().slice(0, 10);
-}
 
 function prettyDate(d) {
   try {
@@ -26,7 +27,6 @@ function prettyDate(d) {
 }
 
 function timeToMinutes(t) {
-  // "HH:MM"
   if (!t || typeof t !== "string") return NaN;
   const [hh, mm] = t.split(":").map(Number);
   if (!Number.isFinite(hh) || !Number.isFinite(mm)) return NaN;
@@ -55,37 +55,38 @@ function validateWindow(startTime, endTime) {
 export default function PublicBookingWizard({
   initialService,
   serviceOptions = [],
+  extraOptions = [],
 }) {
-  // Steps:
-  // 1 Service
-  // 2 Schedule
-  // 3 Add-ons
-  // 4 Review + Submit
   const [step, setStep] = useState(1);
-
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState(null);
   const [booking, setBooking] = useState(null);
 
-  // Service selection
-  const [serviceCode, setServiceCode] = useState(initialService.code);
-  const [serviceType, setServiceType] = useState(initialService.serviceType);
+  // Service is already chosen by the route: /book/[serviceCode]
+  const serviceCode = initialService.code;
+  const serviceType = initialService.serviceType;
+  const svc =
+    serviceOptions.find((s) => s.code === serviceCode) || initialService;
 
-  // Client + address
   const [client, setClient] = useState({
     name: "",
     email: "",
     phone: "",
+  });
+
+  const [serviceLocation, setServiceLocation] = useState({
     addressLine1: "",
     addressLine2: "",
     city: "",
     state: "",
     postalCode: "",
+    country: "US",
+    accessInstructions: "",
+    locationNotes: "",
   });
 
-  // Add-ons
   const [addOns, setAddOns] = useState({
-    nailTrim: { enabled: false, appliesTo: "ONCE" }, // ONCE | EACH_VISIT
+    nailTrim: { enabled: false, appliesTo: "ONCE" },
     bath: {
       enabled: false,
       appliesTo: "ONCE",
@@ -93,6 +94,46 @@ export default function PublicBookingWizard({
       largeDogs: 0,
     },
   });
+
+  const [weightClass, setWeightClass] = useState("");
+  const [range, setRange] = useState();
+  const [dates, setDates] = useState([]); // always ["YYYY-MM-DD"]
+  const [scheduleMode, setScheduleMode] = useState("SAME");
+
+  const [times, setTimes] = useState({
+    startTime: "",
+    endTime: "",
+  });
+
+  const [slotsByDate, setSlotsByDate] = useState({});
+  const [dogSize, setDogSize] = useState([]);
+  const [petNotes, setPetNotes] = useState("");
+
+  const isRange = serviceType === "OVERNIGHT";
+
+  const availableExtras = useMemo(() => {
+    if (!svc) return [];
+    return extraOptions.filter((extra) => extra.species === svc.species);
+  }, [extraOptions, svc]);
+
+  const nailTrimExtra = useMemo(() => {
+    return (
+      availableExtras.find(
+        (extra) =>
+          extra.code === "DOG_NAIL_GRIND" || extra.code === "CAT_NAIL_CUT"
+      ) || null
+    );
+  }, [availableExtras]);
+
+  const bathExtra = useMemo(() => {
+    return availableExtras.find((extra) => extra.code === "DOG_BATH") || null;
+  }, [availableExtras]);
+
+  const hasAnyAddOns = addOns.nailTrim.enabled || addOns.bath.enabled;
+
+  const selectedDateStrs = useMemo(() => {
+    return [...dates].sort();
+  }, [dates]);
 
   function toggleAddOn(key) {
     setAddOns((prev) => ({
@@ -108,98 +149,84 @@ export default function PublicBookingWizard({
     }));
   }
 
-  // Schedule
-  const [scheduleKind, setScheduleKind] = useState("ONE_TIME"); // ONE_TIME | REPEAT_WEEKLY (later)
-
-  // For overnight
-  const [range, setRange] = useState(); // { from, to }
-
-  // For walks/drop-ins (date selection)
-  const [dates, setDates] = useState([]); // array<Date>
-
-  // Same-time-for-all mode
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-
-  // Custom time windows mode (supports multiple visits per date)
-  // scheduleMode only applies to non-range services
-  const [scheduleMode, setScheduleMode] = useState("SAME_TIME"); // SAME_TIME | CUSTOM
-  // Map: "YYYY-MM-DD" -> [{ startTime, endTime }]
-  const [customWindowsByDate, setCustomWindowsByDate] = useState({});
-
-  // Pet notes (for now)
-  const [dogSize, setDogSize] = useState([]); // ["0-15", "16-40", ...]
-  const [petNotes, setPetNotes] = useState("");
-
-  const isRange = serviceType === "OVERNIGHT";
-
-  const svc = useMemo(() => {
-    return serviceOptions.find((s) => s.code === serviceCode) || initialService;
-  }, [serviceOptions, serviceCode, initialService]);
-
   function toggleDogSize(size) {
     setDogSize((prev) =>
       prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
     );
   }
 
-  // Keep customWindowsByDate in sync with selected dates
-  useEffect(() => {
-    if (isRange) return;
+  function syncSlotsForDates(dateStrs) {
+    setSlotsByDate((prev) => {
+      const next = {};
 
-    const keys = dates.map(toISODate);
-    setCustomWindowsByDate((prev) => {
-      const next = { ...prev };
+      for (const dateStr of dateStrs) {
+        const existing = Array.isArray(prev[dateStr]) ? prev[dateStr] : null;
 
-      // add missing keys
-      for (const k of keys) {
-        if (!next[k] || !Array.isArray(next[k]) || next[k].length === 0) {
-          // seed one slot if SAME_TIME has values, else blank
-          next[k] = [
-            {
-              startTime: startTime || "",
-              endTime: endTime || "",
-            },
-          ];
-        }
-      }
-
-      // remove keys no longer selected
-      for (const existingKey of Object.keys(next)) {
-        if (!keys.includes(existingKey)) {
-          delete next[existingKey];
-        }
+        next[dateStr] =
+          existing && existing.length
+            ? existing
+            : [
+                {
+                  startTime: times.startTime || "",
+                  endTime: times.endTime || "",
+                },
+              ];
       }
 
       return next;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dates, isRange]);
+  }
 
-  function addVisitSlot(dateKey) {
-    setCustomWindowsByDate((prev) => {
-      const slots = Array.isArray(prev[dateKey]) ? prev[dateKey] : [];
+  useEffect(() => {
+    if (isRange) return;
+    syncSlotsForDates(selectedDateStrs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDateStrs, isRange]);
+
+  function handleRangeChange(nextRange) {
+    setRange(nextRange);
+  }
+
+  function handleDatesChange(nextDates) {
+    setDates(nextDates || []);
+  }
+
+  function addSlot(dateStr) {
+    setSlotsByDate((prev) => {
+      const slots = Array.isArray(prev[dateStr]) ? prev[dateStr] : [];
       return {
         ...prev,
-        [dateKey]: [...slots, { startTime: "", endTime: "" }],
+        [dateStr]: [...slots, { startTime: "", endTime: "" }],
       };
     });
   }
 
-  function removeVisitSlot(dateKey, idx) {
-    setCustomWindowsByDate((prev) => {
-      const slots = Array.isArray(prev[dateKey]) ? [...prev[dateKey]] : [];
-      slots.splice(idx, 1);
-      return { ...prev, [dateKey]: slots.length ? slots : [] };
+  function updateSlot(dateStr, idx, patch) {
+    setSlotsByDate((prev) => {
+      const slots = Array.isArray(prev[dateStr]) ? [...prev[dateStr]] : [];
+      if (!slots[idx]) return prev;
+
+      slots[idx] = {
+        ...slots[idx],
+        ...patch,
+      };
+
+      return {
+        ...prev,
+        [dateStr]: slots,
+      };
     });
   }
 
-  function updateVisitSlot(dateKey, idx, field, value) {
-    setCustomWindowsByDate((prev) => {
-      const slots = Array.isArray(prev[dateKey]) ? [...prev[dateKey]] : [];
-      if (!slots[idx]) return prev;
-      slots[idx] = { ...slots[idx], [field]: value };
-      return { ...prev, [dateKey]: slots };
+  function removeSlot(dateStr, idx) {
+    setSlotsByDate((prev) => {
+      const slots = Array.isArray(prev[dateStr]) ? [...prev[dateStr]] : [];
+      slots.splice(idx, 1);
+
+      return {
+        ...prev,
+        [dateStr]: slots.length ? slots : [{ startTime: "", endTime: "" }],
+      };
     });
   }
 
@@ -214,35 +241,15 @@ export default function PublicBookingWizard({
   }
 
   function validateStep(targetStep) {
-    // 2 = schedule step (also includes client basics in this wizard)
+    // Going to Your Info -> validate Schedule first
     if (targetStep === 2) {
-      if (!client.name?.trim() || !client.email?.trim()) {
-        setError("Name and email are required.");
-        return false;
-      }
-    }
-
-    // 3 = add-ons
-    if (targetStep === 3) {
-      if (addOns.bath.enabled) {
-        const totalDogs =
-          (addOns.bath.smallDogs || 0) + (addOns.bath.largeDogs || 0);
-        if (totalDogs === 0) {
-          setError("For Bath, please enter at least 1 dog (small or large).");
-          return false;
-        }
-      }
-    }
-
-    // 4 = review/submit (schedule must be valid)
-    if (targetStep === 4) {
       if (isRange) {
         if (!range?.from || !range?.to) {
           setError("Please select a valid date range.");
           return false;
         }
 
-        const msg = validateWindow(startTime, endTime);
+        const msg = validateWindow(times.startTime, times.endTime);
         if (msg) {
           setError(msg);
           return false;
@@ -251,15 +258,13 @@ export default function PublicBookingWizard({
         return true;
       }
 
-      // multiple dates required
-      if (!dates.length) {
+      if (!selectedDateStrs.length) {
         setError("Please select at least one visit date.");
         return false;
       }
 
-      // SAME_TIME: validate single window
-      if (scheduleMode === "SAME_TIME") {
-        const msg = validateWindow(startTime, endTime);
+      if (scheduleMode === "SAME") {
+        const msg = validateWindow(times.startTime, times.endTime);
         if (msg) {
           setError(msg);
           return false;
@@ -267,20 +272,68 @@ export default function PublicBookingWizard({
         return true;
       }
 
-      // CUSTOM: validate each slot
-      const keys = dates.map(toISODate);
-      for (const k of keys) {
-        const slots = customWindowsByDate[k] || [];
+      for (const dateStr of selectedDateStrs) {
+        const slots = slotsByDate[dateStr] || [];
         if (!slots.length) {
-          setError(`Please add at least one visit time for ${k}.`);
+          setError(`Please add at least one visit time for ${dateStr}.`);
           return false;
         }
+
         for (let i = 0; i < slots.length; i++) {
           const msg = validateWindow(slots[i]?.startTime, slots[i]?.endTime);
           if (msg) {
-            setError(`${prettyDate(new Date(k))}: slot ${i + 1} — ${msg}`);
+            setError(
+              `${prettyDate(new Date(`${dateStr}T00:00:00`))}: slot ${
+                i + 1
+              } — ${msg}`
+            );
             return false;
           }
+        }
+      }
+
+      return true;
+    }
+
+    // Going to Add-ons -> validate Client Info
+    if (targetStep === 3) {
+      if (!client.name?.trim() || !client.email?.trim()) {
+        setError("Name and email are required.");
+        return false;
+      }
+
+      if (!serviceLocation.addressLine1?.trim()) {
+        setError("Service address is required.");
+        return false;
+      }
+
+      if (!serviceLocation.city?.trim()) {
+        setError("Service city is required.");
+        return false;
+      }
+
+      if (!serviceLocation.state?.trim()) {
+        setError("Service state is required.");
+        return false;
+      }
+
+      if (!serviceLocation.postalCode?.trim()) {
+        setError("Service postal code is required.");
+        return false;
+      }
+
+      return true;
+    }
+
+    // Going to Review -> validate Add-ons
+    if (targetStep === 4) {
+      if (addOns.bath.enabled) {
+        const totalDogs =
+          (addOns.bath.smallDogs || 0) + (addOns.bath.largeDogs || 0);
+
+        if (totalDogs === 0) {
+          setError("For Bath, please enter at least 1 dog (small or large).");
+          return false;
         }
       }
 
@@ -300,16 +353,16 @@ export default function PublicBookingWizard({
   function buildAddOnsPayload() {
     const addOnsPayload = [];
 
-    if (addOns.nailTrim.enabled) {
+    if (addOns.nailTrim.enabled && nailTrimExtra) {
       addOnsPayload.push({
-        code: "NAIL_TRIM",
+        code: nailTrimExtra.code,
         appliesTo: addOns.nailTrim.appliesTo,
       });
     }
 
-    if (addOns.bath.enabled) {
+    if (addOns.bath.enabled && bathExtra) {
       addOnsPayload.push({
-        code: "BATH",
+        code: bathExtra.code,
         appliesTo: addOns.bath.appliesTo,
         smallDogs: addOns.bath.smallDogs,
         largeDogs: addOns.bath.largeDogs,
@@ -320,18 +373,18 @@ export default function PublicBookingWizard({
   }
 
   function handleSubmit() {
-    if (booking) return; // prevent duplicate submits
-    if (!validateStep(4)) return;
+    if (booking) return;
+    if (step !== 4) return;
 
-    // Notes: keep pet meta as simple text for now
     const petMeta =
-      dogSize.length || petNotes
+      dogSize.length || weightClass || petNotes
         ? `\n\nPet details:\n- Dog size: ${
             dogSize.length ? dogSize.join(", ") : "not specified"
-          }\n- Notes: ${petNotes || "none"}`
+          }\n- Weight class: ${weightClass || "not specified"}\n- Notes: ${
+            petNotes || "none"
+          }`
         : "";
 
-    // Build schedule
     let payload = {
       serviceType: svc.serviceType,
       serviceCode: svc.code,
@@ -341,15 +394,26 @@ export default function PublicBookingWizard({
         name: client.name,
         email: client.email,
         phone: client.phone || undefined,
-        addressLine1: client.addressLine1 || undefined,
-        addressLine2: client.addressLine2 || undefined,
-        city: client.city || undefined,
-        state: client.state || undefined,
-        postalCode: client.postalCode || undefined,
       },
 
-      addOns: buildAddOnsPayload(),
+      serviceAddressLine1: serviceLocation.addressLine1 || undefined,
+      serviceAddressLine2: serviceLocation.addressLine2 || undefined,
+      serviceCity: serviceLocation.city || undefined,
+      serviceState: serviceLocation.state || undefined,
+      servicePostalCode: serviceLocation.postalCode || undefined,
+      serviceCountry: serviceLocation.country || "US",
+      accessInstructions: serviceLocation.accessInstructions || undefined,
+      locationNotes: serviceLocation.locationNotes || undefined,
 
+      petDetails:
+        dogSize.length || weightClass
+          ? {
+              dogSize,
+              weightClass: weightClass || undefined,
+            }
+          : undefined,
+
+      addOns: buildAddOnsPayload(),
       notes: (petNotes || petMeta || "").trim() || undefined,
     };
 
@@ -359,40 +423,26 @@ export default function PublicBookingWizard({
         mode: "RANGE",
         startDate: range.from.toISOString().slice(0, 10),
         endDate: range.to.toISOString().slice(0, 10),
-        startTime,
-        endTime,
+        scheduleMode: "SAME",
+        startTime: times.startTime,
+        endTime: times.endTime,
       };
     } else if (scheduleMode === "CUSTOM") {
-      const visitWindows = [];
-
-      // flatten
-      for (const d of dates) {
-        const k = toISODate(d);
-        const slots = customWindowsByDate[k] || [];
-        for (const slot of slots) {
-          visitWindows.push({
-            date: k,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-          });
-        }
-      }
-
       payload = {
         ...payload,
-        mode: "MULTIPLE", // still a multi-date booking
-        dates: dates.map(toISODate),
+        mode: "MULTIPLE",
+        dates: selectedDateStrs,
         scheduleMode: "CUSTOM",
-        visitWindows,
+        slotsByDate,
       };
     } else {
       payload = {
         ...payload,
         mode: "MULTIPLE",
-        dates: dates.map(toISODate),
-        scheduleMode: "SAME_TIME",
-        startTime,
-        endTime,
+        dates: selectedDateStrs,
+        scheduleMode: "SAME",
+        startTime: times.startTime,
+        endTime: times.endTime,
       };
     }
 
@@ -401,7 +451,6 @@ export default function PublicBookingWizard({
 
     startTransition(async () => {
       try {
-        console.log("📤 Submitting public booking payload:", payload);
         const res = await createPublicBooking(payload);
 
         if (!res.ok) {
@@ -418,586 +467,105 @@ export default function PublicBookingWizard({
     });
   }
 
-  const reviewDates = isRange
-    ? range?.from && range?.to
-      ? `${prettyDate(range.from)} → ${prettyDate(range.to)}`
-      : "—"
-    : dates.length
-    ? dates.map(prettyDate).join(", ")
-    : "—";
-
-  const visitWindowsPreview =
-    !isRange && scheduleMode === "CUSTOM"
-      ? dates
-          .map((d) => {
-            const k = toISODate(d);
-            const slots = customWindowsByDate[k] || [];
-            const summary = slots.length
-              ? slots
-                  .map((s, idx) => `${idx + 1}) ${s.startTime}–${s.endTime}`)
-                  .join(", ")
-              : "—";
-            return `${prettyDate(d)}: ${summary}`;
-          })
-          .join("\n")
-      : null;
-
-  const hasAnyAddOns = addOns.nailTrim.enabled || addOns.bath.enabled;
-
   return (
     <div className="space-y-4">
-      {/* DaisyUI steps */}
-      <ul className="steps w-full mb-4 text-xs">
-        <li className={`step ${step >= 1 ? "step-primary" : ""}`}>Service</li>
-        <li className={`step ${step >= 2 ? "step-primary" : ""}`}>Schedule</li>
+      <div className="rounded-xl border border-zinc-200 bg-white p-4">
+        <div className="mb-2">
+          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+            Selected service
+          </div>
+          <div className="text-base font-semibold text-zinc-900">
+            {svc.name ?? svc.label}
+          </div>
+          {svc.description ? (
+            <p className="mt-1 text-sm text-zinc-600">{svc.description}</p>
+          ) : null}
+        </div>
+      </div>
+
+      <ul className="steps mb-4 w-full text-xs">
+        <li className={`step ${step >= 1 ? "step-primary" : ""}`}>Schedule</li>
+        <li className={`step ${step >= 2 ? "step-primary" : ""}`}>Your Info</li>
         <li className={`step ${step >= 3 ? "step-primary" : ""}`}>Add-ons</li>
         <li className={`step ${step >= 4 ? "step-primary" : ""}`}>Review</li>
       </ul>
 
-      {/* Card wrapper */}
       <div className="card bg-base-100 shadow-md">
         <div className="card-body space-y-4">
-          {/* STEP 1 — Service */}
           {step === 1 && (
-            <>
-              <h1 className="card-title text-lg">Select a service</h1>
-
-              <select
-                className="select select-bordered w-full"
-                value={serviceCode}
-                onChange={(e) => {
-                  const nextCode = e.target.value;
-                  setServiceCode(nextCode);
-                  const next =
-                    serviceOptions.find((s) => s.code === nextCode) ||
-                    initialService;
-                  setServiceType(next.serviceType);
-
-                  // reset schedule on service change (prevents mixing modes)
-                  setRange(undefined);
-                  setDates([]);
-                  setStartTime("");
-                  setEndTime("");
-                  setScheduleMode("SAME_TIME");
-                  setCustomWindowsByDate({});
-                }}
-              >
-                {serviceOptions.map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.name ?? s.label}
-                  </option>
-                ))}
-              </select>
-
-              <p className="text-sm text-base-content/70">
-                {svc.category === "BOARDING" && "In the sitter’s home"}
-                {svc.category === "HOUSE_SITTING" && "In your home"}
-                {svc.category === "DROP_IN" && "Visits in your home"}
-                {svc.category === "DAY_CARE" && "In the sitter’s home"}
-                {svc.category === "WALK" && "In your neighborhood"}
-                {svc.category === "TRAINING" && "With a private trainer"}
-              </p>
-            </>
+            <BookingStepSchedule
+              isRange={isRange}
+              scheduleMode={scheduleMode}
+              setScheduleMode={setScheduleMode}
+              selectedDateStrs={selectedDateStrs}
+              syncSlotsForDates={syncSlotsForDates}
+              serviceType={serviceType}
+              range={range}
+              handleRangeChange={handleRangeChange}
+              dates={dates}
+              handleDatesChange={handleDatesChange}
+              times={times}
+              setTimes={setTimes}
+              slotsByDate={slotsByDate}
+              addSlot={addSlot}
+              updateSlot={updateSlot}
+              removeSlot={removeSlot}
+            />
           )}
 
-          {/* STEP 2 — Schedule (includes basic client info here) */}
           {step === 2 && (
-            <>
-              <h2 className="card-title text-lg">When do you need care?</h2>
-
-              {/* client info */}
-              <div className="space-y-2">
-                <label className="form-control">
-                  <span className="label-text text-sm">Name</span>
-                  <input
-                    className="input input-bordered input-sm"
-                    value={client.name}
-                    onChange={(e) =>
-                      setClient((c) => ({ ...c, name: e.target.value }))
-                    }
-                    required
-                  />
-                </label>
-
-                <label className="form-control">
-                  <span className="label-text text-sm">Email</span>
-                  <input
-                    type="email"
-                    className="input input-bordered input-sm"
-                    value={client.email}
-                    onChange={(e) =>
-                      setClient((c) => ({ ...c, email: e.target.value }))
-                    }
-                    required
-                  />
-                </label>
-
-                <label className="form-control">
-                  <span className="label-text text-sm">Phone</span>
-                  <input
-                    className="input input-bordered input-sm"
-                    value={client.phone}
-                    onChange={(e) =>
-                      setClient((c) => ({ ...c, phone: e.target.value }))
-                    }
-                  />
-                </label>
-              </div>
-
-              {/* schedule kind */}
-              <div className="mt-2">
-                <span className="label-text text-sm mb-1 block">Schedule</span>
-                <div className="join join-vertical sm:join-horizontal">
-                  <button
-                    type="button"
-                    className={`btn btn-sm join-item ${
-                      scheduleKind === "ONE_TIME" ? "btn-primary" : "btn-ghost"
-                    }`}
-                    onClick={() => setScheduleKind("ONE_TIME")}
-                  >
-                    One Time
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn btn-sm join-item ${
-                      scheduleKind === "REPEAT_WEEKLY"
-                        ? "btn-primary"
-                        : "btn-ghost"
-                    }`}
-                    onClick={() => setScheduleKind("REPEAT_WEEKLY")}
-                  >
-                    Repeat Weekly
-                  </button>
-                </div>
-              </div>
-
-              {/* calendar */}
-              <div className="mt-2">
-                <p className="label-text text-sm mb-1">
-                  {isRange
-                    ? "Select check-in and check-out"
-                    : "Select visit dates"}
-                </p>
-                <AdaptiveCalendar
-                  serviceType={serviceType}
-                  range={range}
-                  setRange={setRange}
-                  dates={dates}
-                  setDates={setDates}
-                />
-              </div>
-
-              {/* For non-overnight: choose schedule mode */}
-              {!isRange && (
-                <div className="mt-2">
-                  <p className="label-text text-sm mb-1">Time setup</p>
-                  <div className="join join-vertical sm:join-horizontal w-full">
-                    <button
-                      type="button"
-                      className={`btn btn-sm join-item ${
-                        scheduleMode === "SAME_TIME"
-                          ? "btn-primary"
-                          : "btn-ghost"
-                      }`}
-                      onClick={() => setScheduleMode("SAME_TIME")}
-                    >
-                      Same time for all dates
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn btn-sm join-item ${
-                        scheduleMode === "CUSTOM" ? "btn-primary" : "btn-ghost"
-                      }`}
-                      onClick={() => setScheduleMode("CUSTOM")}
-                    >
-                      Different times / multiple visits
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* time window(s) */}
-              {(isRange || scheduleMode === "SAME_TIME") && (
-                <>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <label className="form-control">
-                      <span className="label-text text-sm">Start time</span>
-                      <input
-                        type="time"
-                        className="input input-bordered input-sm"
-                        value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
-                        required
-                      />
-                    </label>
-
-                    <label className="form-control">
-                      <span className="label-text text-sm">End time</span>
-                      <input
-                        type="time"
-                        className="input input-bordered input-sm"
-                        value={endTime}
-                        onChange={(e) => setEndTime(e.target.value)}
-                        required
-                      />
-                    </label>
-                  </div>
-
-                  <p className="text-xs text-base-content/60">
-                    Booking window: 7:00 AM to 10:00 PM.
-                  </p>
-                </>
-              )}
-
-              {!isRange && scheduleMode === "CUSTOM" && (
-                <>
-                  <p className="text-xs text-base-content/60">
-                    Add one or more visits per day (example: 11:30 AM and 2:30
-                    PM). Booking window: 7:00 AM to 10:00 PM.
-                  </p>
-
-                  <div className="space-y-3 mt-2">
-                    {dates
-                      .slice()
-                      .sort((a, b) => a.getTime() - b.getTime())
-                      .map((d) => {
-                        const key = toISODate(d);
-                        const slots = customWindowsByDate[key] || [];
-                        return (
-                          <div
-                            key={key}
-                            className="border rounded-xl p-3 bg-base-100"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium text-sm">
-                                {prettyDate(d)}
-                              </div>
-                              <button
-                                type="button"
-                                className="btn btn-xs btn-outline"
-                                onClick={() => addVisitSlot(key)}
-                              >
-                                + Add visit
-                              </button>
-                            </div>
-
-                            <div className="mt-2 space-y-2">
-                              {slots.map((slot, idx) => (
-                                <div
-                                  key={`${key}-${idx}`}
-                                  className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end"
-                                >
-                                  <label className="form-control">
-                                    <span className="label-text text-xs">
-                                      Start
-                                    </span>
-                                    <input
-                                      type="time"
-                                      className="input input-bordered input-sm"
-                                      value={slot.startTime}
-                                      onChange={(e) =>
-                                        updateVisitSlot(
-                                          key,
-                                          idx,
-                                          "startTime",
-                                          e.target.value
-                                        )
-                                      }
-                                    />
-                                  </label>
-
-                                  <label className="form-control">
-                                    <span className="label-text text-xs">
-                                      End
-                                    </span>
-                                    <input
-                                      type="time"
-                                      className="input input-bordered input-sm"
-                                      value={slot.endTime}
-                                      onChange={(e) =>
-                                        updateVisitSlot(
-                                          key,
-                                          idx,
-                                          "endTime",
-                                          e.target.value
-                                        )
-                                      }
-                                    />
-                                  </label>
-
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-ghost"
-                                    onClick={() => removeVisitSlot(key, idx)}
-                                    disabled={slots.length === 1}
-                                    title={
-                                      slots.length === 1
-                                        ? "Keep at least one slot"
-                                        : "Remove"
-                                    }
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                </>
-              )}
-            </>
+            <BookingStepClientInfo
+              client={client}
+              setClient={setClient}
+              serviceLocation={serviceLocation}
+              setServiceLocation={setServiceLocation}
+              notes={petNotes}
+              setNotes={setPetNotes}
+              dogSize={dogSize}
+              toggleDogSize={toggleDogSize}
+              weightClass={weightClass}
+              setWeightClass={setWeightClass}
+            />
           )}
 
-          {/* STEP 3 — Add-ons */}
           {step === 3 && (
-            <>
-              <h2 className="card-title text-lg">Any add-ons?</h2>
-
-              <div className="space-y-4">
-                {/* Nail Trim */}
-                <div className="border rounded-xl p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Nail Trim</p>
-                      <p className="text-xs text-base-content/60">
-                        +20 min and +$15 when added to a visit (standalone is
-                        different).
-                      </p>
-                    </div>
-
-                    <input
-                      type="checkbox"
-                      className="toggle toggle-primary"
-                      checked={addOns.nailTrim.enabled}
-                      onChange={() => toggleAddOn("nailTrim")}
-                    />
-                  </div>
-
-                  {addOns.nailTrim.enabled && (
-                    <div className="mt-3">
-                      <p className="text-xs font-medium mb-1">Applies</p>
-                      <div className="join join-vertical sm:join-horizontal">
-                        <button
-                          type="button"
-                          className={`btn btn-sm join-item ${
-                            addOns.nailTrim.appliesTo === "ONCE"
-                              ? "btn-primary"
-                              : "btn-ghost"
-                          }`}
-                          onClick={() =>
-                            setAddOnField("nailTrim", "appliesTo", "ONCE")
-                          }
-                        >
-                          Once
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn btn-sm join-item ${
-                            addOns.nailTrim.appliesTo === "EACH_VISIT"
-                              ? "btn-primary"
-                              : "btn-ghost"
-                          }`}
-                          onClick={() =>
-                            setAddOnField("nailTrim", "appliesTo", "EACH_VISIT")
-                          }
-                        >
-                          Each visit
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Bath */}
-                <div className="border rounded-xl p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Bath</p>
-                      <p className="text-xs text-base-content/60">
-                        +30 min and +$25 flat, plus per-dog depending on size.
-                      </p>
-                    </div>
-
-                    <input
-                      type="checkbox"
-                      className="toggle toggle-primary"
-                      checked={addOns.bath.enabled}
-                      onChange={() => toggleAddOn("bath")}
-                    />
-                  </div>
-
-                  {addOns.bath.enabled && (
-                    <div className="mt-3 space-y-3">
-                      <div>
-                        <p className="text-xs font-medium mb-1">Applies</p>
-                        <div className="join join-vertical sm:join-horizontal">
-                          <button
-                            type="button"
-                            className={`btn btn-sm join-item ${
-                              addOns.bath.appliesTo === "ONCE"
-                                ? "btn-primary"
-                                : "btn-ghost"
-                            }`}
-                            onClick={() =>
-                              setAddOnField("bath", "appliesTo", "ONCE")
-                            }
-                          >
-                            Once
-                          </button>
-                          <button
-                            type="button"
-                            className={`btn btn-sm join-item ${
-                              addOns.bath.appliesTo === "EACH_VISIT"
-                                ? "btn-primary"
-                                : "btn-ghost"
-                            }`}
-                            onClick={() =>
-                              setAddOnField("bath", "appliesTo", "EACH_VISIT")
-                            }
-                          >
-                            Each visit
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <label className="form-control">
-                          <span className="label-text text-sm">Small dogs</span>
-                          <input
-                            type="number"
-                            min={0}
-                            className="input input-bordered input-sm"
-                            value={addOns.bath.smallDogs}
-                            onChange={(e) =>
-                              setAddOnField(
-                                "bath",
-                                "smallDogs",
-                                Number(e.target.value)
-                              )
-                            }
-                          />
-                        </label>
-
-                        <label className="form-control">
-                          <span className="label-text text-sm">Large dogs</span>
-                          <input
-                            type="number"
-                            min={0}
-                            className="input input-bordered input-sm"
-                            value={addOns.bath.largeDogs}
-                            onChange={(e) =>
-                              setAddOnField(
-                                "bath",
-                                "largeDogs",
-                                Number(e.target.value)
-                              )
-                            }
-                          />
-                        </label>
-                      </div>
-
-                      <p className="text-xs text-base-content/60">
-                        If you’re not sure, leave counts at 0 and add details in
-                        Notes.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
+            <BookingStepAddOns
+              nailTrimExtra={nailTrimExtra}
+              bathExtra={bathExtra}
+              addOns={addOns}
+              toggleAddOn={toggleAddOn}
+              setAddOnField={setAddOnField}
+            />
           )}
 
-          {/* STEP 4 — Review + Submit */}
           {step === 4 && (
-            <>
-              <h2 className="card-title text-lg">Review your request</h2>
-
-              <div className="space-y-2 text-sm">
-                <div>
-                  <p className="font-semibold">Service</p>
-                  <p>{svc.name ?? svc.label}</p>
-                </div>
-
-                <div>
-                  <p className="font-semibold">Client</p>
-                  <p>{client.name}</p>
-                  <p className="text-base-content/70">{client.email}</p>
-                  {client.phone && (
-                    <p className="text-base-content/70">{client.phone}</p>
-                  )}
-                </div>
-
-                <div>
-                  <p className="font-semibold">Dates</p>
-                  <p className="text-base-content/70">{reviewDates}</p>
-                </div>
-
-                <div>
-                  <p className="font-semibold">Time</p>
-                  {isRange ? (
-                    <p className="text-base-content/70">
-                      Check-in/out window: {startTime || "?"} – {endTime || "?"}
-                    </p>
-                  ) : scheduleMode === "CUSTOM" ? (
-                    <pre className="text-xs whitespace-pre-wrap bg-base-200 rounded-lg p-2">
-                      {visitWindowsPreview || "—"}
-                    </pre>
-                  ) : (
-                    <p className="text-base-content/70">
-                      Visit window: {startTime || "?"} – {endTime || "?"}
-                    </p>
-                  )}
-                </div>
-
-                {hasAnyAddOns && (
-                  <div>
-                    <p className="font-semibold">Add-ons</p>
-                    <ul className="list-disc ml-5 mt-1">
-                      {addOns.nailTrim.enabled && (
-                        <li>
-                          Nail Trim (
-                          {addOns.nailTrim.appliesTo === "EACH_VISIT"
-                            ? "each visit"
-                            : "once"}
-                          )
-                        </li>
-                      )}
-                      {addOns.bath.enabled && (
-                        <li>
-                          Bath (
-                          {addOns.bath.appliesTo === "EACH_VISIT"
-                            ? "each visit"
-                            : "once"}
-                          ) — Small: {addOns.bath.smallDogs}, Large:{" "}
-                          {addOns.bath.largeDogs}
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-
-                {booking && (
-                  <div className="mt-2 alert alert-success text-xs">
-                    <span>
-                      Booking created! ID:{" "}
-                      <code className="font-mono break-all">{booking.id}</code>
-                    </span>
-                  </div>
-                )}
-              </div>
-            </>
+            <BookingStepReview
+              booking={booking}
+              payloadService={svc}
+              isRange={isRange}
+              range={range}
+              selectedDateStrs={selectedDateStrs}
+              scheduleMode={scheduleMode}
+              times={times}
+              slotsByDate={slotsByDate}
+              addOns={addOns}
+              nailTrimExtra={nailTrimExtra}
+              bathExtra={bathExtra}
+              hasAnyAddOns={hasAnyAddOns}
+              client={client}
+              serviceLocation={serviceLocation}
+              notes={petNotes}
+              dogSize={dogSize}
+              weightClass={weightClass}
+            />
           )}
 
-          {/* Error */}
           {error && (
-            <p className="text-sm text-error mt-1 whitespace-pre-line">
+            <p className="text-error mt-1 whitespace-pre-line text-sm">
               {error}
             </p>
           )}
 
-          {/* Actions */}
           <div className="card-actions mt-4 flex justify-between">
             <button
               type="button"

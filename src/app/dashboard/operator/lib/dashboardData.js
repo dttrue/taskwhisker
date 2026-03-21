@@ -2,6 +2,32 @@
 import { prisma } from "@/lib/db";
 import { buildDateWhere } from "./dashboardQuery";
 
+function serializeBookingForMap(booking) {
+  return {
+    id: booking.id,
+    clientName: booking.client?.name ?? "—",
+    serviceSummary: booking.serviceSummary ?? "—",
+    status: booking.status,
+    startTime:
+      booking.startTime instanceof Date
+        ? booking.startTime.toISOString()
+        : booking.startTime,
+
+    lat: booking.serviceLat != null ? Number(booking.serviceLat) : null,
+    lng: booking.serviceLng != null ? Number(booking.serviceLng) : null,
+
+    address: [
+      booking.serviceAddressLine1,
+      booking.serviceCity,
+      booking.serviceState,
+    ]
+      .filter(Boolean)
+      .join(", "),
+
+    sitterName: booking.sitter?.name || booking.sitter?.email || "Unassigned",
+  };
+}
+
 export function normalizeMetrics(grouped) {
   const base = {
     ALL: { count: 0, revenueCents: 0 },
@@ -31,6 +57,32 @@ export function normalizeMetrics(grouped) {
     base.CANCELED.revenueCents;
 
   return base;
+}
+
+function toClientValue(value) {
+  if (value == null) return value;
+
+  if (Array.isArray(value)) {
+    return value.map(toClientValue);
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "object") {
+    if (typeof value.toNumber === "function") {
+      return value.toNumber();
+    }
+
+    const out = {};
+    for (const [key, val] of Object.entries(value)) {
+      out[key] = toClientValue(val);
+    }
+    return out;
+  }
+
+  return value;
 }
 
 export async function getOperatorDashboardData({
@@ -76,5 +128,9 @@ export async function getOperatorDashboardData({
 
   console.log("OP DASH bookings count:", bookings.length);
 
-  return { bookings, metrics: normalizeMetrics(grouped) };
+  return {
+    bookings: toClientValue(bookings),
+    metrics: normalizeMetrics(grouped),
+    mapBookings: bookings.map(serializeBookingForMap),
+  };
 }

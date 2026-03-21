@@ -9,6 +9,7 @@ import {
 import MetricsBar from "./_components/MetricsBar";
 import DateRangeFilter from "./_components/DateRangeFilter";
 import BookingsTable from "./_components/BookingsTable";
+import OperatorMap from "./_components/OperatorMap";
 
 import CollapsibleCard from "@/components/ui/CollapsibleCard";
 import { resolveStatus, resolveDateRange } from "./lib/dashboardQuery";
@@ -34,6 +35,32 @@ function StatCard({ label, value, subtext }) {
       ) : null}
     </div>
   );
+}
+
+function toClientValue(value) {
+  if (value == null) return value;
+
+  if (Array.isArray(value)) {
+    return value.map(toClientValue);
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "object") {
+    if (typeof value.toNumber === "function") {
+      return value.toNumber();
+    }
+
+    const out = {};
+    for (const [key, val] of Object.entries(value)) {
+      out[key] = toClientValue(val);
+    }
+    return out;
+  }
+
+  return value;
 }
 
 function Section({
@@ -127,12 +154,18 @@ export default async function OperatorDashboard({ searchParams }) {
 
   const status = resolveStatus(sp);
 
-  const { bookings, metrics } = await getOperatorDashboardData({
+  const {
+    bookings: rawBookings,
+    metrics,
+    mapBookings,
+  } = await getOperatorDashboardData({
     operatorId,
     status,
     from,
     to,
   });
+
+  const bookings = toClientValue(rawBookings);
 
   const fromStr = formatDateOnly(from);
   const toStr = formatDateOnly(to);
@@ -221,6 +254,8 @@ export default async function OperatorDashboard({ searchParams }) {
             subtext="From confirmed bookings"
           />
         </section>
+
+        <OperatorMap bookings={mapBookings} />
 
         {showGroupedDashboard && needsAttention ? (
           <section className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-5 shadow-sm">
