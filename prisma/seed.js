@@ -22,6 +22,93 @@ function dayOnlyFromDate(date) {
   );
 }
 
+const LOCATIONS = {
+  southRiver: {
+    serviceAddressLine1: "12 Main St",
+    serviceAddressLine2: null,
+    serviceCity: "South River",
+    serviceState: "NJ",
+    servicePostalCode: "08882",
+    serviceCountry: "US",
+    serviceLat: 40.4465,
+    serviceLng: -74.3857,
+    accessInstructions: "Use front walkway.",
+    locationNotes: "Friendly orange cat inside.",
+  },
+  eastBrunswick: {
+    serviceAddressLine1: "421 Route 18",
+    serviceAddressLine2: null,
+    serviceCity: "East Brunswick",
+    serviceState: "NJ",
+    servicePostalCode: "08816",
+    serviceCountry: "US",
+    serviceLat: 40.4279,
+    serviceLng: -74.4159,
+    accessInstructions: "Side door entry.",
+    locationNotes: "Dog leash hangs by the door.",
+  },
+  newBrunswick: {
+    serviceAddressLine1: "90 Livingston Ave",
+    serviceAddressLine2: "Apt 2",
+    serviceCity: "New Brunswick",
+    serviceState: "NJ",
+    servicePostalCode: "08901",
+    serviceCountry: "US",
+    serviceLat: 40.4862,
+    serviceLng: -74.4518,
+    accessInstructions: "Buzz apartment 2.",
+    locationNotes: "Parking is easier after noon.",
+  },
+  oldBridge: {
+    serviceAddressLine1: "7 County Rd 516",
+    serviceAddressLine2: null,
+    serviceCity: "Old Bridge",
+    serviceState: "NJ",
+    servicePostalCode: "08857",
+    serviceCountry: "US",
+    serviceLat: 40.398,
+    serviceLng: -74.3232,
+    accessInstructions: "Garage code shared separately.",
+    locationNotes: "Large fenced yard.",
+  },
+  sayreville: {
+    serviceAddressLine1: "25 Washington Rd",
+    serviceAddressLine2: null,
+    serviceCity: "Sayreville",
+    serviceState: "NJ",
+    servicePostalCode: "08872",
+    serviceCountry: "US",
+    serviceLat: 40.4593,
+    serviceLng: -74.3607,
+    accessInstructions: "Back gate entrance.",
+    locationNotes: "Two cats, carrier in laundry room.",
+  },
+  princeton: {
+    serviceAddressLine1: "55 Nassau St",
+    serviceAddressLine2: null,
+    serviceCity: "Princeton",
+    serviceState: "NJ",
+    servicePostalCode: "08542",
+    serviceCountry: "US",
+    serviceLat: 40.3493,
+    serviceLng: -74.659,
+    accessInstructions: "Concierge has key.",
+    locationNotes: "Do not ring bell after 8 PM.",
+  },
+  jerseyCity: {
+    serviceAddressLine1: "200 Newark Ave",
+    serviceAddressLine2: "Unit 5B",
+    serviceCity: "Jersey City",
+    serviceState: "NJ",
+    servicePostalCode: "07302",
+    serviceCountry: "US",
+    serviceLat: 40.7193,
+    serviceLng: -74.0422,
+    accessInstructions: "Call on arrival.",
+    locationNotes: "Busy street, limited parking.",
+  },
+};
+
 // Because Client.email is optional-but-unique, upsert-by-email only works if email exists.
 async function upsertClient({ name, email, phone, city, state }) {
   if (email) {
@@ -65,6 +152,16 @@ async function createSeedBooking({
   notes,
   visits,
   addOnCodes = [],
+  serviceAddressLine1 = null,
+  serviceAddressLine2 = null,
+  serviceCity = null,
+  serviceState = null,
+  servicePostalCode = null,
+  serviceCountry = "US",
+  serviceLat = null,
+  serviceLng = null,
+  accessInstructions = null,
+  locationNotes = null,
 }) {
   if (!serviceCode) {
     throw new Error("createSeedBooking requires serviceCode");
@@ -177,6 +274,17 @@ async function createSeedBooking({
       canceledAt,
       completedAt,
 
+      serviceAddressLine1,
+      serviceAddressLine2,
+      serviceCity,
+      serviceState,
+      servicePostalCode,
+      serviceCountry,
+      serviceLat,
+      serviceLng,
+      accessInstructions,
+      locationNotes,
+
       lineItems: {
         create: lineItems,
       },
@@ -197,7 +305,7 @@ async function createSeedBooking({
           {
             fromStatus: null,
             toStatus: status,
-            note: "Seeded booking",
+            note: notes ?? "Seeded booking",
             changedByUserId: operatorId,
           },
         ],
@@ -216,6 +324,7 @@ async function main() {
       "Missing BRIDGET_PASSWORD, BRIDGET_SITTER_PASSWORD, or DANIEL_PASSWORD in .env"
     );
   }
+
   const [bridgetHash, danielHash, bridgetSitterHash] = await Promise.all([
     bcrypt.hash(bridgetPassword, 12),
     bcrypt.hash(danielPassword, 12),
@@ -496,66 +605,47 @@ async function main() {
   });
 
   // ---- SEEDED BOOKINGS ----
+
+  // Daniel - route-friendly bookings for today
   await createSeedBooking({
     clientId: sarah.id,
     sitterId: daniel.id,
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "CAT_DROPIN_SINGLE_30",
-    notes: "Seeded booking: cat drop-in with nail trim",
+    notes: "Seeded booking: Daniel today morning cat visit",
     visits: [
-      { startTime: dayAt(1, 10, 0), endTime: dayAt(1, 10, 30) },
-      { startTime: dayAt(3, 10, 0), endTime: dayAt(3, 10, 30) },
+      { startTime: dayAt(0, 9, 0), endTime: dayAt(0, 9, 30) },
+      { startTime: dayAt(1, 9, 0), endTime: dayAt(1, 9, 30) },
     ],
     addOnCodes: ["CAT_NAIL_CUT"],
+    ...LOCATIONS.southRiver,
   });
 
   await createSeedBooking({
     clientId: mike.id,
-    sitterId: bridgetSitter.id,
+    sitterId: daniel.id,
     operatorId: bridget.id,
-    status: BookingStatus.REQUESTED,
+    status: BookingStatus.CONFIRMED,
     serviceCode: "DOG_WALK_SINGLE_30",
-    notes: "Seeded booking: dog walk requested",
+    notes: "Seeded booking: Daniel today midday dog walk",
     visits: [
-      { startTime: dayAt(2, 9, 0), endTime: dayAt(2, 9, 30) },
-      { startTime: dayAt(2, 15, 0), endTime: dayAt(2, 15, 30) },
+      { startTime: dayAt(0, 12, 30), endTime: dayAt(0, 13, 0) },
+      { startTime: dayAt(2, 12, 30), endTime: dayAt(2, 13, 0) },
     ],
+    ...LOCATIONS.eastBrunswick,
   });
 
   await createSeedBooking({
     clientId: ava.id,
     sitterId: daniel.id,
     operatorId: bridget.id,
-    status: BookingStatus.COMPLETED,
+    status: BookingStatus.CONFIRMED,
     serviceCode: "DOG_DROPIN_SINGLE_60",
-    notes: "Seeded booking: completed dog drop-in with bath",
-    visits: [{ startTime: dayAt(-1, 12, 0), endTime: dayAt(-1, 13, 0) }],
+    notes: "Seeded booking: Daniel today afternoon dog drop-in with bath",
+    visits: [{ startTime: dayAt(0, 15, 30), endTime: dayAt(0, 16, 30) }],
     addOnCodes: ["DOG_BATH"],
-  });
-
-  await createSeedBooking({
-    clientId: noah.id,
-    sitterId: daniel.id,
-    operatorId: bridget.id,
-    status: BookingStatus.CANCELED,
-    serviceCode: "CAT_OVERNIGHT",
-    notes: "Seeded booking: canceled cat overnight",
-    visits: [{ startTime: dayAt(4, 20, 0), endTime: dayAt(5, 8, 0) }],
-  });
-
-  await createSeedBooking({
-    clientId: emma.id,
-    sitterId: null,
-    operatorId: bridget.id,
-    status: BookingStatus.REQUESTED,
-    serviceCode: "DOG_DROPIN_DOUBLE_30",
-    notes: "Seeded booking: unassigned double dog drop-in",
-    visits: [
-      { startTime: dayAt(5, 11, 30), endTime: dayAt(5, 12, 0) },
-      { startTime: dayAt(6, 11, 30), endTime: dayAt(6, 12, 0) },
-    ],
-    addOnCodes: ["DOG_NAIL_GRIND"],
+    ...LOCATIONS.newBrunswick,
   });
 
   await createSeedBooking({
@@ -564,11 +654,81 @@ async function main() {
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "DOG_OVERNIGHT_HOME",
-    notes: "Seeded booking: confirmed dog overnight",
-    visits: [{ startTime: dayAt(7, 20, 0), endTime: dayAt(8, 8, 0) }],
+    notes: "Seeded booking: Daniel upcoming overnight",
+    visits: [{ startTime: dayAt(1, 20, 0), endTime: dayAt(2, 8, 0) }],
+    ...LOCATIONS.oldBridge,
   });
 
-  console.log("Seed complete: services + bookings created.");
+  // Bridget sitter
+  await createSeedBooking({
+    clientId: noah.id,
+    sitterId: bridgetSitter.id,
+    operatorId: bridget.id,
+    status: BookingStatus.CONFIRMED,
+    serviceCode: "CAT_DROPIN_DOUBLE_30",
+    notes: "Seeded booking: Bridget sitter today cat visit",
+    visits: [
+      { startTime: dayAt(0, 10, 30), endTime: dayAt(0, 11, 0) },
+      { startTime: dayAt(0, 18, 0), endTime: dayAt(0, 18, 30) },
+    ],
+    ...LOCATIONS.sayreville,
+  });
+
+  await createSeedBooking({
+    clientId: emma.id,
+    sitterId: bridgetSitter.id,
+    operatorId: bridget.id,
+    status: BookingStatus.REQUESTED,
+    serviceCode: "DOG_WALK_SINGLE_60",
+    notes: "Seeded booking: Bridget sitter requested long walk",
+    visits: [{ startTime: dayAt(1, 14, 0), endTime: dayAt(1, 15, 0) }],
+    ...LOCATIONS.princeton,
+  });
+
+  // Unassigned for operator dashboard
+  await createSeedBooking({
+    clientId: emma.id,
+    sitterId: null,
+    operatorId: bridget.id,
+    status: BookingStatus.REQUESTED,
+    serviceCode: "DOG_DROPIN_DOUBLE_30",
+    notes: "Seeded booking: unassigned requested booking",
+    visits: [
+      { startTime: dayAt(0, 17, 0), endTime: dayAt(0, 17, 30) },
+      { startTime: dayAt(1, 17, 0), endTime: dayAt(1, 17, 30) },
+    ],
+    addOnCodes: ["DOG_NAIL_GRIND"],
+    ...LOCATIONS.jerseyCity,
+  });
+
+  // Completed
+  await createSeedBooking({
+    clientId: ava.id,
+    sitterId: daniel.id,
+    operatorId: bridget.id,
+    status: BookingStatus.COMPLETED,
+    serviceCode: "DOG_DROPIN_SINGLE_60",
+    notes: "Seeded booking: completed yesterday dog drop-in",
+    visits: [{ startTime: dayAt(-1, 11, 0), endTime: dayAt(-1, 12, 0) }],
+    addOnCodes: ["DOG_BATH"],
+    ...LOCATIONS.newBrunswick,
+  });
+
+  // Canceled
+  await createSeedBooking({
+    clientId: noah.id,
+    sitterId: daniel.id,
+    operatorId: bridget.id,
+    status: BookingStatus.CANCELED,
+    serviceCode: "CAT_OVERNIGHT",
+    notes: "Seeded booking: canceled overnight",
+    visits: [{ startTime: dayAt(2, 20, 0), endTime: dayAt(3, 8, 0) }],
+    ...LOCATIONS.oldBridge,
+  });
+
+  console.log(
+    "Seed complete: services + map-ready dashboard bookings created."
+  );
 }
 
 main()

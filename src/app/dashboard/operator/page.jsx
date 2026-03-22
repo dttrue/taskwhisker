@@ -255,6 +255,8 @@ export default async function OperatorDashboard({ searchParams }) {
           />
         </section>
 
+        
+
         <OperatorMap bookings={mapBookings} />
 
         {showGroupedDashboard && needsAttention ? (

@@ -30,6 +30,7 @@ export default function RootLayout({ children }) {
           "text-[var(--foreground)]",
         ].join(" ")}
       >
+        {/* <ShimejiAssistant storageKey="taskwhisker-shimeji-enabled" /> */}
         ;{children}
       </body>
     </html>
