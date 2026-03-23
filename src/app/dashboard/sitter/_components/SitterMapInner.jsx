@@ -1,10 +1,17 @@
 // src/app/dashboard/sitter/_components/SitterMapInner.jsx
 "use client";
 
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import {
+  MapContainer,
+  Marker,
+  Popup,
+  Polyline,
+  TileLayer,
+  useMap,
+} from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -16,61 +23,75 @@ function formatDateTime(value) {
   });
 }
 
-function formatMoney(cents = 0) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function getStatusColor(status) {
-  switch (status) {
-    case "REQUESTED":
-      return "#f59e0b";
-    case "CONFIRMED":
-      return "#22c55e";
-    case "COMPLETED":
-      return "#3b82f6";
-    case "CANCELED":
-      return "#6b7280";
-    default:
-      return "#71717a";
-  }
-}
-
-function makeDotIcon(color) {
+function makeNumberedIcon(number, isSelected = false) {
   return L.divIcon({
     className: "",
     html: `
       <div style="
-        width: 14px;
-        height: 14px;
+        width: 24px;
+        height: 24px;
         border-radius: 9999px;
-        background: ${color};
+        background: ${isSelected ? "#2563eb" : "#111827"};
+        color: white;
         border: 2px solid white;
-        box-shadow: 0 0 0 1px rgba(0,0,0,0.15);
-      "></div>
+        box-shadow: 0 1px 6px rgba(0,0,0,0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+      ">
+        ${number}
+      </div>
     `,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -12],
   });
 }
 
-function FitBounds({ bookings }) {
-  const map = require("react-leaflet").useMap();
+function getSortTime(booking) {
+  const candidate = booking.todayVisitStart || booking.nextVisitStart || null;
+  if (!candidate) return Number.MAX_SAFE_INTEGER;
 
-  useMemo(() => {
+  const time = new Date(candidate).getTime();
+  return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+}
+
+function FitBounds({ bookings }) {
+  const map = useMap();
+
+  useEffect(() => {
     if (!bookings.length) return;
 
-    const bounds = L.latLngBounds(bookings.map((b) => [b.lat, b.lng]));
+    if (bookings.length === 1) {
+      map.setView([bookings[0].lat, bookings[0].lng], 13);
+      return;
+    }
 
+    const bounds = L.latLngBounds(bookings.map((b) => [b.lat, b.lng]));
     map.fitBounds(bounds, { padding: [30, 30] });
   }, [bookings, map]);
 
   return null;
 }
 
-export default function SitterMapInner({ bookings = [] }) {
-  const center = bookings.length
-    ? [bookings[0].lat, bookings[0].lng]
+export default function SitterMapInner({
+  bookings = [],
+  selectedBookingId = null,
+  onSelectBooking,
+}) {
+  const validBookings = useMemo(() => {
+    return bookings
+      .filter((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng))
+      .sort((a, b) => getSortTime(a) - getSortTime(b));
+  }, [bookings]);
+
+  const center = validBookings.length
+    ? [validBookings[0].lat, validBookings[0].lng]
     : [40.7128, -74.006];
+
+  const routePositions = validBookings.map((b) => [b.lat, b.lng]);
 
   return (
     <div className="h-[400px] w-full overflow-hidden rounded-xl">
@@ -90,35 +111,52 @@ export default function SitterMapInner({ bookings = [] }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <FitBounds bookings={bookings} />
+        <FitBounds bookings={validBookings} />
 
-        {bookings.map((booking) => (
+        {routePositions.length > 1 ? (
+          <Polyline positions={routePositions} />
+        ) : null}
+
+        {validBookings.map((booking, index) => (
           <Marker
             key={booking.id}
             position={[booking.lat, booking.lng]}
-            icon={makeDotIcon(getStatusColor(booking.status))}
+            icon={makeNumberedIcon(index + 1, booking.id === selectedBookingId)}
+            eventHandlers={{
+              click: () => {
+                onSelectBooking?.(booking);
+              },
+            }}
           >
             <Popup>
               <div className="text-sm">
-                <div className="font-semibold">{booking.clientName}</div>
+                <div className="font-semibold">
+                  {`Stop ${index + 1} • ${booking.clientName}`}
+                </div>
+
                 <div className="mt-1 text-zinc-700">
                   {booking.serviceSummary}
                 </div>
-                <div className="mt-1 text-zinc-600">
-                  Status: {booking.status}
-                </div>
+
                 <div className="mt-1 text-zinc-600">
                   Visit:{" "}
                   {formatDateTime(
                     booking.todayVisitStart || booking.nextVisitStart
                   )}
                 </div>
+
                 {booking.address ? (
-                  <div className="mt-1 text-zinc-600">{booking.address}</div>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      booking.address
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 block text-zinc-600 underline"
+                  >
+                    {booking.address}
+                  </a>
                 ) : null}
-                <div className="mt-2 text-xs text-zinc-500">
-                  Payout: {formatMoney(booking.sitterPayoutCents)}
-                </div>
               </div>
             </Popup>
           </Marker>

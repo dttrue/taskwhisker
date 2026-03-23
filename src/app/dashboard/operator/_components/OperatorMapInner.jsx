@@ -1,8 +1,14 @@
-// src/app/dashboard/operator/_components/OperatorMapInner.jsx
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import { useEffect } from "react";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Polyline,
+  useMap,
+} from "react-leaflet";
+import { useEffect, useMemo } from "react";
 import L from "leaflet";
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -37,6 +43,19 @@ function getStatusIcon(status) {
   return makeMarkerIcon(STATUS_COLORS[status] || "#52525b");
 }
 
+function getSortTime(booking) {
+  const candidate =
+    booking.todayVisitStart ||
+    booking.nextVisitStart ||
+    booking.startTime ||
+    null;
+
+  if (!candidate) return Number.MAX_SAFE_INTEGER;
+
+  const time = new Date(candidate).getTime();
+  return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+}
+
 function FitBounds({ bookings }) {
   const map = useMap();
 
@@ -56,11 +75,17 @@ function FitBounds({ bookings }) {
 }
 
 export default function OperatorMapInner({ bookings = [] }) {
-  const validBookings = bookings.filter((b) => b.lat != null && b.lng != null);
+  const validBookings = useMemo(() => {
+    return bookings
+      .filter((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng))
+      .sort((a, b) => getSortTime(a) - getSortTime(b));
+  }, [bookings]);
 
   const center = validBookings.length
     ? [validBookings[0].lat, validBookings[0].lng]
     : [40.7128, -74.006];
+
+  const routePositions = validBookings.map((b) => [b.lat, b.lng]);
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white shadow-sm">
@@ -86,6 +111,10 @@ export default function OperatorMapInner({ bookings = [] }) {
           />
 
           <FitBounds bookings={validBookings} />
+
+          {routePositions.length > 1 ? (
+            <Polyline positions={routePositions} />
+          ) : null}
 
           {validBookings.map((b) => (
             <Marker

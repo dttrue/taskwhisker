@@ -22,6 +22,33 @@ function dayOnlyFromDate(date) {
   );
 }
 
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60 * 1000);
+}
+
+// Creates a visit today relative to NOW.
+// Example: todayAtOffset(-3, 30) = started 3 hours ago, lasts 30 mins
+// Example: todayAtOffset(1, 60) = starts 1 hour from now, lasts 60 mins
+function todayAtOffset(hoursFromNow = 0, durationMinutes = 30) {
+  const start = new Date();
+  start.setSeconds(0, 0);
+  start.setMinutes(start.getMinutes() + hoursFromNow * 60);
+  const end = addMinutes(start, durationMinutes);
+  return { startTime: start, endTime: end };
+}
+
+function tomorrowAt(hour = 10, minute = 0, durationMinutes = 30) {
+  const start = dayAt(1, hour, minute);
+  const end = addMinutes(start, durationMinutes);
+  return { startTime: start, endTime: end };
+}
+
+function yesterdayAt(hour = 10, minute = 0, durationMinutes = 30) {
+  const start = dayAt(-1, hour, minute);
+  const end = addMinutes(start, durationMinutes);
+  return { startTime: start, endTime: end };
+}
+
 const LOCATIONS = {
   southRiver: {
     serviceAddressLine1: "12 Main St",
@@ -109,7 +136,6 @@ const LOCATIONS = {
   },
 };
 
-// Because Client.email is optional-but-unique, upsert-by-email only works if email exists.
 async function upsertClient({ name, email, phone, city, state }) {
   if (email) {
     return prisma.client.upsert({
@@ -331,7 +357,6 @@ async function main() {
     bcrypt.hash(bridgetSitterPassword, 12),
   ]);
 
-  // ---- USERS ----
   const bridget = await prisma.user.upsert({
     where: { email: "therainbowniche@gmail.com" },
     update: {},
@@ -365,7 +390,6 @@ async function main() {
     },
   });
 
-  // ---- SERVICES ----
   await prisma.service.deleteMany();
 
   await prisma.service.createMany({
@@ -538,7 +562,6 @@ async function main() {
     ],
   });
 
-  // ---- CLEANUP SEEDED BOOKINGS ----
   await prisma.bookingHistory.deleteMany({
     where: { booking: { notes: { startsWith: "Seeded booking:" } } },
   });
@@ -555,7 +578,6 @@ async function main() {
     where: { notes: { startsWith: "Seeded booking:" } },
   });
 
-  // ---- CLIENTS ----
   const sarah = await upsertClient({
     name: "Sarah Johnson",
     email: "sarah@example.com",
@@ -604,19 +626,17 @@ async function main() {
     state: "NY",
   });
 
-  // ---- SEEDED BOOKINGS ----
-
-  // Daniel - route-friendly bookings for today
+  // Daniel - intentionally mixed route state for testing
   await createSeedBooking({
     clientId: sarah.id,
     sitterId: daniel.id,
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "CAT_DROPIN_SINGLE_30",
-    notes: "Seeded booking: Daniel today morning cat visit",
+    notes: "Seeded booking: Daniel passed stop today",
     visits: [
-      { startTime: dayAt(0, 9, 0), endTime: dayAt(0, 9, 30) },
-      { startTime: dayAt(1, 9, 0), endTime: dayAt(1, 9, 30) },
+      todayAtOffset(-3, 30), // already passed
+      tomorrowAt(9, 0, 30),
     ],
     addOnCodes: ["CAT_NAIL_CUT"],
     ...LOCATIONS.southRiver,
@@ -628,10 +648,10 @@ async function main() {
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "DOG_WALK_SINGLE_30",
-    notes: "Seeded booking: Daniel today midday dog walk",
+    notes: "Seeded booking: Daniel next stop today",
     visits: [
-      { startTime: dayAt(0, 12, 30), endTime: dayAt(0, 13, 0) },
-      { startTime: dayAt(2, 12, 30), endTime: dayAt(2, 13, 0) },
+      todayAtOffset(1, 30), // next upcoming stop
+      tomorrowAt(12, 30, 30),
     ],
     ...LOCATIONS.eastBrunswick,
   });
@@ -642,8 +662,10 @@ async function main() {
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "DOG_DROPIN_SINGLE_60",
-    notes: "Seeded booking: Daniel today afternoon dog drop-in with bath",
-    visits: [{ startTime: dayAt(0, 15, 30), endTime: dayAt(0, 16, 30) }],
+    notes: "Seeded booking: Daniel later stop today",
+    visits: [
+      todayAtOffset(3, 60), // later today
+    ],
     addOnCodes: ["DOG_BATH"],
     ...LOCATIONS.newBrunswick,
   });
@@ -654,8 +676,8 @@ async function main() {
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "DOG_OVERNIGHT_HOME",
-    notes: "Seeded booking: Daniel upcoming overnight",
-    visits: [{ startTime: dayAt(1, 20, 0), endTime: dayAt(2, 8, 0) }],
+    notes: "Seeded booking: Daniel tomorrow overnight",
+    visits: [tomorrowAt(20, 0, 12 * 60)],
     ...LOCATIONS.oldBridge,
   });
 
@@ -666,11 +688,8 @@ async function main() {
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "CAT_DROPIN_DOUBLE_30",
-    notes: "Seeded booking: Bridget sitter today cat visit",
-    visits: [
-      { startTime: dayAt(0, 10, 30), endTime: dayAt(0, 11, 0) },
-      { startTime: dayAt(0, 18, 0), endTime: dayAt(0, 18, 30) },
-    ],
+    notes: "Seeded booking: Bridget sitter today route",
+    visits: [todayAtOffset(2, 30), todayAtOffset(5, 30)],
     ...LOCATIONS.sayreville,
   });
 
@@ -681,7 +700,7 @@ async function main() {
     status: BookingStatus.REQUESTED,
     serviceCode: "DOG_WALK_SINGLE_60",
     notes: "Seeded booking: Bridget sitter requested long walk",
-    visits: [{ startTime: dayAt(1, 14, 0), endTime: dayAt(1, 15, 0) }],
+    visits: [tomorrowAt(14, 0, 60)],
     ...LOCATIONS.princeton,
   });
 
@@ -693,10 +712,7 @@ async function main() {
     status: BookingStatus.REQUESTED,
     serviceCode: "DOG_DROPIN_DOUBLE_30",
     notes: "Seeded booking: unassigned requested booking",
-    visits: [
-      { startTime: dayAt(0, 17, 0), endTime: dayAt(0, 17, 30) },
-      { startTime: dayAt(1, 17, 0), endTime: dayAt(1, 17, 30) },
-    ],
+    visits: [todayAtOffset(4, 30), tomorrowAt(17, 0, 30)],
     addOnCodes: ["DOG_NAIL_GRIND"],
     ...LOCATIONS.jerseyCity,
   });
@@ -709,7 +725,7 @@ async function main() {
     status: BookingStatus.COMPLETED,
     serviceCode: "DOG_DROPIN_SINGLE_60",
     notes: "Seeded booking: completed yesterday dog drop-in",
-    visits: [{ startTime: dayAt(-1, 11, 0), endTime: dayAt(-1, 12, 0) }],
+    visits: [yesterdayAt(11, 0, 60)],
     addOnCodes: ["DOG_BATH"],
     ...LOCATIONS.newBrunswick,
   });
@@ -722,7 +738,7 @@ async function main() {
     status: BookingStatus.CANCELED,
     serviceCode: "CAT_OVERNIGHT",
     notes: "Seeded booking: canceled overnight",
-    visits: [{ startTime: dayAt(2, 20, 0), endTime: dayAt(3, 8, 0) }],
+    visits: [tomorrowAt(20, 0, 12 * 60)],
     ...LOCATIONS.oldBridge,
   });
 

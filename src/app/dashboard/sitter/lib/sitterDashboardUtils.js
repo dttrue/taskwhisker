@@ -114,27 +114,6 @@ export function groupBookings(bookings, now = new Date()) {
   return { today, upcoming, completed, canceled };
 }
 
-export function getNextUpBooking(bookings, now = new Date()) {
-  const confirmed = bookings.filter(
-    (booking) => booking.status === "CONFIRMED"
-  );
-
-  const withNextVisit = confirmed
-    .map((booking) => ({
-      booking,
-      nextVisit: getBookingNextVisit(booking, now),
-    }))
-    .filter((item) => item.nextVisit);
-
-  withNextVisit.sort(
-    (a, b) =>
-      new Date(a.nextVisit.startTime).getTime() -
-      new Date(b.nextVisit.startTime).getTime()
-  );
-
-  return withNextVisit[0] || null;
-}
-
 export function getSitterMapBookings(bookings, now = new Date()) {
   return bookings
     .filter((booking) => booking.status !== "CANCELED")
@@ -146,22 +125,29 @@ export function getSitterMapBookings(bookings, now = new Date()) {
 
       const nextVisit = getBookingNextVisit(booking, now);
 
+      const address = [
+        booking.serviceAddressLine1,
+        booking.serviceAddressLine2,
+        booking.serviceCity,
+        booking.serviceState,
+        booking.servicePostalCode,
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+      const lat =
+        booking.serviceLat != null ? Number(booking.serviceLat) : null;
+      const lng =
+        booking.serviceLng != null ? Number(booking.serviceLng) : null;
+
       return {
         id: booking.id,
         clientName: booking.client?.name || "Client",
         serviceSummary: booking.serviceSummary || "Drop-in visit",
         status: booking.status,
-        lat: Number(booking.serviceLat),
-        lng: Number(booking.serviceLng),
-        address: [
-          booking.serviceAddressLine1,
-          booking.serviceAddressLine2,
-          booking.serviceCity,
-          booking.serviceState,
-          booking.servicePostalCode,
-        ]
-          .filter(Boolean)
-          .join(", "),
+        lat,
+        lng,
+        address,
         nextVisitStart: nextVisit?.startTime || null,
         todayVisitStart: todayVisit?.startTime || null,
         sitterPayoutCents: booking.sitterPayoutCents || 0,
@@ -170,4 +156,32 @@ export function getSitterMapBookings(bookings, now = new Date()) {
     .filter(
       (booking) => Number.isFinite(booking.lat) && Number.isFinite(booking.lng)
     );
+}
+
+export function getSortTimeForMapBooking(booking) {
+  const candidate = booking.todayVisitStart || booking.nextVisitStart || null;
+  if (!candidate) return Number.MAX_SAFE_INTEGER;
+
+  const time = new Date(candidate).getTime();
+  return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+}
+
+export function getSortedSitterMapBookings(bookings = []) {
+  return [...bookings].sort(
+    (a, b) => getSortTimeForMapBooking(a) - getSortTimeForMapBooking(b)
+  );
+}
+
+export function getRemainingMapStops(bookings = [], now = new Date()) {
+  return getSortedSitterMapBookings(bookings).filter((booking) => {
+    const visitTime = booking.todayVisitStart || booking.nextVisitStart;
+    if (!visitTime) return false;
+
+    return new Date(visitTime).getTime() >= now.getTime();
+  });
+}
+
+export function getNextMapStop(bookings = [], now = new Date()) {
+  const remaining = getRemainingMapStops(bookings, now);
+  return remaining[0] || null;
 }

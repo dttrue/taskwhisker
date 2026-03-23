@@ -7,6 +7,16 @@ const SitterMapInner = dynamic(() => import("./SitterMapInner"), {
   ssr: false,
 });
 
-export default function SitterMap({ bookings = [] }) {
-  return <SitterMapInner bookings={bookings} />;
+export default function SitterMap({
+  bookings = [],
+  selectedBookingId = null,
+  onSelectBooking,
+}) {
+  return (
+    <SitterMapInner
+      bookings={bookings}
+      selectedBookingId={selectedBookingId}
+      onSelectBooking={onSelectBooking}
+    />
+  );
 }

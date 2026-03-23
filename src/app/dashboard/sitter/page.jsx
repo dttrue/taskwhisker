@@ -1,26 +1,25 @@
 import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
-import { getSitterMapBookings } from "./lib/sitterDashboardUtils";
-import { completeBookingAsSitter } from "./actions";
 
-import SitterMap from "./_components/SitterMap";
 import StatCard from "./_components/StatCard";
 import Section from "./_components/Section";
+import SitterRoutePanel from "./_components/SitterRoutePanel";
 
 import {
   formatMoney,
-  formatDateTime,
   groupBookings,
-  getNextUpBooking,
   getVisitCountForToday,
   getUpcomingPayout,
   getCompletedThisWeekCount,
+  getSitterMapBookings,
+  getRemainingMapStops,
+  getNextMapStop,
 } from "./lib/sitterDashboardUtils";
 
 export default async function SitterDashboardPage() {
   const session = await requireRole(["SITTER"]);
   const userId = session.user?.id;
-  
+
   if (!userId) {
     throw new Error("Missing user id in session for sitter.");
   }
@@ -40,8 +39,14 @@ export default async function SitterDashboardPage() {
 
   const now = new Date();
   const { today, upcoming, completed, canceled } = groupBookings(bookings, now);
-  const nextUp = getNextUpBooking(bookings, now);
+
   const sitterMapBookings = getSitterMapBookings(today, now);
+  const remainingSitterMapBookings = getRemainingMapStops(
+    sitterMapBookings,
+    now
+  );
+  const nextUp = getNextMapStop(sitterMapBookings, now);
+
   const todayVisitCount = getVisitCountForToday(bookings, now);
   const upcomingPayout = getUpcomingPayout(bookings);
   const completedThisWeek = getCompletedThisWeekCount(bookings, now);
@@ -85,71 +90,10 @@ export default async function SitterDashboardPage() {
         </section>
 
         {nextUp ? (
-          <section className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-5 shadow-sm">
-            <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-              Next Up
-            </div>
-
-            <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-zinc-900">
-                  {nextUp.booking.client?.name || "—"}
-                </h2>
-                <div className="mt-1 text-sm text-zinc-700">
-                  {nextUp.booking.serviceSummary || "Drop-in visit"}
-                </div>
-                <div className="mt-2 text-sm font-medium text-blue-700">
-                  {formatDateTime(nextUp.nextVisit.startTime)}
-                </div>
-                <div className="mt-1 text-xs text-zinc-500">
-                  {nextUp.booking.visits?.length || 0} visit
-                  {nextUp.booking.visits?.length === 1 ? "" : "s"} in this
-                  booking
-                </div>
-              </div>
-
-              {sitterMapBookings.length > 0 ? (
-                <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-                  <div className="mb-3">
-                    <h2 className="text-lg font-semibold text-zinc-900">
-                      Today’s Route 🗺️
-                    </h2>
-                    <p className="mt-1 text-sm text-zinc-600">
-                      Your assigned visits for today.
-                    </p>
-                  </div>
-
-                  <SitterMap bookings={sitterMapBookings} />
-                </section>
-              ) : null}
-
-              <div className="text-left md:text-right">
-                <div className="text-xs text-zinc-500">Payout</div>
-                <div className="text-lg font-semibold text-zinc-900">
-                  {formatMoney(nextUp.booking.sitterPayoutCents)}
-                </div>
-
-                <form action={completeBookingAsSitter} className="mt-3">
-                  <input
-                    type="hidden"
-                    name="bookingId"
-                    value={nextUp.booking.id}
-                  />
-                  <button
-                    type="submit"
-                    disabled={nextUp.booking.status !== "CONFIRMED"}
-                    className={
-                      nextUp.booking.status === "CONFIRMED"
-                        ? "rounded-md border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-600 hover:text-white"
-                        : "cursor-not-allowed rounded-md border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-400"
-                    }
-                  >
-                    Mark complete
-                  </button>
-                </form>
-              </div>
-            </div>
-          </section>
+          <SitterRoutePanel
+            bookings={remainingSitterMapBookings}
+            defaultBooking={nextUp}
+          />
         ) : null}
 
         {bookings.length === 0 ? (
