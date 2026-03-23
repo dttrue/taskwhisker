@@ -46,7 +46,22 @@ export default async function SitterDashboardPage() {
     now
   );
   const nextUp = getNextMapStop(sitterMapBookings, now);
-
+   console.log("SITTER DASH DEBUG", {
+     now: now.toISOString(),
+     todayCount: today.length,
+     sitterMapBookings: sitterMapBookings.map((b) => ({
+       id: b.id,
+       clientName: b.clientName,
+       todayVisitStart: b.todayVisitStart,
+       nextVisitStart: b.nextVisitStart,
+     })),
+     remainingSitterMapBookings: remainingSitterMapBookings.map((b) => ({
+       id: b.id,
+       clientName: b.clientName,
+       todayVisitStart: b.todayVisitStart,
+       nextVisitStart: b.nextVisitStart,
+     })),
+   });
   const todayVisitCount = getVisitCountForToday(bookings, now);
   const upcomingPayout = getUpcomingPayout(bookings);
   const completedThisWeek = getCompletedThisWeekCount(bookings, now);
