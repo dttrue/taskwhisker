@@ -176,44 +176,44 @@ export function getSitterMapBookings(bookings = [], now) {
     );
 }
 
-export function getSortTimeForMapBooking(booking) {
-  const candidate = booking.todayVisitStart || booking.nextVisitStart || null;
-  if (!candidate) return Number.MAX_SAFE_INTEGER;
+export function getSortTimeForMapBooking(booking, now) {
+  if (!now) return Number.MAX_SAFE_INTEGER;
 
-  const time = new Date(candidate).getTime();
-  return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+  const today = booking.todayVisitStart
+    ? new Date(booking.todayVisitStart)
+    : null;
+
+  const next = booking.nextVisitStart ? new Date(booking.nextVisitStart) : null;
+
+  if (today && today.getTime() > now.getTime()) {
+    return today.getTime();
+  }
+
+  if (next && next.getTime() > now.getTime()) {
+    return next.getTime();
+  }
+
+  return Number.MAX_SAFE_INTEGER;
 }
 
-export function getSortedSitterMapBookings(bookings = []) {
+export function getSortedSitterMapBookings(bookings = [], now) {
   return [...bookings].sort(
-    (a, b) => getSortTimeForMapBooking(a) - getSortTimeForMapBooking(b)
+    (a, b) =>
+      getSortTimeForMapBooking(a, now) - getSortTimeForMapBooking(b, now)
   );
 }
 
 export function getRemainingMapStops(bookings = [], now) {
   if (!now) return [];
 
-  return getSortedSitterMapBookings(bookings).filter((booking) => {
-    const visitTime = booking.todayVisitStart || booking.nextVisitStart;
-    if (!visitTime) return false;
-
-    const visitDate = new Date(visitTime);
-
-    if (isSameDay(visitDate, now)) return true;
-
-    return visitDate.getTime() >= now.getTime();
+  return getSortedSitterMapBookings(bookings, now).filter((booking) => {
+    const sortTime = getSortTimeForMapBooking(booking, now);
+    return sortTime !== Number.MAX_SAFE_INTEGER;
   });
 }
 
 export function getNextMapStop(bookings = [], now) {
   if (!now) return null;
 
-  return (
-    getSortedSitterMapBookings(bookings).find((booking) => {
-      const visitTime = booking.todayVisitStart || booking.nextVisitStart;
-      if (!visitTime) return false;
-
-      return new Date(visitTime).getTime() > now.getTime();
-    }) || null
-  );
+  return getRemainingMapStops(bookings, now)[0] || null;
 }
