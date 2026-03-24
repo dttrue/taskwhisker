@@ -20,15 +20,22 @@ export default function SitterRoutePanel({
     if (!mounted || !bookings.length) return null;
 
     if (selectedBookingId) {
-      const matchedSelected = bookings.find(
-        (booking) => booking.id === selectedBookingId
-      );
-      if (matchedSelected) return matchedSelected;
+      const found = bookings.find((b) => b.id === selectedBookingId);
+      if (found) return found;
     }
 
-    return bookings[0] || null;
-  }, [mounted, bookings, selectedBookingId]);
+    if (defaultBooking) {
+      const foundDefault = bookings.find((b) => b.id === defaultBooking.id);
+      if (foundDefault) return foundDefault;
+    }
 
+    return null; // ❗ DO NOT fallback to bookings[0]
+  }, [mounted, bookings, selectedBookingId, defaultBooking]);
+   
+  useEffect(() => {
+    if (!mounted || !defaultBooking) return;
+    setSelectedBookingId(defaultBooking.id);
+  }, [mounted, defaultBooking]);
   const showJumpBack =
     mounted &&
     defaultBooking &&
