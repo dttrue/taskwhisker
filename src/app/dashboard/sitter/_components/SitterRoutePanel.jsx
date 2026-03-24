@@ -1,7 +1,6 @@
-// src/app/dashboard/sitter/_components/SitterRoutePanel.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatMoney, formatDateTime } from "../lib/sitterDashboardUtils";
 import { completeBookingAsSitter } from "../actions";
 import SitterMap from "./SitterMap";
@@ -10,50 +9,70 @@ export default function SitterRoutePanel({
   bookings = [],
   defaultBooking = null,
 }) {
-  const [selectedBooking, setSelectedBooking] = useState(
-    defaultBooking || bookings[0] || null
-  );
+  const [mounted, setMounted] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
 
   useEffect(() => {
-    if (!bookings.length) {
-      setSelectedBooking(null);
-      return;
+    setMounted(true);
+  }, []);
+
+  const selectedBooking = useMemo(() => {
+    if (!mounted || !bookings.length) return null;
+
+    if (selectedBookingId) {
+      const matchedSelected = bookings.find(
+        (booking) => booking.id === selectedBookingId
+      );
+      if (matchedSelected) return matchedSelected;
     }
 
-    setSelectedBooking((current) => {
-      // If current selection still exists in fresh bookings, keep it
-      if (current) {
-        const matchedCurrent = bookings.find(
-          (booking) => booking.id === current.id
-        );
+    if (defaultBooking) {
+      const matchedDefault = bookings.find(
+        (booking) => booking.id === defaultBooking.id
+      );
+      if (matchedDefault) return matchedDefault;
+    }
 
-        if (matchedCurrent) return matchedCurrent;
-      }
+    return bookings[0] || null;
+  }, [mounted, bookings, defaultBooking, selectedBookingId]);
 
-      // Otherwise prefer the newest default booking
-      if (defaultBooking) {
-        const matchedDefault = bookings.find(
-          (booking) => booking.id === defaultBooking.id
-        );
-
-        if (matchedDefault) return matchedDefault;
-      }
-
-      // Final fallback
-      return bookings[0] || null;
-    });
-  }, [bookings, defaultBooking]);
-
-  if (!selectedBooking) return null;
-
-  const visitDateTime =
-    selectedBooking.todayVisitStart || selectedBooking.nextVisitStart;
-
-  const canComplete = selectedBooking.status === "CONFIRMED";
   const showJumpBack =
+    mounted &&
     defaultBooking &&
+    selectedBooking &&
     defaultBooking.id !== selectedBooking.id &&
     bookings.some((booking) => booking.id === defaultBooking.id);
+
+  const canComplete = selectedBooking?.status === "CONFIRMED";
+  const visitDateTime =
+    selectedBooking?.todayVisitStart || selectedBooking?.nextVisitStart;
+
+  if (!mounted) {
+    return (
+      <section className="space-y-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-5 shadow-sm">
+        <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+          Selected Stop
+        </div>
+
+        <div className="h-40 animate-pulse rounded-xl bg-white/70" />
+
+        <div>
+          <div className="mb-3">
+            <h3 className="text-lg font-semibold text-zinc-900">
+              Today’s Route 🗺️
+            </h3>
+            <p className="mt-1 text-sm text-zinc-600">
+              Your remaining assigned visits for today.
+            </p>
+          </div>
+
+          <div className="h-[300px] animate-pulse rounded-xl bg-white/70" />
+        </div>
+      </section>
+    );
+  }
+
+  if (!selectedBooking) return null;
 
   return (
     <section className="space-y-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-5 shadow-sm">
@@ -106,7 +125,7 @@ export default function SitterRoutePanel({
           {showJumpBack ? (
             <button
               type="button"
-              onClick={() => setSelectedBooking(defaultBooking)}
+              onClick={() => setSelectedBookingId(defaultBooking.id)}
               className="mt-2 text-xs font-medium text-zinc-600 underline"
             >
               Jump back to next stop
@@ -128,7 +147,7 @@ export default function SitterRoutePanel({
         <SitterMap
           bookings={bookings}
           selectedBookingId={selectedBooking.id}
-          onSelectBooking={setSelectedBooking}
+          onSelectBooking={(booking) => setSelectedBookingId(booking.id)}
         />
       </div>
     </section>

@@ -50,12 +50,21 @@ function makeNumberedIcon(number, isSelected = false) {
   });
 }
 
-function getSortTime(booking) {
-  const candidate = booking.todayVisitStart || booking.nextVisitStart || null;
-  if (!candidate) return Number.MAX_SAFE_INTEGER;
+function getActionableVisitTime(booking, now) {
+  if (!now || !booking.todayVisitStart) return null;
 
-  const time = new Date(candidate).getTime();
-  return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+  const todayVisit = new Date(booking.todayVisitStart);
+  const time = todayVisit.getTime();
+
+  if (Number.isNaN(time)) return null;
+  if (time <= now.getTime()) return null;
+
+  return todayVisit;
+}
+
+function getSortTime(booking, now) {
+  const actionableVisit = getActionableVisitTime(booking, now);
+  return actionableVisit ? actionableVisit.getTime() : Number.MAX_SAFE_INTEGER;
 }
 
 function FitBounds({ bookings }) {
@@ -82,9 +91,12 @@ export default function SitterMapInner({
   onSelectBooking,
 }) {
   const validBookings = useMemo(() => {
+    const now = new Date();
+
     return bookings
       .filter((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng))
-      .sort((a, b) => getSortTime(a) - getSortTime(b));
+      .filter((b) => getActionableVisitTime(b, now))
+      .sort((a, b) => getSortTime(a, now) - getSortTime(b, now));
   }, [bookings]);
 
   const center = validBookings.length
@@ -117,50 +129,57 @@ export default function SitterMapInner({
           <Polyline positions={routePositions} />
         ) : null}
 
-        {validBookings.map((booking, index) => (
-          <Marker
-            key={booking.id}
-            position={[booking.lat, booking.lng]}
-            icon={makeNumberedIcon(index + 1, booking.id === selectedBookingId)}
-            eventHandlers={{
-              click: () => {
-                onSelectBooking?.(booking);
-              },
-            }}
-          >
-            <Popup>
-              <div className="text-sm">
-                <div className="font-semibold">
-                  {`Stop ${index + 1} • ${booking.clientName}`}
-                </div>
+        {validBookings.map((booking, index) => {
+          const actionableVisitTime = getActionableVisitTime(
+            booking,
+            new Date()
+          );
 
-                <div className="mt-1 text-zinc-700">
-                  {booking.serviceSummary}
-                </div>
+          return (
+            <Marker
+              key={booking.id}
+              position={[booking.lat, booking.lng]}
+              icon={makeNumberedIcon(
+                index + 1,
+                booking.id === selectedBookingId
+              )}
+              eventHandlers={{
+                click: () => {
+                  onSelectBooking?.(booking.id);
+                },
+              }}
+            >
+              <Popup>
+                <div className="text-sm">
+                  <div className="font-semibold">
+                    {`Stop ${index + 1} • ${booking.clientName}`}
+                  </div>
 
-                <div className="mt-1 text-zinc-600">
-                  Visit:{" "}
-                  {formatDateTime(
-                    booking.todayVisitStart || booking.nextVisitStart
-                  )}
-                </div>
+                  <div className="mt-1 text-zinc-700">
+                    {booking.serviceSummary}
+                  </div>
 
-                {booking.address ? (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                      booking.address
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 block text-zinc-600 underline"
-                  >
-                    {booking.address}
-                  </a>
-                ) : null}
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+                  <div className="mt-1 text-zinc-600">
+                    Visit: {formatDateTime(actionableVisitTime)}
+                  </div>
+
+                  {booking.address ? (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        booking.address
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 block text-zinc-600 underline"
+                    >
+                      {booking.address}
+                    </a>
+                  ) : null}
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
     </div>
   );
