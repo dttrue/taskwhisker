@@ -177,11 +177,23 @@ export function getRemainingMapStops(bookings = [], now = new Date()) {
     const visitTime = booking.todayVisitStart || booking.nextVisitStart;
     if (!visitTime) return false;
 
-    return new Date(visitTime).getTime() >= now.getTime();
+    const visitDate = new Date(visitTime);
+
+    // ✅ KEEP ALL VISITS FROM TODAY
+    if (isSameDay(visitDate, now)) return true;
+
+    // ✅ KEEP FUTURE VISITS
+    return visitDate.getTime() >= now.getTime();
   });
 }
 
 export function getNextMapStop(bookings = [], now = new Date()) {
-  const remaining = getRemainingMapStops(bookings, now);
-  return remaining[0] || null;
+  return (
+    getSortedSitterMapBookings(bookings).find((booking) => {
+      const visitTime = booking.todayVisitStart || booking.nextVisitStart;
+      if (!visitTime) return false;
+
+      return new Date(visitTime).getTime() > now.getTime();
+    }) || null
+  );
 }
