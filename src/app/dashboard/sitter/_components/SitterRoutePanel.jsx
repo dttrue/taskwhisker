@@ -1,7 +1,7 @@
 // src/app/dashboard/sitter/_components/SitterRoutePanel.jsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { formatMoney, formatDateTime } from "../lib/sitterDashboardUtils";
 import { completeBookingAsSitter } from "../actions";
 import SitterMap from "./SitterMap";
@@ -10,17 +10,53 @@ export default function SitterRoutePanel({
   bookings = [],
   defaultBooking = null,
 }) {
-  const initialBooking = useMemo(() => {
-    if (defaultBooking) return defaultBooking;
-    return bookings[0] || null;
-  }, [defaultBooking, bookings]);
+  const [selectedBooking, setSelectedBooking] = useState(
+    defaultBooking || bookings[0] || null
+  );
 
-  const [selectedBooking, setSelectedBooking] = useState(initialBooking);
+  useEffect(() => {
+    if (!bookings.length) {
+      setSelectedBooking(null);
+      return;
+    }
+
+    setSelectedBooking((current) => {
+      // If current selection still exists in fresh bookings, keep it
+      if (current) {
+        const matchedCurrent = bookings.find(
+          (booking) => booking.id === current.id
+        );
+
+        if (matchedCurrent) return matchedCurrent;
+      }
+
+      // Otherwise prefer the newest default booking
+      if (defaultBooking) {
+        const matchedDefault = bookings.find(
+          (booking) => booking.id === defaultBooking.id
+        );
+
+        if (matchedDefault) return matchedDefault;
+      }
+
+      // Final fallback
+      return bookings[0] || null;
+    });
+  }, [bookings, defaultBooking]);
 
   if (!selectedBooking) return null;
 
+  const visitDateTime =
+    selectedBooking.todayVisitStart || selectedBooking.nextVisitStart;
+
+  const canComplete = selectedBooking.status === "CONFIRMED";
+  const showJumpBack =
+    defaultBooking &&
+    defaultBooking.id !== selectedBooking.id &&
+    bookings.some((booking) => booking.id === defaultBooking.id);
+
   return (
-    <section className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-5 shadow-sm space-y-4">
+    <section className="space-y-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-5 shadow-sm">
       <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
         Selected Stop
       </div>
@@ -36,9 +72,7 @@ export default function SitterRoutePanel({
           </div>
 
           <div className="mt-2 text-sm font-medium text-blue-700">
-            {formatDateTime(
-              selectedBooking.todayVisitStart || selectedBooking.nextVisitStart
-            )}
+            {visitDateTime ? formatDateTime(visitDateTime) : "No visit time"}
           </div>
 
           {selectedBooking.address ? (
@@ -58,9 +92,9 @@ export default function SitterRoutePanel({
             <input type="hidden" name="bookingId" value={selectedBooking.id} />
             <button
               type="submit"
-              disabled={selectedBooking.status !== "CONFIRMED"}
+              disabled={!canComplete}
               className={
-                selectedBooking.status === "CONFIRMED"
+                canComplete
                   ? "rounded-md border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-600 hover:text-white"
                   : "cursor-not-allowed rounded-md border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-400"
               }
@@ -69,7 +103,7 @@ export default function SitterRoutePanel({
             </button>
           </form>
 
-          {defaultBooking && defaultBooking.id !== selectedBooking.id ? (
+          {showJumpBack ? (
             <button
               type="button"
               onClick={() => setSelectedBooking(defaultBooking)}
