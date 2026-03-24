@@ -28,8 +28,8 @@ export function isSameDay(a, b) {
   );
 }
 
-export function getBookingNextVisit(booking, now = new Date()) {
-  if (!booking?.visits?.length) return null;
+export function getBookingNextVisit(booking, now) {
+  if (!booking?.visits?.length || !now) return booking?.visits?.[0] || null;
 
   return (
     booking.visits.find((visit) => new Date(visit.endTime) >= now) ||
@@ -51,7 +51,9 @@ export function getVisitSummaryLines(visits = []) {
   });
 }
 
-export function getVisitCountForToday(bookings, now = new Date()) {
+export function getVisitCountForToday(bookings = [], now) {
+  if (!now) return 0;
+
   return bookings.reduce((count, booking) => {
     const todayVisits =
       booking.visits?.filter((visit) =>
@@ -68,7 +70,9 @@ export function getUpcomingPayout(bookings) {
     .reduce((sum, booking) => sum + (booking.sitterPayoutCents || 0), 0);
 }
 
-export function getCompletedThisWeekCount(bookings, now = new Date()) {
+export function getCompletedThisWeekCount(bookings = [], now) {
+  if (!now) return 0;
+
   const startOfWeek = new Date(now);
   const day = startOfWeek.getDay();
 
@@ -82,7 +86,19 @@ export function getCompletedThisWeekCount(bookings, now = new Date()) {
   }).length;
 }
 
-export function groupBookings(bookings, now = new Date()) {
+export function groupBookings(bookings = [], now) {
+  if (!now) {
+    return {
+      today: [],
+      upcoming: bookings.filter(
+        (booking) =>
+          booking.status !== "COMPLETED" && booking.status !== "CANCELED"
+      ),
+      completed: bookings.filter((booking) => booking.status === "COMPLETED"),
+      canceled: bookings.filter((booking) => booking.status === "CANCELED"),
+    };
+  }
+
   const today = [];
   const upcoming = [];
   const completed = [];
@@ -114,7 +130,9 @@ export function groupBookings(bookings, now = new Date()) {
   return { today, upcoming, completed, canceled };
 }
 
-export function getSitterMapBookings(bookings, now = new Date()) {
+export function getSitterMapBookings(bookings = [], now) {
+  if (!now) return [];
+
   return bookings
     .filter((booking) => booking.status !== "CANCELED")
     .map((booking) => {
@@ -172,22 +190,24 @@ export function getSortedSitterMapBookings(bookings = []) {
   );
 }
 
-export function getRemainingMapStops(bookings = [], now = new Date()) {
+export function getRemainingMapStops(bookings = [], now) {
+  if (!now) return [];
+
   return getSortedSitterMapBookings(bookings).filter((booking) => {
     const visitTime = booking.todayVisitStart || booking.nextVisitStart;
     if (!visitTime) return false;
 
     const visitDate = new Date(visitTime);
 
-    // ✅ KEEP ALL VISITS FROM TODAY
     if (isSameDay(visitDate, now)) return true;
 
-    // ✅ KEEP FUTURE VISITS
     return visitDate.getTime() >= now.getTime();
   });
 }
 
-export function getNextMapStop(bookings = [], now = new Date()) {
+export function getNextMapStop(bookings = [], now) {
+  if (!now) return null;
+
   return (
     getSortedSitterMapBookings(bookings).find((booking) => {
       const visitTime = booking.todayVisitStart || booking.nextVisitStart;
