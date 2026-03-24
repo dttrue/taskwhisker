@@ -26,15 +26,8 @@ export default function SitterRoutePanel({
       if (matchedSelected) return matchedSelected;
     }
 
-    if (defaultBooking) {
-      const matchedDefault = bookings.find(
-        (booking) => booking.id === defaultBooking.id
-      );
-      if (matchedDefault) return matchedDefault;
-    }
-
     return bookings[0] || null;
-  }, [mounted, bookings, defaultBooking, selectedBookingId]);
+  }, [mounted, bookings, selectedBookingId]);
 
   const showJumpBack =
     mounted &&
@@ -71,6 +64,14 @@ export default function SitterRoutePanel({
       </section>
     );
   }
+  console.log("SITTER ROUTE PANEL DEBUG", {
+  mounted,
+  bookingCount: bookings.length,
+  defaultBookingId: defaultBooking?.id || null,
+  selectedBookingId,
+  bookingIds: bookings.map((b) => b.id),
+  resolvedSelectedBookingId: selectedBooking?.id || null,
+});
 
   if (!selectedBooking) return null;
 
@@ -122,7 +123,7 @@ export default function SitterRoutePanel({
             </button>
           </form>
 
-          {showJumpBack ? (
+          {/* {showJumpBack ? (
             <button
               type="button"
               onClick={() => setSelectedBookingId(defaultBooking.id)}
@@ -130,7 +131,7 @@ export default function SitterRoutePanel({
             >
               Jump back to next stop
             </button>
-          ) : null}
+          ) : null} */}
         </div>
       </div>
 
