@@ -183,14 +183,8 @@ export function getSortTimeForMapBooking(booking, now) {
     ? new Date(booking.todayVisitStart)
     : null;
 
-  const next = booking.nextVisitStart ? new Date(booking.nextVisitStart) : null;
-
   if (today && today.getTime() > now.getTime()) {
     return today.getTime();
-  }
-
-  if (next && next.getTime() > now.getTime()) {
-    return next.getTime();
   }
 
   return Number.MAX_SAFE_INTEGER;

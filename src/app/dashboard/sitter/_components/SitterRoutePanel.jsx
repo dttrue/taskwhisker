@@ -146,8 +146,8 @@ export default function SitterRoutePanel({
 
         <SitterMap
           bookings={bookings}
-          selectedBookingId={selectedBooking.id}
-          onSelectBooking={(booking) => setSelectedBookingId(booking.id)}
+          selectedBookingId={selectedBooking?.id || null}
+          onSelectBooking={(bookingId) => setSelectedBookingId(bookingId)}
         />
       </div>
     </section>
