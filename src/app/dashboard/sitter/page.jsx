@@ -1,3 +1,4 @@
+// src/app/dashboard/sitter/page.jsx
 import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
 
@@ -46,22 +47,31 @@ export default async function SitterDashboardPage() {
     now
   );
   const nextUp = getNextMapStop(sitterMapBookings, now);
-   console.log("SITTER DASH DEBUG", {
-     now: now.toISOString(),
-     todayCount: today.length,
-     sitterMapBookings: sitterMapBookings.map((b) => ({
-       id: b.id,
-       clientName: b.clientName,
-       todayVisitStart: b.todayVisitStart,
-       nextVisitStart: b.nextVisitStart,
-     })),
-     remainingSitterMapBookings: remainingSitterMapBookings.map((b) => ({
-       id: b.id,
-       clientName: b.clientName,
-       todayVisitStart: b.todayVisitStart,
-       nextVisitStart: b.nextVisitStart,
-     })),
-   });
+
+  console.log("SITTER DASH DEBUG", {
+    now: now.toISOString(),
+    todayCount: today.length,
+    sitterMapBookings: sitterMapBookings.map((b) => ({
+      id: b.id,
+      clientName: b.clientName,
+      todayVisitStart: b.todayVisitStart,
+      nextVisitStart: b.nextVisitStart,
+    })),
+    remainingSitterMapBookings: remainingSitterMapBookings.map((b) => ({
+      id: b.id,
+      clientName: b.clientName,
+      todayVisitStart: b.todayVisitStart,
+      nextVisitStart: b.nextVisitStart,
+    })),
+    nextUp: nextUp
+      ? {
+          id: nextUp.id,
+          clientName: nextUp.clientName,
+          todayVisitStart: nextUp.todayVisitStart,
+          nextVisitStart: nextUp.nextVisitStart,
+        }
+      : null,
+  });
   const todayVisitCount = getVisitCountForToday(bookings, now);
   const upcomingPayout = getUpcomingPayout(bookings);
   const completedThisWeek = getCompletedThisWeekCount(bookings, now);
@@ -104,7 +114,7 @@ export default async function SitterDashboardPage() {
           />
         </section>
 
-        {nextUp ? (
+        {remainingSitterMapBookings.length ? (
           <SitterRoutePanel
             bookings={remainingSitterMapBookings}
             defaultBooking={nextUp}
