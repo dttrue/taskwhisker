@@ -20,12 +20,19 @@ export function formatTime(value) {
   });
 }
 
+const BUSINESS_TZ = "America/New_York";
+
+function toBusinessDayKey(date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 export function isSameDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return toBusinessDayKey(a) === toBusinessDayKey(b);
 }
 
 export function getBookingNextVisit(booking, now) {
