@@ -179,12 +179,28 @@ export function getSitterMapBookings(bookings = [], now) {
 export function getSortTimeForMapBooking(booking, now) {
   if (!now) return Number.MAX_SAFE_INTEGER;
 
+  const GRACE_MINUTES = 15;
+
   const today = booking.todayVisitStart
     ? new Date(booking.todayVisitStart)
     : null;
 
-  if (today && today.getTime() > now.getTime()) {
-    return today.getTime();
+  if (!today) return Number.MAX_SAFE_INTEGER;
+
+  const visitTime = today.getTime();
+  if (Number.isNaN(visitTime)) return Number.MAX_SAFE_INTEGER;
+
+  const nowTime = now.getTime();
+  const cutoffTime = visitTime + GRACE_MINUTES * 60 * 1000;
+
+  // Future visits sort by actual visit time
+  if (visitTime > nowTime) {
+    return visitTime;
+  }
+
+  // Recently-started visits stay visible, but sort AFTER future visits
+  if (nowTime <= cutoffTime) {
+    return nowTime + 24 * 60 * 60 * 1000 + visitTime;
   }
 
   return Number.MAX_SAFE_INTEGER;

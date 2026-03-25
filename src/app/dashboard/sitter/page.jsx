@@ -41,6 +41,26 @@ export default async function SitterDashboardPage() {
   const now = new Date();
   const { today, upcoming, completed, canceled } = groupBookings(bookings, now);
 
+  console.log("SITTER GROUPED BOOKINGS DEBUG", {
+    now: now.toISOString(),
+    today: today.map((b) => ({
+      id: b.id,
+      clientName: b.client?.name,
+      visits: b.visits?.map((v) => ({
+        startTime: v.startTime,
+        endTime: v.endTime,
+      })),
+    })),
+    upcoming: upcoming.map((b) => ({
+      id: b.id,
+      clientName: b.client?.name,
+      visits: b.visits?.map((v) => ({
+        startTime: v.startTime,
+        endTime: v.endTime,
+      })),
+    })),
+  });
+
   const sitterMapBookings = getSitterMapBookings(today, now);
   const remainingSitterMapBookings = getRemainingMapStops(
     sitterMapBookings,
