@@ -29,7 +29,7 @@ export default function SitterRoutePanel({
       if (foundDefault) return foundDefault;
     }
 
-    return null; // ❗ DO NOT fallback to bookings[0]
+    return null;
   }, [mounted, bookings, selectedBookingId, defaultBooking]);
    
   useEffect(() => {

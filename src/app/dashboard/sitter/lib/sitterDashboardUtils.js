@@ -193,17 +193,18 @@ export function getSortTimeForMapBooking(booking, now) {
   const nowTime = now.getTime();
   const cutoffTime = visitTime + GRACE_MINUTES * 60 * 1000;
 
-  // Future visits sort by actual visit time
+  // ❌ HARD STOP — past grace → REMOVE
+  if (nowTime > cutoffTime) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  // ✅ Future visit
   if (visitTime > nowTime) {
     return visitTime;
   }
 
-  // Recently-started visits stay visible, but sort AFTER future visits
-  if (nowTime <= cutoffTime) {
-    return nowTime + 24 * 60 * 60 * 1000 + visitTime;
-  }
-
-  return Number.MAX_SAFE_INTEGER;
+  // ✅ Within grace window → keep but deprioritize
+  return nowTime + 24 * 60 * 60 * 1000 + visitTime;
 }
 
 export function getSortedSitterMapBookings(bookings = [], now) {
