@@ -43,6 +43,12 @@ function tomorrowAt(hour = 10, minute = 0, durationMinutes = 30) {
   return { startTime: start, endTime: end };
 }
 
+function todayAt(hour = 18, minute = 0, durationMinutes = 30) {
+  const start = dayAt(0, hour, minute);
+  const end = addMinutes(start, durationMinutes);
+  return { startTime: start, endTime: end };
+}
+
 function yesterdayAt(hour = 10, minute = 0, durationMinutes = 30) {
   const start = dayAt(-1, hour, minute);
   const end = addMinutes(start, durationMinutes);
@@ -390,177 +396,181 @@ async function main() {
     },
   });
 
-  await prisma.service.deleteMany();
+  const services = [
+    {
+      name: "Dog Overnight (in your home)",
+      code: "DOG_OVERNIGHT_HOME",
+      species: "DOG",
+      category: "OVERNIGHT",
+      durationMinutes: null,
+      basePriceCents: 6000,
+      notes: "+$20 per additional dog, +$8 per cat",
+    },
+    {
+      name: "Cat Overnight",
+      code: "CAT_OVERNIGHT",
+      species: "CAT",
+      category: "OVERNIGHT",
+      durationMinutes: null,
+      basePriceCents: 4200,
+      notes: "+$8 per additional cat",
+    },
+    {
+      name: "Dog Drop-In (single dog, 15 min)",
+      code: "DOG_DROPIN_SINGLE_15",
+      species: "DOG",
+      category: "DROP_IN",
+      durationMinutes: 15,
+      basePriceCents: 2000,
+    },
+    {
+      name: "Dog Drop-In (single dog, 30 min)",
+      code: "DOG_DROPIN_SINGLE_30",
+      species: "DOG",
+      category: "DROP_IN",
+      durationMinutes: 30,
+      basePriceCents: 2500,
+    },
+    {
+      name: "Dog Drop-In (single dog, 60 min)",
+      code: "DOG_DROPIN_SINGLE_60",
+      species: "DOG",
+      category: "DROP_IN",
+      durationMinutes: 60,
+      basePriceCents: 3000,
+    },
+    {
+      name: "Dog Drop-In (two dogs, 15 min)",
+      code: "DOG_DROPIN_DOUBLE_15",
+      species: "DOG",
+      category: "DROP_IN",
+      durationMinutes: 15,
+      basePriceCents: 2200,
+    },
+    {
+      name: "Dog Drop-In (two dogs, 30 min)",
+      code: "DOG_DROPIN_DOUBLE_30",
+      species: "DOG",
+      category: "DROP_IN",
+      durationMinutes: 30,
+      basePriceCents: 3000,
+    },
+    {
+      name: "Dog Drop-In (two dogs, 60 min)",
+      code: "DOG_DROPIN_DOUBLE_60",
+      species: "DOG",
+      category: "DROP_IN",
+      durationMinutes: 60,
+      basePriceCents: 3500,
+    },
+    {
+      name: "Dog Walk (single dog, 15 min)",
+      code: "DOG_WALK_SINGLE_15",
+      species: "DOG",
+      category: "WALK",
+      durationMinutes: 15,
+      basePriceCents: 1500,
+    },
+    {
+      name: "Dog Walk (single dog, 30 min)",
+      code: "DOG_WALK_SINGLE_30",
+      species: "DOG",
+      category: "WALK",
+      durationMinutes: 30,
+      basePriceCents: 2200,
+    },
+    {
+      name: "Dog Walk (single dog, 60 min)",
+      code: "DOG_WALK_SINGLE_60",
+      species: "DOG",
+      category: "WALK",
+      durationMinutes: 60,
+      basePriceCents: 3000,
+    },
+    {
+      name: "Dog Bath (at home)",
+      code: "DOG_BATH",
+      species: "DOG",
+      category: "EXTRA",
+      durationMinutes: null,
+      basePriceCents: 2500,
+    },
+    {
+      name: "Dog Nail Cut + Grind",
+      code: "DOG_NAIL_GRIND",
+      species: "DOG",
+      category: "EXTRA",
+      durationMinutes: null,
+      basePriceCents: 2000,
+    },
+    {
+      name: "Cat Nail Cutting",
+      code: "CAT_NAIL_CUT",
+      species: "CAT",
+      category: "EXTRA",
+      durationMinutes: null,
+      basePriceCents: 2000,
+    },
+    {
+      name: "Cat Drop-In (one cat, 15 min)",
+      code: "CAT_DROPIN_SINGLE_15",
+      species: "CAT",
+      category: "DROP_IN",
+      durationMinutes: 15,
+      basePriceCents: 1000,
+    },
+    {
+      name: "Cat Drop-In (one cat, 30 min)",
+      code: "CAT_DROPIN_SINGLE_30",
+      species: "CAT",
+      category: "DROP_IN",
+      durationMinutes: 30,
+      basePriceCents: 2000,
+    },
+    {
+      name: "Cat Drop-In (one cat, 60 min)",
+      code: "CAT_DROPIN_SINGLE_60",
+      species: "CAT",
+      category: "DROP_IN",
+      durationMinutes: 60,
+      basePriceCents: 2500,
+    },
+    {
+      name: "Cat Drop-In (two cats, 15 min)",
+      code: "CAT_DROPIN_DOUBLE_15",
+      species: "CAT",
+      category: "DROP_IN",
+      durationMinutes: 15,
+      basePriceCents: 2000,
+      notes: "+$3 per visit per additional cat after two",
+    },
+    {
+      name: "Cat Drop-In (two cats, 30 min)",
+      code: "CAT_DROPIN_DOUBLE_30",
+      species: "CAT",
+      category: "DROP_IN",
+      durationMinutes: 30,
+      basePriceCents: 2200,
+      notes: "+$3 per visit per additional cat after two",
+    },
+    {
+      name: "Cat Drop-In (two cats, 60 min)",
+      code: "CAT_DROPIN_DOUBLE_60",
+      species: "CAT",
+      category: "DROP_IN",
+      durationMinutes: 60,
+      basePriceCents: 2800,
+      notes: "+$3 per visit per additional cat after two",
+    },
+  ];
 
-  await prisma.service.createMany({
-    data: [
-      {
-        name: "Dog Overnight (in your home)",
-        code: "DOG_OVERNIGHT_HOME",
-        species: "DOG",
-        category: "OVERNIGHT",
-        durationMinutes: null,
-        basePriceCents: 6000,
-        notes: "+$20 per additional dog, +$8 per cat",
-      },
-      {
-        name: "Cat Overnight",
-        code: "CAT_OVERNIGHT",
-        species: "CAT",
-        category: "OVERNIGHT",
-        durationMinutes: null,
-        basePriceCents: 4200,
-        notes: "+$8 per additional cat",
-      },
-      {
-        name: "Dog Drop-In (single dog, 15 min)",
-        code: "DOG_DROPIN_SINGLE_15",
-        species: "DOG",
-        category: "DROP_IN",
-        durationMinutes: 15,
-        basePriceCents: 2000,
-      },
-      {
-        name: "Dog Drop-In (single dog, 30 min)",
-        code: "DOG_DROPIN_SINGLE_30",
-        species: "DOG",
-        category: "DROP_IN",
-        durationMinutes: 30,
-        basePriceCents: 2500,
-      },
-      {
-        name: "Dog Drop-In (single dog, 60 min)",
-        code: "DOG_DROPIN_SINGLE_60",
-        species: "DOG",
-        category: "DROP_IN",
-        durationMinutes: 60,
-        basePriceCents: 3000,
-      },
-      {
-        name: "Dog Drop-In (two dogs, 15 min)",
-        code: "DOG_DROPIN_DOUBLE_15",
-        species: "DOG",
-        category: "DROP_IN",
-        durationMinutes: 15,
-        basePriceCents: 2200,
-      },
-      {
-        name: "Dog Drop-In (two dogs, 30 min)",
-        code: "DOG_DROPIN_DOUBLE_30",
-        species: "DOG",
-        category: "DROP_IN",
-        durationMinutes: 30,
-        basePriceCents: 3000,
-      },
-      {
-        name: "Dog Drop-In (two dogs, 60 min)",
-        code: "DOG_DROPIN_DOUBLE_60",
-        species: "DOG",
-        category: "DROP_IN",
-        durationMinutes: 60,
-        basePriceCents: 3500,
-      },
-      {
-        name: "Dog Walk (single dog, 15 min)",
-        code: "DOG_WALK_SINGLE_15",
-        species: "DOG",
-        category: "WALK",
-        durationMinutes: 15,
-        basePriceCents: 1500,
-      },
-      {
-        name: "Dog Walk (single dog, 30 min)",
-        code: "DOG_WALK_SINGLE_30",
-        species: "DOG",
-        category: "WALK",
-        durationMinutes: 30,
-        basePriceCents: 2200,
-      },
-      {
-        name: "Dog Walk (single dog, 60 min)",
-        code: "DOG_WALK_SINGLE_60",
-        species: "DOG",
-        category: "WALK",
-        durationMinutes: 60,
-        basePriceCents: 3000,
-      },
-      {
-        name: "Dog Bath (at home)",
-        code: "DOG_BATH",
-        species: "DOG",
-        category: "EXTRA",
-        durationMinutes: null,
-        basePriceCents: 2500,
-      },
-      {
-        name: "Dog Nail Cut + Grind",
-        code: "DOG_NAIL_GRIND",
-        species: "DOG",
-        category: "EXTRA",
-        durationMinutes: null,
-        basePriceCents: 2000,
-      },
-      {
-        name: "Cat Nail Cutting",
-        code: "CAT_NAIL_CUT",
-        species: "CAT",
-        category: "EXTRA",
-        durationMinutes: null,
-        basePriceCents: 2000,
-      },
-      {
-        name: "Cat Drop-In (one cat, 15 min)",
-        code: "CAT_DROPIN_SINGLE_15",
-        species: "CAT",
-        category: "DROP_IN",
-        durationMinutes: 15,
-        basePriceCents: 1000,
-      },
-      {
-        name: "Cat Drop-In (one cat, 30 min)",
-        code: "CAT_DROPIN_SINGLE_30",
-        species: "CAT",
-        category: "DROP_IN",
-        durationMinutes: 30,
-        basePriceCents: 2000,
-      },
-      {
-        name: "Cat Drop-In (one cat, 60 min)",
-        code: "CAT_DROPIN_SINGLE_60",
-        species: "CAT",
-        category: "DROP_IN",
-        durationMinutes: 60,
-        basePriceCents: 2500,
-      },
-      {
-        name: "Cat Drop-In (two cats, 15 min)",
-        code: "CAT_DROPIN_DOUBLE_15",
-        species: "CAT",
-        category: "DROP_IN",
-        durationMinutes: 15,
-        basePriceCents: 2000,
-        notes: "+$3 per visit per additional cat after two",
-      },
-      {
-        name: "Cat Drop-In (two cats, 30 min)",
-        code: "CAT_DROPIN_DOUBLE_30",
-        species: "CAT",
-        category: "DROP_IN",
-        durationMinutes: 30,
-        basePriceCents: 2200,
-        notes: "+$3 per visit per additional cat after two",
-      },
-      {
-        name: "Cat Drop-In (two cats, 60 min)",
-        code: "CAT_DROPIN_DOUBLE_60",
-        species: "CAT",
-        category: "DROP_IN",
-        durationMinutes: 60,
-        basePriceCents: 2800,
-        notes: "+$3 per visit per additional cat after two",
-      },
-    ],
-  });
+  for (const service of services) {
+    await prisma.service.upsert({
+      where: { code: service.code },
+      update: service,
+      create: service,
+    });
+  }
 
   await prisma.bookingHistory.deleteMany({
     where: { booking: { notes: { startsWith: "Seeded booking:" } } },
@@ -626,16 +636,16 @@ async function main() {
     state: "NY",
   });
 
-  // Daniel - intentionally mixed route state for testing
+  // Daniel - fixed evening route for testing later in the day
   await createSeedBooking({
     clientId: sarah.id,
     sitterId: daniel.id,
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "CAT_DROPIN_SINGLE_30",
-    notes: "Seeded booking: Daniel passed stop today",
+    notes: "Seeded booking: Daniel early evening stop",
     visits: [
-      todayAtOffset(-3, 30), // already passed
+      todayAt(18, 0, 30), // 6:00 PM
       tomorrowAt(9, 0, 30),
     ],
     addOnCodes: ["CAT_NAIL_CUT"],
@@ -648,9 +658,9 @@ async function main() {
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "DOG_WALK_SINGLE_30",
-    notes: "Seeded booking: Daniel next stop today",
+    notes: "Seeded booking: Daniel mid evening stop",
     visits: [
-      todayAtOffset(1, 30), // next upcoming stop
+      todayAt(19, 15, 30), // 7:15 PM
       tomorrowAt(12, 30, 30),
     ],
     ...LOCATIONS.eastBrunswick,
@@ -662,9 +672,9 @@ async function main() {
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "DOG_DROPIN_SINGLE_60",
-    notes: "Seeded booking: Daniel later stop today",
+    notes: "Seeded booking: Daniel late evening stop",
     visits: [
-      todayAtOffset(3, 60), // later today
+      todayAt(20, 30, 60), // 8:30 PM
     ],
     addOnCodes: ["DOG_BATH"],
     ...LOCATIONS.newBrunswick,
@@ -675,21 +685,24 @@ async function main() {
     sitterId: daniel.id,
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
-    serviceCode: "DOG_OVERNIGHT_HOME",
-    notes: "Seeded booking: Daniel tomorrow overnight",
-    visits: [tomorrowAt(20, 0, 12 * 60)],
+    serviceCode: "DOG_WALK_SINGLE_60",
+    notes: "Seeded booking: Daniel night stop",
+    visits: [
+      todayAt(21, 45, 60), // 9:45 PM
+    ],
     ...LOCATIONS.oldBridge,
   });
 
-  // Bridget sitter
   await createSeedBooking({
     clientId: noah.id,
-    sitterId: bridgetSitter.id,
+    sitterId: daniel.id,
     operatorId: bridget.id,
     status: BookingStatus.CONFIRMED,
     serviceCode: "CAT_DROPIN_DOUBLE_30",
-    notes: "Seeded booking: Bridget sitter today route",
-    visits: [todayAtOffset(2, 30), todayAtOffset(5, 30)],
+    notes: "Seeded booking: Daniel late night cat stop",
+    visits: [
+      todayAt(22, 30, 30), // 10:30 PM
+    ],
     ...LOCATIONS.sayreville,
   });
 
