@@ -11,7 +11,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -68,7 +68,7 @@ function getSortTime(booking, now) {
 }
 
 function fitRoute(map, bookings) {
-  if (!bookings.length) return;
+  if (!map || !bookings.length) return;
 
   if (bookings.length === 1) {
     map.setView([bookings[0].lat, bookings[0].lng], 13);
@@ -98,7 +98,7 @@ function RecenterButton({ bookings }) {
     <button
       type="button"
       onClick={() => fitRoute(map, bookings)}
-      className="rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow hover:bg-zinc-50"
+      className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium shadow-md transition hover:bg-zinc-50 active:scale-95"
     >
       Recenter
     </button>
@@ -110,6 +110,9 @@ export default function SitterMapInner({
   selectedBookingId = null,
   onSelectBooking,
 }) {
+  const markerRefs = useRef({});
+  const mapRef = useRef(null);
+
   const validBookings = useMemo(() => {
     const now = new Date();
 
@@ -118,6 +121,27 @@ export default function SitterMapInner({
       .filter((b) => getActionableVisitTime(b, now))
       .sort((a, b) => getSortTime(a, now) - getSortTime(b, now));
   }, [bookings]);
+
+  useEffect(() => {
+    if (!selectedBookingId) return;
+
+    const booking = validBookings.find((b) => b.id === selectedBookingId);
+    if (!booking) return;
+
+    const map = mapRef.current;
+    const marker = markerRefs.current[selectedBookingId];
+
+    if (map) {
+      map.flyTo([booking.lat, booking.lng], map.getZoom(), {
+        animate: true,
+        duration: 0.6,
+      });
+    }
+
+    if (marker) {
+      marker.openPopup();
+    }
+  }, [selectedBookingId, validBookings]);
 
   const center = validBookings.length
     ? [validBookings[0].lat, validBookings[0].lng]
@@ -137,6 +161,7 @@ export default function SitterMapInner({
         preferCanvas={true}
         doubleClickZoom={false}
         className="h-full w-full"
+        ref={mapRef}
       >
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
@@ -167,6 +192,11 @@ export default function SitterMapInner({
                 index + 1,
                 booking.id === selectedBookingId
               )}
+              ref={(instance) => {
+                if (instance) {
+                  markerRefs.current[booking.id] = instance;
+                }
+              }}
               eventHandlers={{
                 click: () => {
                   onSelectBooking?.(booking.id);

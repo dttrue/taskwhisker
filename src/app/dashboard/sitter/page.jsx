@@ -15,6 +15,9 @@ import {
   getSitterMapBookings,
   getRemainingMapStops,
   getNextMapStop,
+  getLastGraceStop,
+  hasRemainingTodayVisit,
+  hasFutureVisit,
 } from "./lib/sitterDashboardUtils";
 
 export default async function SitterDashboardPage() {
@@ -41,60 +44,35 @@ export default async function SitterDashboardPage() {
   const now = new Date();
   const { today, upcoming, completed, canceled } = groupBookings(bookings, now);
 
-  console.log("SITTER GROUPED BOOKINGS DEBUG", {
-    now: now.toISOString(),
-    today: today.map((b) => ({
-      id: b.id,
-      clientName: b.client?.name,
-      visits: b.visits?.map((v) => ({
-        startTime: v.startTime,
-        endTime: v.endTime,
-      })),
-    })),
-    upcoming: upcoming.map((b) => ({
-      id: b.id,
-      clientName: b.client?.name,
-      visits: b.visits?.map((v) => ({
-        startTime: v.startTime,
-        endTime: v.endTime,
-      })),
-    })),
-  });
-
   const sitterMapBookings = getSitterMapBookings(today, now);
   const remainingSitterMapBookings = getRemainingMapStops(
     sitterMapBookings,
     now
   );
   const nextUp = getNextMapStop(sitterMapBookings, now);
+  const lastGraceStop = getLastGraceStop(sitterMapBookings, now);
 
-  console.log("SITTER DASH DEBUG", {
-    now: now.toISOString(),
-    todayCount: today.length,
-    sitterMapBookings: sitterMapBookings.map((b) => ({
-      id: b.id,
-      clientName: b.clientName,
-      todayVisitStart: b.todayVisitStart,
-      nextVisitStart: b.nextVisitStart,
-    })),
-    remainingSitterMapBookings: remainingSitterMapBookings.map((b) => ({
-      id: b.id,
-      clientName: b.clientName,
-      todayVisitStart: b.todayVisitStart,
-      nextVisitStart: b.nextVisitStart,
-    })),
-    nextUp: nextUp
-      ? {
-          id: nextUp.id,
-          clientName: nextUp.clientName,
-          todayVisitStart: nextUp.todayVisitStart,
-          nextVisitStart: nextUp.nextVisitStart,
-        }
-      : null,
-  });
+  const defaultBooking =
+    remainingSitterMapBookings.find((b) => b.id === nextUp?.id) ??
+    remainingSitterMapBookings[0] ??
+    null;
+
+  const safeLastGraceStop =
+    remainingSitterMapBookings.find((b) => b.id === lastGraceStop?.id) ?? null;
+
   const todayVisitCount = getVisitCountForToday(bookings, now);
   const upcomingPayout = getUpcomingPayout(bookings);
   const completedThisWeek = getCompletedThisWeekCount(bookings, now);
+
+  const todayActive = today.filter((b) => hasRemainingTodayVisit(b, now));
+
+  const todayMovedToUpcoming = today.filter(
+    (b) => !hasRemainingTodayVisit(b, now) && hasFutureVisit(b, now)
+  );
+
+  const upcomingCombined = [...todayMovedToUpcoming, ...upcoming].filter(
+    (b, i, arr) => arr.findIndex((x) => x.id === b.id) === i
+  );
 
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
@@ -137,7 +115,8 @@ export default async function SitterDashboardPage() {
         {remainingSitterMapBookings.length ? (
           <SitterRoutePanel
             bookings={remainingSitterMapBookings}
-            defaultBooking={nextUp}
+            defaultBooking={defaultBooking}
+            lastGraceStop={safeLastGraceStop}
           />
         ) : null}
 
@@ -151,14 +130,14 @@ export default async function SitterDashboardPage() {
           <>
             <Section
               title="Today"
-              description="Your bookings with visits scheduled today."
-              bookings={today}
+              description="Your remaining visits for today."
+              bookings={todayActive}
             />
 
             <Section
               title="Upcoming"
               description="Future assigned bookings."
-              bookings={upcoming}
+              bookings={upcomingCombined}
             />
 
             <Section

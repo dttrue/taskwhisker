@@ -71,6 +71,36 @@ export function getVisitCountForToday(bookings = [], now) {
   }, 0);
 }
 
+export function hasRemainingTodayVisit(booking, now) {
+  if (!now || !booking?.visits?.length) return false;
+
+  const GRACE_MINUTES = 15;
+  const graceMs = GRACE_MINUTES * 60 * 1000;
+
+  return booking.visits.some((visit) => {
+    const start = new Date(visit.startTime);
+    if (Number.isNaN(start.getTime())) return false;
+
+    if (!isSameDay(start, now)) return false;
+
+    return start.getTime() + graceMs > now.getTime();
+  });
+}
+
+export function hasFutureVisit(booking, now) {
+  if (!now || !booking?.visits?.length) return false;
+
+  const GRACE_MINUTES = 15;
+  const graceMs = GRACE_MINUTES * 60 * 1000;
+
+  return booking.visits.some((visit) => {
+    const start = new Date(visit.startTime);
+    if (Number.isNaN(start.getTime())) return false;
+
+    return start.getTime() + graceMs > now.getTime();
+  });
+}
+
 export function getUpcomingPayout(bookings) {
   return bookings
     .filter((booking) => booking.status === "CONFIRMED")
@@ -234,4 +264,34 @@ export function getNextMapStop(bookings = [], now) {
   if (!now) return null;
 
   return getRemainingMapStops(bookings, now)[0] || null;
+}
+
+export function getRecentGraceStops(bookings = [], now) {
+  if (!now) return [];
+
+  const GRACE_MINUTES = 15;
+  const nowTime = now.getTime();
+
+  return bookings.filter((booking) => {
+    if (!booking.todayVisitStart) return false;
+
+    const visitTime = new Date(booking.todayVisitStart).getTime();
+    if (Number.isNaN(visitTime)) return false;
+
+    const cutoffTime = visitTime + GRACE_MINUTES * 60 * 1000;
+
+    return visitTime <= nowTime && nowTime <= cutoffTime;
+  });
+}
+
+export function getLastGraceStop(bookings = [], now) {
+  const recentStops = getRecentGraceStops(bookings, now);
+
+  return (
+    recentStops.sort((a, b) => {
+      const aTime = new Date(a.todayVisitStart).getTime();
+      const bTime = new Date(b.todayVisitStart).getTime();
+      return bTime - aTime;
+    })[0] || null
+  );
 }
