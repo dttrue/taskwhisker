@@ -35,12 +35,64 @@ export function isSameDay(a, b) {
   return toBusinessDayKey(a) === toBusinessDayKey(b);
 }
 
+export function getRemainingVisitCountForToday(
+  bookings = [],
+  now = new Date(),
+  graceMinutes = 15
+) {
+  if (!now) return 0;
+
+  const graceMs = graceMinutes * 60 * 1000;
+
+  return bookings.reduce((count, booking) => {
+    const remainingTodayVisits =
+      booking.visits?.filter((visit) => {
+        if (visit.status === "COMPLETED" || visit.status === "CANCELED") {
+          return false;
+        }
+
+        const start = new Date(visit.startTime);
+        if (Number.isNaN(start.getTime())) return false;
+
+        if (!isSameDay(start, now)) return false;
+
+        return start.getTime() + graceMs > now.getTime();
+      }) || [];
+
+    return count + remainingTodayVisits.length;
+  }, 0);
+}
+
+
+export function getVisitProgressLabel(visits = []) {
+  if (!visits.length) return "No visits scheduled";
+
+  const total = visits.length;
+  const completed = visits.filter(
+    (visit) => visit.status === "COMPLETED"
+  ).length;
+  const remaining = visits.filter(
+    (visit) => visit.status !== "COMPLETED" && visit.status !== "CANCELED"
+  ).length;
+
+  if (remaining === 0 && completed > 0) {
+    return `${completed} of ${total} visits completed`;
+  }
+
+  if (completed > 0) {
+    return `${remaining} remaining of ${total} visits`;
+  }
+
+  return total === 1 ? "1 visit scheduled" : `${total} visits scheduled`;
+}
+
 export function getBookingNextVisit(booking, now) {
   if (!booking?.visits?.length || !now) return booking?.visits?.[0] || null;
 
   return (
-    booking.visits.find((visit) => new Date(visit.endTime) >= now) ||
-    booking.visits[0]
+    booking.visits.find(
+      (visit) => visit.status !== "COMPLETED" && new Date(visit.endTime) >= now
+    ) || booking.visits[0]
   );
 }
 
@@ -71,6 +123,44 @@ export function getVisitCountForToday(bookings = [], now) {
   }, 0);
 }
 
+export function getActionableVisitForBooking(booking, now) {
+  if (!booking?.visits?.length || !now) return null;
+
+  const GRACE_MINUTES = 15;
+  const graceMs = GRACE_MINUTES * 60 * 1000;
+
+  const remaining = booking.visits.filter((visit) => {
+    const start = new Date(visit.startTime);
+    if (Number.isNaN(start.getTime())) return false;
+
+    return (
+      visit.status === "CONFIRMED" && start.getTime() + graceMs > now.getTime()
+    );
+  });
+
+  return (
+    remaining.sort(
+      (a, b) => new Date(a.startTime) - new Date(b.startTime)
+    )[0] || null
+  );
+}
+export function canCompleteVisit(visit, now) {
+  if (!visit || !now) return false;
+
+  const start = new Date(visit.startTime);
+  if (Number.isNaN(start.getTime())) return false;
+
+  return visit.status === "CONFIRMED" && start.getTime() <= now.getTime();
+}
+
+export function shouldAutoCompleteBooking(visits = []) {
+  if (!visits.length) return false;
+
+  return visits.every(
+    (v) => v.status === "COMPLETED" || v.status === "CANCELED"
+  );
+}
+
 export function hasRemainingTodayVisit(booking, now) {
   if (!now || !booking?.visits?.length) return false;
 
@@ -78,12 +168,124 @@ export function hasRemainingTodayVisit(booking, now) {
   const graceMs = GRACE_MINUTES * 60 * 1000;
 
   return booking.visits.some((visit) => {
+    if (visit.status === "COMPLETED" || visit.status === "CANCELED")
+      return false;
+
     const start = new Date(visit.startTime);
     if (Number.isNaN(start.getTime())) return false;
 
     if (!isSameDay(start, now)) return false;
 
     return start.getTime() + graceMs > now.getTime();
+  });
+}
+export function getRemainingTodayVisitSummaryLines(
+  visits = [],
+  now,
+  limit = 3
+) {
+  if (!visits.length || !now) return ["No visits scheduled"];
+
+  const GRACE_MINUTES = 15;
+  const graceMs = GRACE_MINUTES * 60 * 1000;
+
+  const remainingTodayVisits = visits
+    .filter((visit) => {
+      if (visit.status === "COMPLETED" || visit.status === "CANCELED")
+        return false;
+
+      const start = new Date(visit.startTime);
+      if (Number.isNaN(start.getTime())) return false;
+      if (!isSameDay(start, now)) return false;
+
+      return start.getTime() + graceMs > now.getTime();
+    })
+    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+    .slice(0, limit);
+
+  if (!remainingTodayVisits.length) return ["No remaining visits today"];
+
+  return remainingTodayVisits.map((visit) => {
+    const start = new Date(visit.startTime);
+    const end = new Date(visit.endTime);
+
+    return `${start.toLocaleDateString(undefined, {
+      month: "numeric",
+      day: "numeric",
+    })} • ${formatTime(start)}–${formatTime(end)}`;
+  });
+}
+
+export function getFutureVisits(
+  visits = [],
+  now = new Date(),
+  graceMinutes = 15
+) {
+  const graceMs = graceMinutes * 60 * 1000;
+
+  return visits.filter((visit) => {
+    if (visit.status === "COMPLETED" || visit.status === "CANCELED")
+      return false;
+
+    const end = new Date(visit.endTime);
+    if (Number.isNaN(end.getTime())) return false;
+
+    return end.getTime() + graceMs > now.getTime();
+  });
+}
+
+export function getRemainingVisits(
+  visits = [],
+  now = new Date(),
+  graceMinutes = 15
+) {
+  const graceMs = graceMinutes * 60 * 1000;
+
+  return visits.filter((visit) => {
+    const end = new Date(visit.endTime);
+    if (Number.isNaN(end.getTime())) return false;
+
+    return end.getTime() + graceMs > now.getTime();
+  });
+}
+
+export function canCompleteBooking(
+  booking,
+  now = new Date(),
+  graceMinutes = 15
+) {
+  if (!booking || booking.status !== "CONFIRMED") return false;
+
+  const remainingVisits = getRemainingVisits(booking.visits, now, graceMinutes);
+
+  return remainingVisits.length === 0;
+}
+
+export function getUpcomingVisitSummaryLines(visits = [], now, limit = 3) {
+  if (!visits.length || !now) return ["No visits scheduled"];
+
+  const GRACE_MINUTES = 15;
+  const graceMs = GRACE_MINUTES * 60 * 1000;
+
+  const upcomingVisits = visits
+    .filter((visit) => {
+      const start = new Date(visit.startTime);
+      if (Number.isNaN(start.getTime())) return false;
+
+      return start.getTime() + graceMs > now.getTime();
+    })
+    .slice(0, limit);
+
+  if (!upcomingVisits.length) return ["No upcoming visits"];
+
+  return upcomingVisits.map((visit) => {
+    const start = new Date(visit.startTime);
+    const end = new Date(visit.endTime);
+
+    return `${start.toLocaleDateString(undefined, {
+      month: "numeric",
+      day: "numeric",
+    })} • ${formatTime(start)}–${formatTime(end)}`;
   });
 }
 
@@ -128,13 +330,15 @@ export function groupBookings(bookings = [], now) {
     return {
       today: [],
       upcoming: bookings.filter(
-        (booking) =>
-          booking.status !== "COMPLETED" && booking.status !== "CANCELED"
+        (b) => b.status !== "COMPLETED" && b.status !== "CANCELED"
       ),
-      completed: bookings.filter((booking) => booking.status === "COMPLETED"),
-      canceled: bookings.filter((booking) => booking.status === "CANCELED"),
+      completed: bookings.filter((b) => b.status === "COMPLETED"),
+      canceled: bookings.filter((b) => b.status === "CANCELED"),
     };
   }
+
+  const GRACE_MINUTES = 15;
+  const graceMs = GRACE_MINUTES * 60 * 1000;
 
   const today = [];
   const upcoming = [];
@@ -152,15 +356,42 @@ export function groupBookings(bookings = [], now) {
       continue;
     }
 
-    const hasVisitToday =
-      booking.visits?.some((visit) =>
-        isSameDay(new Date(visit.startTime), now)
-      ) || false;
+    const visits = booking.visits || [];
 
-    if (hasVisitToday) {
+    let hasTodayVisit = false;
+    let hasRemainingTodayVisit = false;
+    let hasFutureVisit = false;
+
+    for (const visit of visits) {
+      const start = new Date(visit.startTime);
+      if (Number.isNaN(start.getTime())) continue;
+
+      const isToday = isSameDay(start, now);
+
+      if (isToday) {
+        hasTodayVisit = true;
+
+        if (start.getTime() + graceMs > now.getTime()) {
+          hasRemainingTodayVisit = true;
+        }
+      }
+
+      if (start.getTime() + graceMs > now.getTime()) {
+        hasFutureVisit = true;
+      }
+    }
+
+    
+
+    // 🎯 New classification logic
+
+    if (hasTodayVisit && hasRemainingTodayVisit) {
       today.push(booking);
-    } else {
+    } else if (hasFutureVisit) {
       upcoming.push(booking);
+    } else {
+      // optional: treat fully past bookings as completed-like
+      completed.push(booking);
     }
   }
 
@@ -206,6 +437,7 @@ export function getSitterMapBookings(bookings = [], now) {
         nextVisitStart: nextVisit?.startTime || null,
         todayVisitStart: todayVisit?.startTime || null,
         sitterPayoutCents: booking.sitterPayoutCents || 0,
+        visits: booking.visits || [],
       };
     })
     .filter(

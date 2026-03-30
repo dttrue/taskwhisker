@@ -13,59 +13,14 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef } from "react";
 
-function formatDateTime(value) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString(undefined, {
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
+import {
+  formatDateTime,
+  getActionableVisitTime,
+  getSortTime,
+  isVisitInGraceWindow,
+} from "../lib/sitterMapUtils";
 
-function makeNumberedIcon(number, isSelected = false) {
-  return L.divIcon({
-    className: "",
-    html: `
-      <div style="
-        width: 24px;
-        height: 24px;
-        border-radius: 9999px;
-        background: ${isSelected ? "#2563eb" : "#111827"};
-        color: white;
-        border: 2px solid white;
-        box-shadow: 0 1px 6px rgba(0,0,0,0.35);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        font-weight: 700;
-      ">
-        ${number}
-      </div>
-    `,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -12],
-  });
-}
-
-function getActionableVisitTime(booking, now) {
-  if (!now || !booking.todayVisitStart) return null;
-
-  const todayVisit = new Date(booking.todayVisitStart);
-  const time = todayVisit.getTime();
-
-  if (Number.isNaN(time)) return null;
-  if (time <= now.getTime()) return null;
-
-  return todayVisit;
-}
-
-function getSortTime(booking, now) {
-  const actionableVisit = getActionableVisitTime(booking, now);
-  return actionableVisit ? actionableVisit.getTime() : Number.MAX_SAFE_INTEGER;
-}
+import { makeNumberedIcon } from "../lib/mapIcons";
 
 function fitRoute(map, bookings) {
   if (!map || !bookings.length) return;
@@ -79,29 +34,55 @@ function fitRoute(map, bookings) {
   map.fitBounds(bounds, { padding: [30, 30] });
 }
 
-function FitBounds({ bookings }) {
+function FitBounds({ bookings, selectedBookingId }) {
   const map = useMap();
 
   useEffect(() => {
+    if (selectedBookingId) return;
     fitRoute(map, bookings);
-  }, [bookings, map]);
+  }, [bookings, map, selectedBookingId]);
 
   return null;
 }
 
-function RecenterButton({ bookings }) {
+function FocusSelectedStop({ bookings, selectedBookingId, markerRefs }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!selectedBookingId) return;
+
+    const booking = bookings.find((b) => b.id === selectedBookingId);
+    if (!booking) return;
+
+    map.flyTo([booking.lat, booking.lng], 14, {
+      animate: true,
+      duration: 0.6,
+    });
+
+    const marker = markerRefs.current[selectedBookingId];
+    if (marker?.openPopup) {
+      marker.openPopup();
+    }
+  }, [bookings, selectedBookingId, markerRefs, map]);
+
+  return null;
+}
+
+function RecenterControl({ bookings }) {
   const map = useMap();
 
   if (!bookings.length) return null;
 
   return (
-    <button
-      type="button"
-      onClick={() => fitRoute(map, bookings)}
-      className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium shadow-md transition hover:bg-zinc-50 active:scale-95"
-    >
-      Recenter
-    </button>
+    <div className="absolute right-3 top-3 z-[1000]">
+      <button
+        type="button"
+        onClick={() => fitRoute(map, bookings)}
+        className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium shadow-md transition hover:bg-zinc-50 active:scale-95"
+      >
+        Recenter
+      </button>
+    </div>
   );
 }
 
@@ -111,7 +92,6 @@ export default function SitterMapInner({
   onSelectBooking,
 }) {
   const markerRefs = useRef({});
-  const mapRef = useRef(null);
 
   const validBookings = useMemo(() => {
     const now = new Date();
@@ -122,27 +102,6 @@ export default function SitterMapInner({
       .sort((a, b) => getSortTime(a, now) - getSortTime(b, now));
   }, [bookings]);
 
-  useEffect(() => {
-    if (!selectedBookingId) return;
-
-    const booking = validBookings.find((b) => b.id === selectedBookingId);
-    if (!booking) return;
-
-    const map = mapRef.current;
-    const marker = markerRefs.current[selectedBookingId];
-
-    if (map) {
-      map.flyTo([booking.lat, booking.lng], map.getZoom(), {
-        animate: true,
-        duration: 0.6,
-      });
-    }
-
-    if (marker) {
-      marker.openPopup();
-    }
-  }, [selectedBookingId, validBookings]);
-
   const center = validBookings.length
     ? [validBookings[0].lat, validBookings[0].lng]
     : [40.7128, -74.006];
@@ -151,6 +110,19 @@ export default function SitterMapInner({
 
   return (
     <div className="relative h-[400px] w-full overflow-hidden rounded-xl">
+      <style jsx global>{`
+        @keyframes sitterPulse {
+          0% {
+            transform: scale(0.9);
+            opacity: 0.9;
+          }
+          100% {
+            transform: scale(1.8);
+            opacity: 0;
+          }
+        }
+      `}</style>
+
       <MapContainer
         center={center}
         zoom={11}
@@ -161,28 +133,33 @@ export default function SitterMapInner({
         preferCanvas={true}
         doubleClickZoom={false}
         className="h-full w-full"
-        ref={mapRef}
       >
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <FitBounds bookings={validBookings} />
+        <FitBounds
+          bookings={validBookings}
+          selectedBookingId={selectedBookingId}
+        />
 
-        <div className="absolute right-3 top-3 z-[1000]">
-          <RecenterButton bookings={validBookings} />
-        </div>
+        <FocusSelectedStop
+          bookings={validBookings}
+          selectedBookingId={selectedBookingId}
+          markerRefs={markerRefs}
+        />
+
+        <RecenterControl bookings={validBookings} />
 
         {routePositions.length > 1 ? (
           <Polyline positions={routePositions} />
         ) : null}
 
         {validBookings.map((booking, index) => {
-          const actionableVisitTime = getActionableVisitTime(
-            booking,
-            new Date()
-          );
+          const now = new Date();
+          const actionableVisitTime = getActionableVisitTime(booking, now);
+          const isInGrace = isVisitInGraceWindow(booking, now);
 
           return (
             <Marker
@@ -190,7 +167,8 @@ export default function SitterMapInner({
               position={[booking.lat, booking.lng]}
               icon={makeNumberedIcon(
                 index + 1,
-                booking.id === selectedBookingId
+                booking.id === selectedBookingId,
+                isInGrace
               )}
               ref={(instance) => {
                 if (instance) {

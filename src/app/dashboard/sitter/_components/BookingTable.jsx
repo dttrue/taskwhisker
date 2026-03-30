@@ -9,10 +9,13 @@ import {
   formatDateTime,
   getBookingNextVisit,
   getVisitSummaryLines,
+  getVisitProgressLabel,
 } from "../lib/sitterDashboardUtils";
 import { completeBookingAsSitter } from "../actions";
 
 export default function BookingTable({ bookings }) {
+  const now = new Date();
+
   return (
     <div className="hidden overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm md:block">
       <table className="min-w-full text-sm">
@@ -29,7 +32,7 @@ export default function BookingTable({ bookings }) {
         </thead>
         <tbody>
           {bookings.map((booking) => {
-            const nextVisit = getBookingNextVisit(booking);
+            const nextVisit = getBookingNextVisit(booking, now);
 
             return (
               <tr
@@ -39,23 +42,27 @@ export default function BookingTable({ bookings }) {
                 <td className="p-3 font-medium text-zinc-900">
                   {booking.client?.name || "—"}
                 </td>
+
                 <td className="p-3 text-zinc-700">
                   {booking.serviceSummary || "Drop-in visit"}
                 </td>
+
                 <td className="p-3 text-zinc-700">
                   {nextVisit ? formatDateTime(nextVisit.startTime) : "—"}
                 </td>
+
                 <td className="p-3">
                   <div className="text-sm text-zinc-900">
-                    {booking.visits?.length || 0} visit
-                    {booking.visits?.length === 1 ? "" : "s"}
+                    {getVisitProgressLabel(booking.visits)}
                   </div>
+
                   <div className="mt-1 space-y-1">
                     {getVisitSummaryLines(booking.visits).map((line, index) => (
                       <div key={index} className="text-xs text-zinc-500">
                         {line}
                       </div>
                     ))}
+
                     {booking.visits?.length > 3 ? (
                       <div className="text-xs text-zinc-400">
                         +{booking.visits.length - 3} more
@@ -63,6 +70,7 @@ export default function BookingTable({ bookings }) {
                     ) : null}
                   </div>
                 </td>
+
                 <td className="p-3">
                   <span
                     className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
@@ -80,9 +88,11 @@ export default function BookingTable({ bookings }) {
                     </span>
                   </span>
                 </td>
+
                 <td className="p-3 whitespace-nowrap font-medium text-zinc-900">
                   {formatMoney(booking.sitterPayoutCents)}
                 </td>
+
                 <td className="p-3 text-right">
                   <form action={completeBookingAsSitter}>
                     <input type="hidden" name="bookingId" value={booking.id} />

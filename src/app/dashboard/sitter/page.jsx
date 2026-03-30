@@ -8,16 +8,16 @@ import SitterRoutePanel from "./_components/SitterRoutePanel";
 
 import {
   formatMoney,
+  formatDateTime,
   groupBookings,
-  getVisitCountForToday,
+  getRemainingVisitCountForToday,
   getUpcomingPayout,
   getCompletedThisWeekCount,
   getSitterMapBookings,
   getRemainingMapStops,
   getNextMapStop,
   getLastGraceStop,
-  hasRemainingTodayVisit,
-  hasFutureVisit,
+  getBookingNextVisit,
 } from "./lib/sitterDashboardUtils";
 
 export default async function SitterDashboardPage() {
@@ -60,19 +60,27 @@ export default async function SitterDashboardPage() {
   const safeLastGraceStop =
     remainingSitterMapBookings.find((b) => b.id === lastGraceStop?.id) ?? null;
 
-  const todayVisitCount = getVisitCountForToday(bookings, now);
+  const todayVisitCount = getRemainingVisitCountForToday(bookings, now);
   const upcomingPayout = getUpcomingPayout(bookings);
   const completedThisWeek = getCompletedThisWeekCount(bookings, now);
 
-  const todayActive = today.filter((b) => hasRemainingTodayVisit(b, now));
+  const nextUpcomingBooking = upcoming[0] || null;
+  const nextUpcomingVisit = nextUpcomingBooking
+    ? getBookingNextVisit(nextUpcomingBooking, now)
+    : null;
 
-  const todayMovedToUpcoming = today.filter(
-    (b) => !hasRemainingTodayVisit(b, now) && hasFutureVisit(b, now)
-  );
+  const tomorrowCount = upcoming.filter((booking) => {
+    const nextVisit = getBookingNextVisit(booking, now);
+    if (!nextVisit) return false;
 
-  const upcomingCombined = [...todayMovedToUpcoming, ...upcoming].filter(
-    (b, i, arr) => arr.findIndex((x) => x.id === b.id) === i
-  );
+    const visitDate = new Date(nextVisit.startTime);
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    return visitDate.toDateString() === tomorrow.toDateString();
+  }).length;
+
+  const hasActiveRoute = remainingSitterMapBookings.length > 0;
 
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
@@ -85,40 +93,105 @@ export default async function SitterDashboardPage() {
             Sitter Dashboard
           </h1>
           <p className="mt-1 text-sm text-zinc-600">
-            See what’s next, manage today’s work, and track your payout.
+            Your live route, next visits, and shift progress.
           </p>
         </header>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Today’s Visits"
+            label="Remaining Today"
             value={todayVisitCount}
-            subtext="Visits scheduled for today"
+            subtext={
+              todayVisitCount === 1
+                ? "1 visit still active today"
+                : "Visits still active today"
+            }
           />
+
           <StatCard
-            label="Upcoming Bookings"
-            value={upcoming.length}
-            subtext="Future assigned bookings"
+            label="Next Visit"
+            value={
+              nextUp?.clientName
+                ? nextUp.clientName
+                : nextUpcomingVisit
+                ? formatDateTime(nextUpcomingVisit.startTime)
+                : "No upcoming visits"
+            }
+            subtext={
+              nextUp?.nextVisitStart
+                ? formatDateTime(nextUp.nextVisitStart)
+                : nextUpcomingVisit
+                ? "Next scheduled stop"
+                : "Nothing queued right now"
+            }
           />
+
           <StatCard
-            label="Completed This Week"
-            value={completedThisWeek}
-            subtext="Bookings marked complete"
+            label="Tomorrow"
+            value={tomorrowCount}
+            subtext={
+              tomorrowCount === 1
+                ? "1 booking starts tomorrow"
+                : "Bookings starting tomorrow"
+            }
           />
+
           <StatCard
             label="Upcoming Payout"
             value={formatMoney(upcomingPayout)}
-            subtext="From confirmed assigned bookings"
+            subtext={`Completed this week: ${completedThisWeek}`}
           />
         </section>
 
-        {remainingSitterMapBookings.length ? (
+        {hasActiveRoute ? (
           <SitterRoutePanel
             bookings={remainingSitterMapBookings}
             defaultBooking={defaultBooking}
             lastGraceStop={safeLastGraceStop}
           />
-        ) : null}
+        ) : (
+          <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Shift Status
+            </div>
+
+            <h2 className="mt-2 text-xl font-semibold text-zinc-900">
+              All caught up for today
+            </h2>
+
+            <p className="mt-1 text-sm text-zinc-600">
+              You have no remaining active stops today.
+            </p>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Next Upcoming Visit
+                </div>
+                <div className="mt-2 text-sm font-semibold text-zinc-900">
+                  {nextUpcomingBooking?.client?.name || "No upcoming bookings"}
+                </div>
+                <div className="mt-1 text-sm text-zinc-600">
+                  {nextUpcomingVisit
+                    ? formatDateTime(nextUpcomingVisit.startTime)
+                    : "You're clear for now"}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  This Week
+                </div>
+                <div className="mt-2 text-sm font-semibold text-zinc-900">
+                  {completedThisWeek} completed
+                </div>
+                <div className="mt-1 text-sm text-zinc-600">
+                  Finished bookings recorded this week
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {bookings.length === 0 ? (
           <section className="rounded-xl border border-zinc-200 bg-white shadow-sm">
@@ -130,27 +203,42 @@ export default async function SitterDashboardPage() {
           <>
             <Section
               title="Today"
-              description="Your remaining visits for today."
-              bookings={todayActive}
+              description="Active and upcoming stops for the rest of today."
+              bookings={today}
+              view="today"
+              nextUp={nextUp}
+              emptyMessage="No remaining visits for today."
             />
 
             <Section
               title="Upcoming"
-              description="Future assigned bookings."
-              bookings={upcomingCombined}
+              description="What’s coming after today."
+              bookings={upcoming}
+              view="upcoming"
+              emptyMessage="No upcoming bookings scheduled."
             />
 
-            <Section
-              title="Completed"
-              description="Bookings you’ve already finished."
-              bookings={completed}
-            />
+            {completed.length > 0 ? (
+              <Section
+                title="Completed"
+                description="Finished work from recent visits."
+                bookings={completed}
+                view="completed"
+                emptyMessage="No completed bookings yet."
+                muted
+              />
+            ) : null}
 
-            <Section
-              title="Canceled"
-              description="Bookings that are no longer active."
-              bookings={canceled}
-            />
+            {canceled.length > 0 ? (
+              <Section
+                title="Canceled"
+                description="Bookings that are no longer active."
+                bookings={canceled}
+                view="canceled"
+                emptyMessage="No canceled bookings."
+                muted
+              />
+            ) : null}
           </>
         )}
       </div>

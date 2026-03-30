@@ -2,10 +2,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { formatMoney, formatDateTime } from "../lib/sitterDashboardUtils";
-import { completeBookingAsSitter } from "../actions";
+import {
+  formatMoney,
+  formatDateTime,
+  getActionableVisitForBooking,
+  canCompleteVisit,
+} from "../lib/sitterDashboardUtils";
+import { completeVisitAsSitter } from "../actions";
 import SitterMap from "./SitterMap";
-
+(null);
 export default function SitterRoutePanel({
   bookings = [],
   defaultBooking = null,
@@ -14,7 +19,8 @@ export default function SitterRoutePanel({
   const [selectedBookingId, setSelectedBookingId] = useState(
     defaultBooking?.id || null
   );
-
+  const [justCompletedVisitId, setJustCompletedVisitId] = useState(null);
+  const [isCompletingVisit, setIsCompletingVisit] = useState(false);
   useEffect(() => {
     const isValidBooking =
       selectedBookingId &&
@@ -24,6 +30,25 @@ export default function SitterRoutePanel({
       setSelectedBookingId(defaultBooking?.id || bookings[0]?.id || null);
     }
   }, [selectedBookingId, bookings, defaultBooking]);
+
+  useEffect(() => {
+    if (!justCompletedVisitId) return;
+
+    const timer = setTimeout(() => {
+      const currentIndex = bookings.findIndex(
+        (b) => b.id === selectedBookingId
+      );
+
+      if (currentIndex >= 0 && currentIndex < bookings.length - 1) {
+        const nextBooking = bookings[currentIndex + 1];
+        setSelectedBookingId(nextBooking.id);
+      }
+
+      setJustCompletedVisitId(null);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [justCompletedVisitId, bookings, selectedBookingId]);
 
   const selectedBooking = useMemo(() => {
     if (!bookings.length) return null;
@@ -45,11 +70,19 @@ export default function SitterRoutePanel({
     !!lastGraceStop &&
     bookings.some((booking) => booking.id === lastGraceStop.id);
 
-  const canComplete = selectedBooking?.status === "CONFIRMED";
+  const now = new Date();
+  const actionableVisit = getActionableVisitForBooking(selectedBooking, now);
+
+  const canComplete = canCompleteVisit(actionableVisit, now);
+
   const visitDateTime =
-    selectedBooking?.todayVisitStart || selectedBooking?.nextVisitStart;
+    actionableVisit?.startTime ||
+    selectedBooking?.todayVisitStart ||
+    selectedBooking?.nextVisitStart;
 
   if (!selectedBooking) return null;
+  
+  if (!actionableVisit) return null;
 
   const currentIndex = bookings.findIndex((b) => b.id === selectedBooking?.id);
 
@@ -59,6 +92,37 @@ export default function SitterRoutePanel({
       : null;
 
   const previousStop = currentIndex > 0 ? bookings[currentIndex - 1] : null;
+
+  async function handleCompleteVisit() {
+    if (!actionableVisit?.id || !canComplete || isCompletingVisit) return;
+
+    try {
+      setIsCompletingVisit(true);
+
+      const formData = new FormData();
+      formData.append("visitId", actionableVisit.id);
+
+      const result = await completeVisitAsSitter(formData);
+
+      if (!result?.ok) {
+        console.error(result?.error || "Failed to complete visit.");
+        return;
+      }
+
+      const currentIndex = bookings.findIndex(
+        (b) => b.id === selectedBookingId
+      );
+
+      if (currentIndex >= 0 && currentIndex < bookings.length - 1) {
+        const nextBooking = bookings[currentIndex + 1];
+        setSelectedBookingId(nextBooking.id);
+      }
+    } catch (error) {
+      console.error("Failed to complete visit:", error);
+    } finally {
+      setIsCompletingVisit(false);
+    }
+  }
 
   return (
     <section className="space-y-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-5 shadow-sm">
@@ -93,23 +157,26 @@ export default function SitterRoutePanel({
             {formatMoney(selectedBooking.sitterPayoutCents)}
           </div>
 
-          <form action={completeBookingAsSitter} className="mt-3">
-            <input type="hidden" name="bookingId" value={selectedBooking.id} />
+          <div className="mt-3">
             <button
-              type="submit"
-              disabled={!canComplete}
-              onClick={() => {
-                if (nextStop) setSelectedBookingId(nextStop.id);
-              }}
+              type="button"
+              onClick={handleCompleteVisit}
+              disabled={!canComplete || isCompletingVisit}
               className={
-                canComplete
+                canComplete && !isCompletingVisit
                   ? "rounded-md border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-600 hover:text-white"
                   : "cursor-not-allowed rounded-md border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-400"
               }
             >
-              Mark complete
+              {isCompletingVisit ? "Completing..." : "Mark visit complete"}
             </button>
-          </form>
+          </div>
+
+          {actionableVisit && !canComplete && (
+            <p className="mt-2 text-xs text-amber-600">
+              This visit starts at {formatDateTime(actionableVisit.startTime)}.
+            </p>
+          )}
 
           <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3 text-left md:text-left">

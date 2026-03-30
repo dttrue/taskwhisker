@@ -79,3 +79,21 @@ button {
   border-top-right-radius: 9999px;
   border-bottom-right-radius: 9999px;
 }
+
+@keyframes pulse-soft {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.6);
+    opacity: 0.4;
+  }
+}
+
+.pulse-dot {
+  animation: pulse-soft 1.4s ease-in-out infinite;
+}
