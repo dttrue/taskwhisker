@@ -11,7 +11,7 @@ import {
   getVisitSummaryLines,
   getVisitProgressLabel,
 } from "../lib/sitterDashboardUtils";
-import { completeBookingAsSitter } from "../actions";
+import { completeVisitAsSitter } from "../actions";
 
 export default function BookingTable({ bookings }) {
   const now = new Date();
@@ -93,22 +93,7 @@ export default function BookingTable({ bookings }) {
                   {formatMoney(booking.sitterPayoutCents)}
                 </td>
 
-                <td className="p-3 text-right">
-                  <form action={completeBookingAsSitter}>
-                    <input type="hidden" name="bookingId" value={booking.id} />
-                    <button
-                      type="submit"
-                      disabled={booking.status !== "CONFIRMED"}
-                      className={
-                        booking.status === "CONFIRMED"
-                          ? "rounded-md border border-blue-600 px-3 py-1.5 text-xs font-semibold text-blue-600 transition hover:bg-blue-600 hover:text-white"
-                          : "cursor-not-allowed rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-400"
-                      }
-                    >
-                      Mark complete
-                    </button>
-                  </form>
-                </td>
+                
               </tr>
             );
           })}

@@ -31,7 +31,7 @@ export default function RootLayout({ children }) {
         ].join(" ")}
       >
         {/* <ShimejiAssistant storageKey="taskwhisker-shimeji-enabled" /> */}
-        ;{children}
+        {children}
       </body>
     </html>
   );

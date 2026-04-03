@@ -5,76 +5,14 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/auth";
 import { revalidatePath } from "next/cache";
 
-export async function completeBookingAsSitter(formData) {
-  const session = await requireRole(["SITTER"]);
-
-  const bookingId = formData.get("bookingId");
-
-  if (!bookingId) {
-    return { ok: false, error: "Missing booking id." };
-  }
-
-  // Fetch minimal data we need for safety checks
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    select: {
-      id: true,
-      sitterId: true,
-      status: true,
-    },
-  });
-
-  if (!booking) {
-    return { ok: false, error: "Booking not found." };
-  }
-
-  // 🔒 Hard role boundary: sitter can only touch their own bookings
-  if (booking.sitterId !== session.user.id) {
-    return { ok: false, error: "Not authorized for this booking." };
-  }
-
-  // Only allow CONFIRMED → COMPLETED from sitter side
-  if (booking.status !== "CONFIRMED") {
-    return {
-      ok: false,
-      error: "Only confirmed bookings can be marked complete.",
-    };
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.booking.update({
-      where: { id: bookingId },
-      data: { status: "COMPLETED" },
-    });
-
-    await tx.bookingHistory.create({
-      data: {
-        bookingId,
-        fromStatus: "CONFIRMED",
-        toStatus: "COMPLETED",
-        changedByUserId: session.user.id,
-        note: "Marked complete by sitter.",
-      },
-    });
-  });
-
-  // Refresh both dashboards so operator sees the update too
-  revalidatePath("/dashboard/sitter");
-  revalidatePath("/dashboard/operator");
-
-  return { ok: true };
-}
-
 export async function completeVisitAsSitter(formData) {
   const session = await requireRole(["SITTER"]);
-
   const visitId = formData.get("visitId");
 
   if (!visitId) {
     return { ok: false, error: "Missing visit id." };
   }
 
-  // 1. Load visit + booking relationship
   const visit = await prisma.visit.findUnique({
     where: { id: visitId },
     select: {
@@ -82,6 +20,7 @@ export async function completeVisitAsSitter(formData) {
       status: true,
       sitterId: true,
       bookingId: true,
+      startTime: true,
     },
   });
 
@@ -89,12 +28,18 @@ export async function completeVisitAsSitter(formData) {
     return { ok: false, error: "Visit not found." };
   }
 
-  // 🔒 sitter can only act on their own visits
   if (visit.sitterId !== session.user.id) {
     return { ok: false, error: "Not authorized for this visit." };
   }
 
-  // Only CONFIRMED visits can be completed
+  if (visit.status === "COMPLETED") {
+    return { ok: true, alreadyCompleted: true };
+  }
+
+  if (visit.status === "CANCELED") {
+    return { ok: false, error: "Canceled visits cannot be marked complete." };
+  }
+
   if (visit.status !== "CONFIRMED") {
     return {
       ok: false,
@@ -102,45 +47,70 @@ export async function completeVisitAsSitter(formData) {
     };
   }
 
+  const now = new Date();
+
+  if (visit.startTime && new Date(visit.startTime) > now) {
+    return {
+      ok: false,
+      error: "This visit cannot be completed before it starts.",
+    };
+  }
+
   await prisma.$transaction(async (tx) => {
-    // 2. Mark visit completed
     await tx.visit.update({
       where: { id: visitId },
-      data: { status: "COMPLETED" },
+      data: {
+        status: "COMPLETED",
+        completedAt: now,
+      },
     });
 
-    // 3. Get all visits for this booking
-    const visits = await tx.visit.findMany({
-      where: { bookingId: visit.bookingId },
-      select: { status: true },
-    });
-
-    const allDone = visits.every(
-      (v) => v.status === "COMPLETED" || v.status === "CANCELED"
-    );
-
-    // 4. Auto-complete booking if needed
-    if (allDone) {
-      await tx.booking.update({
-        where: { id: visit.bookingId },
-        data: { status: "COMPLETED", completedAt: new Date() },
-      });
-
-      await tx.bookingHistory.create({
-        data: {
-          bookingId: visit.bookingId,
-          fromStatus: "CONFIRMED",
-          toStatus: "COMPLETED",
-          changedByUserId: session.user.id,
-          note: "Auto-completed after all visits finished.",
+    const remainingVisits = await tx.visit.findMany({
+      where: {
+        bookingId: visit.bookingId,
+        NOT: {
+          status: {
+            in: ["COMPLETED", "CANCELED"],
+          },
         },
+      },
+      select: { id: true },
+    });
+
+    const allDone = remainingVisits.length === 0;
+
+    if (allDone) {
+      const booking = await tx.booking.findUnique({
+        where: { id: visit.bookingId },
+        select: { status: true },
       });
+
+      if (
+        booking &&
+        booking.status !== "COMPLETED" &&
+        booking.status !== "CANCELED"
+      ) {
+        await tx.booking.update({
+          where: { id: visit.bookingId },
+          data: { status: "COMPLETED", completedAt: now },
+        });
+
+        await tx.bookingHistory.create({
+          data: {
+            bookingId: visit.bookingId,
+            fromStatus: booking.status,
+            toStatus: "COMPLETED",
+            changedByUserId: session.user.id,
+            note: "Auto-completed after all visits finished.",
+          },
+        });
+      }
     }
   });
 
-  // Refresh UI
   revalidatePath("/dashboard/sitter");
   revalidatePath("/dashboard/operator");
+  revalidatePath(`/dashboard/operator/bookings/${visit.bookingId}`);
 
   return { ok: true };
 }

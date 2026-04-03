@@ -3,21 +3,27 @@ import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
 
 import StatCard from "./_components/StatCard";
-import Section from "./_components/Section";
+import VisitHistorySection from "./_components/VisitHistorySection";
+import UpcomingVisitsSection from "./_components/UpcomingVisitsSection.jsx";
 import SitterRoutePanel from "./_components/SitterRoutePanel";
+import TodayVisitsSection from "./_components/TodayVisitsSection";
 
 import {
   formatMoney,
   formatDateTime,
   groupBookings,
   getRemainingVisitCountForToday,
-  getUpcomingPayout,
+  getRemainingPayoutForToday,
   getCompletedThisWeekCount,
   getSitterMapBookings,
   getRemainingMapStops,
   getNextMapStop,
   getLastGraceStop,
-  getBookingNextVisit,
+  getRemainingTodayVisitEntries,
+  getUpcomingVisitEntries,
+  getCompletedVisitEntries,
+  getCanceledVisitEntries,
+  serializeVisitEntry,
 } from "./lib/sitterDashboardUtils";
 
 export default async function SitterDashboardPage() {
@@ -42,7 +48,26 @@ export default async function SitterDashboardPage() {
   });
 
   const now = new Date();
-  const { today, upcoming, completed, canceled } = groupBookings(bookings, now);
+  const { today } = groupBookings(bookings, now);
+
+  const todayVisitEntries = getRemainingTodayVisitEntries(bookings, now).map(
+    (entry) => serializeVisitEntry(entry)
+  );
+
+  const upcomingVisitEntries = getUpcomingVisitEntries(bookings, now).map(
+    (entry) => serializeVisitEntry(entry)
+  );
+
+  const completedVisitEntries = getCompletedVisitEntries(bookings).map(
+    (entry) => serializeVisitEntry(entry)
+  );
+
+  const canceledVisitEntries = getCanceledVisitEntries(bookings).map((entry) =>
+    serializeVisitEntry(entry)
+  );
+
+  const completedVisitCount = completedVisitEntries.length;
+  const canceledVisitCount = canceledVisitEntries.length;
 
   const sitterMapBookings = getSitterMapBookings(today, now);
   const remainingSitterMapBookings = getRemainingMapStops(
@@ -51,6 +76,7 @@ export default async function SitterDashboardPage() {
   );
   const nextUp = getNextMapStop(sitterMapBookings, now);
   const lastGraceStop = getLastGraceStop(sitterMapBookings, now);
+  const hasActiveRoute = remainingSitterMapBookings.length > 0;
 
   const defaultBooking =
     remainingSitterMapBookings.find((b) => b.id === nextUp?.id) ??
@@ -61,26 +87,40 @@ export default async function SitterDashboardPage() {
     remainingSitterMapBookings.find((b) => b.id === lastGraceStop?.id) ?? null;
 
   const todayVisitCount = getRemainingVisitCountForToday(bookings, now);
-  const upcomingPayout = getUpcomingPayout(bookings);
+  const remainingTodayPayout = getRemainingPayoutForToday(bookings, now);
   const completedThisWeek = getCompletedThisWeekCount(bookings, now);
 
-  const nextUpcomingBooking = upcoming[0] || null;
-  const nextUpcomingVisit = nextUpcomingBooking
-    ? getBookingNextVisit(nextUpcomingBooking, now)
+  const nextUpcomingVisit =
+    bookings
+      .flatMap((b) => b.visits || [])
+      .filter((v) => {
+        if (v.status === "COMPLETED" || v.status === "CANCELED") return false;
+        return new Date(v.startTime) > now;
+      })
+      .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))[0] || null;
+
+  const nextUpcomingBooking = nextUpcomingVisit
+    ? bookings.find((b) => b.visits?.some((v) => v.id === nextUpcomingVisit.id))
     : null;
 
-  const tomorrowCount = upcoming.filter((booking) => {
-    const nextVisit = getBookingNextVisit(booking, now);
-    if (!nextVisit) return false;
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const visitDate = new Date(nextVisit.startTime);
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowCount = bookings.reduce((count, booking) => {
+    const visits =
+      booking.visits?.filter((visit) => {
+        if (visit.status === "COMPLETED" || visit.status === "CANCELED") {
+          return false;
+        }
 
-    return visitDate.toDateString() === tomorrow.toDateString();
-  }).length;
+        const start = new Date(visit.startTime);
+        if (Number.isNaN(start.getTime())) return false;
 
-  const hasActiveRoute = remainingSitterMapBookings.length > 0;
+        return start.toDateString() === tomorrow.toDateString();
+      }) || [];
+
+    return count + visits.length;
+  }, 0);
 
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
@@ -99,47 +139,51 @@ export default async function SitterDashboardPage() {
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Remaining Today"
+            label="Remaining Stops Today"
             value={todayVisitCount}
             subtext={
               todayVisitCount === 1
-                ? "1 visit still active today"
-                : "Visits still active today"
+                ? "1 stop still active today"
+                : "Stops still active today"
             }
           />
 
           <StatCard
-            label="Next Visit"
+            label="Next Stop"
             value={
               nextUp?.clientName
                 ? nextUp.clientName
                 : nextUpcomingVisit
                 ? formatDateTime(nextUpcomingVisit.startTime)
-                : "No upcoming visits"
+                : "No upcoming stops"
             }
             subtext={
               nextUp?.nextVisitStart
-                ? formatDateTime(nextUp.nextVisitStart)
+                ? `Scheduled for ${formatDateTime(nextUp.nextVisitStart)}`
                 : nextUpcomingVisit
-                ? "Next scheduled stop"
+                ? "Next scheduled visit"
                 : "Nothing queued right now"
             }
           />
 
           <StatCard
-            label="Tomorrow"
+            label="Tomorrow’s Visits"
             value={tomorrowCount}
             subtext={
               tomorrowCount === 1
-                ? "1 booking starts tomorrow"
-                : "Bookings starting tomorrow"
+                ? "1 visit scheduled tomorrow"
+                : "Visits scheduled tomorrow"
             }
           />
 
           <StatCard
-            label="Upcoming Payout"
-            value={formatMoney(upcomingPayout)}
-            subtext={`Completed this week: ${completedThisWeek}`}
+            label="Estimated Remaining Payout"
+            value={formatMoney(remainingTodayPayout)}
+            subtext={
+              todayVisitCount === 1
+                ? "Estimated from 1 remaining stop"
+                : "Estimated from remaining stops today"
+            }
           />
         </section>
 
@@ -201,42 +245,31 @@ export default async function SitterDashboardPage() {
           </section>
         ) : (
           <>
-            <Section
-              title="Today"
-              description="Active and upcoming stops for the rest of today."
-              bookings={today}
-              view="today"
-              nextUp={nextUp}
-              emptyMessage="No remaining visits for today."
-            />
+            <TodayVisitsSection visits={todayVisitEntries} now={now} />
 
-            <Section
-              title="Upcoming"
-              description="What’s coming after today."
-              bookings={upcoming}
-              view="upcoming"
-              emptyMessage="No upcoming bookings scheduled."
-            />
+            <UpcomingVisitsSection visits={upcomingVisitEntries} now={now} />
 
-            {completed.length > 0 ? (
-              <Section
+            {completedVisitEntries.length > 0 ? (
+              <VisitHistorySection
                 title="Completed"
-                description="Finished work from recent visits."
-                bookings={completed}
-                view="completed"
-                emptyMessage="No completed bookings yet."
-                muted
+                description={`${completedVisitCount} completed visit${
+                  completedVisitCount === 1 ? "" : "s"
+                }.`}
+                visits={completedVisitEntries}
+                now={now}
+                emptyMessage="No completed visits yet."
               />
             ) : null}
 
-            {canceled.length > 0 ? (
-              <Section
+            {canceledVisitEntries.length > 0 ? (
+              <VisitHistorySection
                 title="Canceled"
-                description="Bookings that are no longer active."
-                bookings={canceled}
-                view="canceled"
-                emptyMessage="No canceled bookings."
-                muted
+                description={`${canceledVisitCount} canceled visit${
+                  canceledVisitCount === 1 ? "" : "s"
+                }.`}
+                visits={canceledVisitEntries}
+                now={now}
+                emptyMessage="No canceled visits."
               />
             ) : null}
           </>

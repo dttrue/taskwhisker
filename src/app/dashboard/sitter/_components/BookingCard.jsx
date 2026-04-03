@@ -18,11 +18,46 @@ import {
 import { completeVisitAsSitter } from "../actions";
 import VisitLinesToggle from "./VisitLinesToggle";
 
+function getExecutionBadge({ actionableVisit, canComplete, nextVisit, view }) {
+  if (actionableVisit && canComplete) {
+    return {
+      label: "Ready now",
+      value: `${formatDateTime(actionableVisit.startTime)}`,
+      classes: "bg-emerald-100 text-emerald-800",
+    };
+  }
+
+  if (view === "today" && actionableVisit && !canComplete) {
+    return {
+      label: "Next up",
+      value: `${formatDateTime(actionableVisit.startTime)}`,
+      classes: "bg-blue-100 text-blue-700",
+    };
+  }
+
+  if (nextVisit) {
+    return {
+      label: "Next up",
+      value: `${formatDateTime(nextVisit.startTime)}`,
+      classes: "bg-blue-100 text-blue-700",
+    };
+  }
+
+  return null;
+}
+
 export default function BookingCard({ booking, view, isNextStop }) {
   const now = new Date();
   const nextVisit = getBookingNextVisit(booking, now);
   const actionableVisit = getActionableVisitForBooking(booking, now);
   const canComplete = canCompleteVisit(actionableVisit, now);
+
+  const executionBadge = getExecutionBadge({
+    actionableVisit,
+    canComplete,
+    nextVisit,
+    view,
+  });
 
   const todayLines = getRemainingTodayVisitSummaryLines(
     booking.visits,
@@ -53,28 +88,40 @@ export default function BookingCard({ booking, view, isNextStop }) {
     <div
       className={`rounded-xl border p-4 shadow-sm transition ${
         STATUS_CARD_BORDER_CLASSES[booking.status] || "border-zinc-200"
-      } ${isNextStop ? "ring-2 ring-blue-400 bg-blue-50" : "bg-white"}`}
+      } ${isNextStop ? "bg-blue-50 ring-2 ring-blue-200" : "bg-white"}`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-zinc-900">
-            {booking.client?.name || "—"}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm font-semibold text-zinc-900">
+              {booking.client?.name || "—"}
+            </div>
+
+            {isNextStop ? (
+              <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+                Next up
+              </span>
+            ) : null}
           </div>
 
           <div className="mt-1 text-xs text-zinc-600">
             {booking.serviceSummary || "Drop-in visit"}
           </div>
 
-          {nextVisit ? (
-            <div className="mt-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-              Next visit: {formatDateTime(nextVisit.startTime)}
+          {executionBadge ? (
+            <div
+              className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${executionBadge.classes}`}
+            >
+              {executionBadge.label}: {executionBadge.value}
             </div>
           ) : null}
 
-          <VisitLinesToggle
-            initialLines={initialLines}
-            extraLines={extraLines}
-          />
+          <div className="mt-3">
+            <VisitLinesToggle
+              initialLines={initialLines}
+              extraLines={extraLines}
+            />
+          </div>
 
           {view === "today" && futureLines.length > 0 ? (
             <div className="mt-3">
@@ -129,13 +176,13 @@ export default function BookingCard({ booking, view, isNextStop }) {
                 : "cursor-not-allowed rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-400"
             }
           >
-            Mark visit complete
+            {canComplete ? "Mark visit complete" : "Not ready yet"}
           </button>
         </form>
 
         {actionableVisit && !canComplete ? (
           <p className="mt-2 text-right text-xs text-amber-600">
-            This visit starts at {formatDateTime(actionableVisit.startTime)}.
+            Available at {formatDateTime(actionableVisit.startTime)}.
           </p>
         ) : null}
       </div>

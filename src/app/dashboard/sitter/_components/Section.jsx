@@ -8,11 +8,18 @@ export default function Section({
   bookings = [],
   view,
   nextUp,
+  count,
+  countLabel = "items",
   emptyMessage = "Nothing to show here.",
   muted = false,
   showTable = true,
 }) {
   const hasBookings = bookings.length > 0;
+
+  const badgeText =
+    typeof count === "number"
+      ? `${count} ${countLabel}${count === 1 ? "" : "s"}`
+      : null;
 
   return (
     <section
@@ -24,9 +31,11 @@ export default function Section({
         <div>
           <h2 className="text-lg font-semibold text-zinc-900">
             {title}
-            <span className="ml-2 text-sm font-medium text-zinc-500">
-              ({bookings.length})
-            </span>
+            {badgeText ? (
+              <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                {badgeText}
+              </span>
+            ) : null}
           </h2>
 
           {description ? (
