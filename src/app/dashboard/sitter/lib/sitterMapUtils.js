@@ -26,6 +26,25 @@ export function getActionableVisitTime(booking, now) {
   return visitStart;
 }
 
+
+export function getRelativeDayLabel(date, now) {
+  const d = new Date(date);
+  const n = new Date(now);
+
+  const isToday = d.toDateString() === n.toDateString();
+
+  const tomorrow = new Date(n);
+  tomorrow.setDate(n.getDate() + 1);
+
+  const isTomorrow = d.toDateString() === tomorrow.toDateString();
+
+  if (isToday) return "Today";
+  if (isTomorrow) return "Tomorrow";
+
+  return null;
+}
+
+
 export function isVisitInGraceWindow(booking, now) {
   if (!now || !booking.todayVisitStart) return false;
 

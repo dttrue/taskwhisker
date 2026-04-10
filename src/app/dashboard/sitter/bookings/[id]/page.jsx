@@ -14,6 +14,7 @@ import {
   getActionableVisitForBooking,
   canCompleteVisit,
 } from "@/app/dashboard/sitter/lib/sitterDashboardUtils";
+import CompleteVisitButton from "../../_components/CompleteVisitButton";
 import CollapsibleCard from "@/components/ui/CollapsibleCard";
 
 
@@ -124,7 +125,7 @@ export default async function SitterBookingDetailPage({ params }) {
   const address = buildAddress(booking);
   const visitGroups = groupVisitsByDay(booking.visits || []);
   const actionableVisit = getActionableVisitForBooking(booking, now);
-
+  const canCompleteActionableVisit = canCompleteVisit(actionableVisit, now);
   const nextUpcomingVisit =
     booking.visits?.find(
       (visit) =>
@@ -210,12 +211,12 @@ export default async function SitterBookingDetailPage({ params }) {
         </div>
 
         <DetailCard title="Next action">
-          {actionableVisit ? (
+          {actionableVisit && canCompleteActionableVisit ? (
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-semibold text-zinc-900">Ready now</p>
                 <p className="mt-1 text-sm text-zinc-600">
-                  Complete this visit when finished.
+                  You can complete this visit now.
                 </p>
                 <p className="mt-2 text-sm text-zinc-800">
                   {formatVisitDateTime(actionableVisit.startTime)}–
@@ -223,19 +224,35 @@ export default async function SitterBookingDetailPage({ params }) {
                 </p>
               </div>
 
-              <form action={completeVisitAsSitter}>
-                <input
-                  type="hidden"
-                  name="visitId"
-                  value={actionableVisit.id}
-                />
-                <button
-                  type="submit"
-                  className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 active:scale-[0.98]"
-                >
-                  Mark visit complete
-                </button>
-              </form>
+              <CompleteVisitButton
+                visitId={actionableVisit.id}
+                nextVisitStartTime={nextUpcomingVisit?.startTime || null}
+              />
+            </div>
+          ) : actionableVisit ? (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-zinc-900">
+                  Not ready yet
+                </p>
+                <p className="mt-1 text-sm text-zinc-600">
+                  This visit cannot be completed before it starts.
+                </p>
+                <p className="mt-2 text-sm font-medium text-zinc-800">
+                  Available at {formatVisitDateTime(actionableVisit.startTime)}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled
+                title={`This visit becomes available at ${formatVisitDateTime(
+                  actionableVisit.startTime
+                )}.`}
+                className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-medium text-zinc-400 cursor-not-allowed"
+              >
+                Available at {formatTime(actionableVisit.startTime)}
+              </button>
             </div>
           ) : nextUpcomingVisit ? (
             <div className="space-y-2">

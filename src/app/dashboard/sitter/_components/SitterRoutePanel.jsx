@@ -1,54 +1,28 @@
 // src/app/dashboard/sitter/_components/SitterRoutePanel.jsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   formatMoney,
   formatDateTime,
+  formatTime,
+  getRelativeDayLabel,
   getActionableVisitForBooking,
   canCompleteVisit,
 } from "../lib/sitterDashboardUtils";
 import { completeVisitAsSitter } from "../actions";
 import SitterMap from "./SitterMap";
-(null);
+import RouteNavigator from "./RouteNavigator";
+
 export default function SitterRoutePanel({
   bookings = [],
   defaultBooking = null,
   lastGraceStop = null,
+  selectedBookingId = null,
+  onSelectBooking,
 }) {
-  const [selectedBookingId, setSelectedBookingId] = useState(
-    defaultBooking?.id || null
-  );
-  const [justCompletedVisitId, setJustCompletedVisitId] = useState(null);
   const [isCompletingVisit, setIsCompletingVisit] = useState(false);
-  useEffect(() => {
-    const isValidBooking =
-      selectedBookingId &&
-      bookings.some((booking) => booking.id === selectedBookingId);
-
-    if (!isValidBooking) {
-      setSelectedBookingId(defaultBooking?.id || bookings[0]?.id || null);
-    }
-  }, [selectedBookingId, bookings, defaultBooking]);
-
-  useEffect(() => {
-    if (!justCompletedVisitId) return;
-
-    const timer = setTimeout(() => {
-      const currentIndex = bookings.findIndex(
-        (b) => b.id === selectedBookingId
-      );
-
-      if (currentIndex >= 0 && currentIndex < bookings.length - 1) {
-        const nextBooking = bookings[currentIndex + 1];
-        setSelectedBookingId(nextBooking.id);
-      }
-
-      setJustCompletedVisitId(null);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [justCompletedVisitId, bookings, selectedBookingId]);
+  const rowRefs = useRef({});
 
   const selectedBooking = useMemo(() => {
     if (!bookings.length) return null;
@@ -66,13 +40,53 @@ export default function SitterRoutePanel({
     return bookings[0] || null;
   }, [bookings, selectedBookingId, defaultBooking]);
 
-  const showLastStop =
-    !!lastGraceStop &&
-    bookings.some((booking) => booking.id === lastGraceStop.id);
-
   const now = new Date();
-  const actionableVisit = getActionableVisitForBooking(selectedBooking, now);
 
+  const getStopState = useCallback(
+    (booking) => {
+      const visit = getActionableVisitForBooking(booking, now);
+
+      if (!visit) return "upcoming";
+
+      if (visit.status === "COMPLETED") {
+        return "past";
+      }
+
+      const start = new Date(visit.startTime);
+      const end = new Date(visit.endTime);
+
+      if (now >= start && now <= end) {
+        return "active";
+      }
+
+      if (now < start) {
+        return "upcoming";
+      }
+
+      return "past";
+    },
+    [now]
+  );
+
+  useEffect(() => {
+    const activeBooking = bookings.find(
+      (booking) => getStopState(booking) === "active"
+    );
+
+    if (!activeBooking) return;
+
+    rowRefs.current[activeBooking.id]?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [bookings, getStopState]);
+
+  if (!selectedBooking) return null;
+
+  const showLastStop =
+    !!lastGraceStop && bookings.some((b) => b.id === lastGraceStop.id);
+
+  const actionableVisit = getActionableVisitForBooking(selectedBooking, now);
   const canComplete = canCompleteVisit(actionableVisit, now);
 
   const visitDateTime =
@@ -80,11 +94,33 @@ export default function SitterRoutePanel({
     selectedBooking?.todayVisitStart ||
     selectedBooking?.nextVisitStart;
 
-  if (!selectedBooking) return null;
-  
-  if (!actionableVisit) return null;
+  const visitEndTime =
+    actionableVisit?.endTime ||
+    selectedBooking?.todayVisitEnd ||
+    selectedBooking?.nextVisitEnd ||
+    null;
 
-  const currentIndex = bookings.findIndex((b) => b.id === selectedBooking?.id);
+  const relativeDayLabel = visitDateTime
+    ? getRelativeDayLabel(visitDateTime, now)
+    : null;
+
+  const visitDayLabel = visitDateTime
+    ? relativeDayLabel ||
+      new Date(visitDateTime).toLocaleDateString([], {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })
+    : "No visit day";
+
+  const visitTimeLabel =
+    visitDateTime && visitEndTime
+      ? `${formatTime(visitDateTime)} – ${formatTime(visitEndTime)}`
+      : visitDateTime
+      ? formatTime(visitDateTime)
+      : "No visit time";
+
+  const currentIndex = bookings.findIndex((b) => b.id === selectedBooking.id);
 
   const nextStop =
     currentIndex >= 0 && currentIndex < bookings.length - 1
@@ -109,46 +145,53 @@ export default function SitterRoutePanel({
         return;
       }
 
-      const currentIndex = bookings.findIndex(
-        (b) => b.id === selectedBookingId
-      );
-
-      if (currentIndex >= 0 && currentIndex < bookings.length - 1) {
-        const nextBooking = bookings[currentIndex + 1];
-        setSelectedBookingId(nextBooking.id);
+      if (nextStop?.id) {
+        onSelectBooking?.(nextStop.id);
       }
-    } catch (error) {
-      console.error("Failed to complete visit:", error);
+    } catch (err) {
+      console.error("Failed to complete visit:", err);
     } finally {
       setIsCompletingVisit(false);
     }
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-5 shadow-sm">
-      <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-        Selected Stop
+    <section className="space-y-4 rounded-2xl border border-blue-300 bg-gradient-to-r from-blue-50 via-white to-white p-5 shadow-sm ring-1 ring-blue-100">
+      <div className="flex items-center gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+          Selected Stop
+        </div>
+        <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+          Active
+        </span>
       </div>
 
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-zinc-900">
-            {selectedBooking.clientName || "—"}
-          </h2>
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-blue-500" />
+            </span>
+
+            <h2 className="text-xl font-semibold text-zinc-900">
+              {selectedBooking.clientName || "—"}
+            </h2>
+          </div>
 
           <div className="mt-1 text-sm text-zinc-700">
             {selectedBooking.serviceSummary || "Drop-in visit"}
           </div>
 
           <div className="mt-2 text-sm font-medium text-blue-700">
-            {visitDateTime ? formatDateTime(visitDateTime) : "No visit time"}
+            {visitDayLabel} · {visitTimeLabel}
           </div>
 
-          {selectedBooking.address ? (
+          {selectedBooking.address && (
             <div className="mt-1 text-xs text-zinc-500">
               {selectedBooking.address}
             </div>
-          ) : null}
+          )}
         </div>
 
         <div className="text-left md:text-right">
@@ -164,7 +207,7 @@ export default function SitterRoutePanel({
               disabled={!canComplete || isCompletingVisit}
               className={
                 canComplete && !isCompletingVisit
-                  ? "rounded-md border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-600 hover:text-white"
+                  ? "rounded-md border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-600 hover:text-white"
                   : "cursor-not-allowed rounded-md border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-400"
               }
             >
@@ -172,100 +215,110 @@ export default function SitterRoutePanel({
             </button>
           </div>
 
-          {actionableVisit && !canComplete && (
+          {!canComplete && actionableVisit && (
             <p className="mt-2 text-xs text-amber-600">
               This visit starts at {formatDateTime(actionableVisit.startTime)}.
             </p>
           )}
 
-          <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3 text-left md:text-left">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Route Controls
-                </p>
-                <p className="mt-1 text-xs text-zinc-600">
-                  Move through your remaining stops for today.
-                </p>
-              </div>
-
-              <div className="text-[11px] font-medium text-zinc-500">
-                Stop {currentIndex >= 0 ? currentIndex + 1 : 1} of{" "}
-                {bookings.length}
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  previousStop && setSelectedBookingId(previousStop.id)
-                }
-                disabled={!previousStop}
-                className={
-                  previousStop
-                    ? "rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
-                    : "cursor-not-allowed rounded-md border border-zinc-200 bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-400 shadow-sm"
-                }
-              >
-                Back
-              </button>
-
-              <button
-                type="button"
-                onClick={() => nextStop && setSelectedBookingId(nextStop.id)}
-                disabled={!nextStop}
-                className={
-                  nextStop
-                    ? "rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
-                    : "cursor-not-allowed rounded-md border border-zinc-200 bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-400 shadow-sm"
-                }
-              >
-                Next Stop
-              </button>
-
-              {showLastStop ? (
-                <button
-                  type="button"
-                  onClick={() => setSelectedBookingId(lastGraceStop.id)}
-                  className="rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
-                >
-                  Last Stop
-                </button>
-              ) : null}
-            </div>
-
-            <div className="mt-3 grid gap-2 text-xs text-zinc-600 sm:grid-cols-2">
-              <div className="rounded-xl bg-zinc-50 px-3 py-2">
-                <span className="font-semibold text-zinc-700">Current:</span>{" "}
-                {selectedBooking?.clientName || "—"}
-              </div>
-
-              <div className="rounded-xl bg-zinc-50 px-3 py-2">
-                <span className="font-semibold text-zinc-700">Next:</span>{" "}
-                {nextStop?.clientName || "No more stops"}
-              </div>
-            </div>
+          <div className="mt-4">
+            <RouteNavigator
+              currentIndex={currentIndex}
+              totalStops={bookings.length}
+              previousStop={previousStop}
+              nextStop={nextStop}
+              lastGraceStop={lastGraceStop}
+              showLastStop={showLastStop}
+              onSelectBooking={onSelectBooking}
+            />
           </div>
         </div>
       </div>
 
-      <div>
-        <div className="mb-3">
-          <h3 className="text-lg font-semibold text-zinc-900">
-            Today’s Route 🗺️
-          </h3>
-          <p className="mt-1 text-sm text-zinc-600">
-            Your remaining assigned visits for today.
-          </p>
-        </div>
+      <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4">
+        <p className="mb-1 text-xs font-semibold uppercase text-zinc-500">
+          Route Timeline
+        </p>
+        <p className="mb-3 text-[11px] text-zinc-400">
+          Now = current visit · Up next = upcoming · Completed = finished
+        </p>
 
-        <SitterMap
-          bookings={bookings}
-          selectedBookingId={selectedBooking?.id || null}
-          onSelectBooking={(bookingId) => setSelectedBookingId(bookingId)}
-        />
+        <div className="space-y-2">
+          {bookings.map((booking, index) => {
+            const state = getStopState(booking);
+            const isSelected = booking.id === selectedBooking.id;
+            const isTrulyActive = state === "active";
+            const isSelectedAndActive = isSelected && isTrulyActive;
+
+            return (
+              <div
+                key={booking.id}
+                ref={(el) => {
+                  if (el) rowRefs.current[booking.id] = el;
+                }}
+                onClick={() => onSelectBooking?.(booking.id)}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer transition-all duration-200
+                  ${
+                    isSelectedAndActive
+                      ? "bg-green-100 border border-green-300 scale-[1.01]"
+                      : isSelected
+                      ? "bg-blue-50 border border-blue-200 scale-[1.01]"
+                      : isTrulyActive
+                      ? "bg-green-50 border border-green-200"
+                      : "hover:bg-zinc-50"
+                  }
+                `}
+              >
+                <div className="flex flex-col items-center">
+                  <div
+                    className={`h-3 w-3 rounded-full
+                      ${
+                        state === "active"
+                          ? "bg-green-500 animate-pulse"
+                          : state === "past"
+                          ? "bg-zinc-400"
+                          : "bg-zinc-200"
+                      }
+                    `}
+                  />
+
+                  {index < bookings.length - 1 && (
+                    <div
+                      className={`w-[2px] flex-1 ${
+                        state === "past" ? "bg-zinc-300" : "bg-zinc-200"
+                      }`}
+                    />
+                  )}
+                </div>
+
+                <div className="flex-1 text-sm">
+                  <div className="font-medium text-zinc-900">
+                    {booking.clientName}
+                  </div>
+
+                  <div className="text-xs text-zinc-500">
+                    {booking.serviceSummary}
+                  </div>
+                </div>
+
+                <div className="text-[10px] font-semibold uppercase text-zinc-400">
+                  {state === "active"
+                    ? "Now"
+                    : state === "past"
+                    ? "Completed"
+                    : "Up next"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
+
+      <SitterMap
+        bookings={bookings}
+        selectedBookingId={selectedBooking?.id || null}
+        onSelectBooking={onSelectBooking}
+      />
     </section>
   );
 }

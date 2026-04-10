@@ -2,14 +2,17 @@
 "use client";
 
 import Link from "next/link";
+
 import { completeVisitAsSitter } from "../actions";
 import {
   canCompleteVisit,
   formatMoney,
   formatTime,
+  isSameDay,
+  getRelativeDayLabel,
 } from "../lib/sitterDashboardUtils";
 
-function getVisitState(visit, now) {
+function getVisitState(visit, now, isToday) {
   const start = new Date(visit.startTime);
 
   if (visit.status === "COMPLETED") {
@@ -18,6 +21,7 @@ function getVisitState(visit, now) {
       badgeClass: "bg-blue-50 text-blue-700",
       cardClass: "border-zinc-200 bg-white opacity-80",
       helperText: "This visit has already been completed.",
+      actionLabel: "Visit completed",
     };
   }
 
@@ -27,6 +31,7 @@ function getVisitState(visit, now) {
       badgeClass: "bg-rose-50 text-rose-700",
       cardClass: "border-zinc-200 bg-white opacity-80",
       helperText: "This visit was canceled.",
+      actionLabel: "Visit canceled",
     };
   }
 
@@ -36,6 +41,7 @@ function getVisitState(visit, now) {
       badgeClass: "bg-emerald-100 text-emerald-800",
       cardClass: "border-emerald-200 bg-emerald-50/40",
       helperText: "You can complete this visit now.",
+      actionLabel: "Mark visit complete",
     };
   }
 
@@ -44,7 +50,8 @@ function getVisitState(visit, now) {
       label: "Scheduled",
       badgeClass: "bg-zinc-100 text-zinc-700",
       cardClass: "border-zinc-200 bg-white",
-      helperText: `Available at ${formatTime(start)}.`,
+      helperText: isToday ? `Available at ${formatTime(start)}.` : "Scheduled.",
+      actionLabel: isToday ? `Available at ${formatTime(start)}` : "Scheduled",
     };
   }
 
@@ -53,10 +60,11 @@ function getVisitState(visit, now) {
     badgeClass: "bg-amber-50 text-amber-700",
     cardClass: "border-zinc-200 bg-white",
     helperText: "This visit cannot be completed right now.",
+    actionLabel: "Unavailable",
   };
 }
 
-export default function VisitCard({ entry, now = new Date() }) {
+export default function VisitCard({ entry, now = new Date(), onComplete }) {
   const {
     visit,
     bookingId,
@@ -69,8 +77,10 @@ export default function VisitCard({ entry, now = new Date() }) {
   const start = new Date(visit.startTime);
   const end = new Date(visit.endTime);
 
+  const isToday = isSameDay(start, now);
   const isCompletable = canCompleteVisit(visit, now);
-  const state = getVisitState(visit, now);
+  const state = getVisitState(visit, now, isToday);
+  const dayLabel = getRelativeDayLabel(start, now);
 
   return (
     <article
@@ -97,8 +107,10 @@ export default function VisitCard({ entry, now = new Date() }) {
 
       <div className="mt-3 space-y-1 text-sm text-zinc-600">
         <p className="font-medium text-zinc-800">
-          {formatTime(start)}–{formatTime(end)}
+          {dayLabel ? `${dayLabel} · ` : ""}
+          {formatTime(start)} – {formatTime(end)}
         </p>
+
         {address ? <p>{address}</p> : null}
       </div>
 
@@ -113,13 +125,20 @@ export default function VisitCard({ entry, now = new Date() }) {
         </Link>
 
         {isCompletable ? (
-          <form action={completeVisitAsSitter}>
+          <form
+            action={async (formData) => {
+              const result = await completeVisitAsSitter(formData);
+              if (result?.ok) {
+                onComplete?.(visit.id);
+              }
+            }}
+          >
             <input type="hidden" name="visitId" value={visit.id} />
             <button
               type="submit"
               className="inline-flex items-center rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800"
             >
-              Mark visit complete
+              {state.actionLabel}
             </button>
           </form>
         ) : (
@@ -128,11 +147,7 @@ export default function VisitCard({ entry, now = new Date() }) {
             disabled
             className="inline-flex items-center rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-400"
           >
-            {visit.status === "COMPLETED"
-              ? "Visit completed"
-              : visit.status === "CANCELED"
-              ? "Visit canceled"
-              : `Available at ${formatTime(start)}`}
+            {state.actionLabel}
           </button>
         )}
       </div>

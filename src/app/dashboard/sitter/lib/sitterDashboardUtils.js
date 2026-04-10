@@ -31,6 +31,23 @@ function toBusinessDayKey(date) {
   }).format(date);
 }
 
+export function getRelativeDayLabel(date, now) {
+  const d = new Date(date);
+  const n = new Date(now);
+
+  // normalize both to midnight (prevents time drift issues)
+  d.setHours(0, 0, 0, 0);
+  n.setHours(0, 0, 0, 0);
+
+  const tomorrow = new Date(n);
+  tomorrow.setDate(n.getDate() + 1);
+
+  if (d.getTime() === n.getTime()) return "Today";
+  if (d.getTime() === tomorrow.getTime()) return "Tomorrow";
+
+  return null;
+}
+
 export function isSameDay(a, b) {
   return toBusinessDayKey(a) === toBusinessDayKey(b);
 }
@@ -61,6 +78,20 @@ export function getRemainingVisitCountForToday(
 
     return count + remainingTodayVisits.length;
   }, 0);
+}
+
+export function serializeValue(value) {
+  if (value === null || value === undefined) return value;
+
+  // Dates
+  if (value instanceof Date) return value.toISOString();
+
+  // Prisma Decimal
+  if (typeof value === "object" && value?.toNumber) {
+    return value.toNumber();
+  }
+
+  return value;
 }
 
 export function getRemainingPayoutForToday(

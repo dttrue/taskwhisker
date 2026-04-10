@@ -114,19 +114,17 @@ model Visit {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  completedAt DateTime?
 
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id])
 
-  // 🔹 We keep operator + sitter here for fast queries and future scaling
   operatorId String
   operator   User   @relation("VisitOperator", fields: [operatorId], references: [id])
 
   sitterId String?
   sitter   User?   @relation("VisitSitter", fields: [sitterId], references: [id])
 
-  // 🔹 Date + time window
-  // date: stored at midnight for the calendar "day"
   date      DateTime
   startTime DateTime
   endTime   DateTime

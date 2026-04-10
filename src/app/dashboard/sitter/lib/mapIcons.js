@@ -1,51 +1,64 @@
 // src/app/dashboard/sitter/lib/mapIcons.js
 import L from "leaflet";
 
-export function makeNumberedIcon(
-  number,
-  isSelected = false,
-  isInGrace = false
-) {
-  const background = isInGrace ? "#f59e0b" : isSelected ? "#2563eb" : "#111827";
+export function makeNumberedIcon(index, isSelected = false, isInGrace = false) {
+  const size = isSelected ? 42 : 34;
 
-  const pulse = isInGrace
-    ? `
-      <div style="
-        position: absolute;
-        inset: -6px;
+  let stateStyles = "";
+
+  if (isSelected) {
+    stateStyles = `
+      background: #2563eb;
+      color: white;
+      border: 2px solid #ffffff;
+      box-shadow:
+        0 0 0 4px rgba(191, 219, 254, 0.95),
+        0 10px 20px rgba(37, 99, 235, 0.28);
+      transform: scale(1.08);
+    `;
+  } else if (isInGrace) {
+    stateStyles = `
+      background: #16a34a;
+      color: white;
+      border: 2px solid #ffffff;
+      box-shadow:
+        0 0 0 3px rgba(187, 247, 208, 0.9),
+        0 8px 18px rgba(22, 163, 74, 0.22);
+    `;
+  } else {
+    stateStyles = `
+      background: #ffffff;
+      color: #18181b;
+      border: 1px solid #d4d4d8;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+    `;
+  }
+
+  const html = `
+    <div
+      style="
+        width: ${size}px;
+        height: ${size}px;
         border-radius: 9999px;
-        background: rgba(245, 158, 11, 0.28);
-        animation: sitterPulse 1.6s ease-out infinite;
-      "></div>
-    `
-    : "";
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        transition: all 0.2s ease;
+        ${stateStyles}
+      "
+    >
+      ${index}
+    </div>
+  `;
 
   return L.divIcon({
+    html,
     className: "",
-    html: `
-      <div style="position: relative; width: 24px; height: 24px;">
-        ${pulse}
-        <div style="
-          position: relative;
-          width: 24px;
-          height: 24px;
-          border-radius: 9999px;
-          background: ${background};
-          color: white;
-          border: 2px solid white;
-          box-shadow: 0 1px 6px rgba(0,0,0,0.35);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 12px;
-          font-weight: 700;
-        ">
-          ${number}
-        </div>
-      </div>
-    `,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-    popupAnchor: [0, -18],
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
   });
 }

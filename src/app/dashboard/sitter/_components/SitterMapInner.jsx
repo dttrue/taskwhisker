@@ -153,23 +153,26 @@ export default function SitterMapInner({
         <RecenterControl bookings={validBookings} />
 
         {routePositions.length > 1 ? (
-          <Polyline positions={routePositions} />
+          <Polyline
+            positions={routePositions}
+            pathOptions={{
+              color: "#3b82f6",
+              weight: 4,
+              opacity: 0.75,
+            }}
+          />
         ) : null}
 
         {validBookings.map((booking, index) => {
           const now = new Date();
           const actionableVisitTime = getActionableVisitTime(booking, now);
           const isInGrace = isVisitInGraceWindow(booking, now);
-
+          const isSelected = booking.id === selectedBookingId;
           return (
             <Marker
               key={booking.id}
               position={[booking.lat, booking.lng]}
-              icon={makeNumberedIcon(
-                index + 1,
-                booking.id === selectedBookingId,
-                isInGrace
-              )}
+              icon={makeNumberedIcon(index + 1, isSelected, isInGrace)}
               ref={(instance) => {
                 if (instance) {
                   markerRefs.current[booking.id] = instance;
