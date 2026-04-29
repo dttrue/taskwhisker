@@ -8,16 +8,13 @@ import { publicBookingSchema } from "./bookingSchemas";
 import { assertValidTimeRange } from "./bookingTimeUtils";
 import { combineDateTime, getDateListFromRange } from "./bookingDateUtils";
 import { checkConflictsForOperator } from "./bookingConflictUtils";
+import { checkAvailability } from "@/lib/calendar/checkAvailability";
 import { formatServiceAddress } from "@/lib/formatAddress";
 import { geocodeAddress } from "@/lib/geocodeAddress";
 
-function decimalToNumber(value) {
-  if (value == null) return null;
-  if (typeof value === "object" && typeof value.toNumber === "function") {
-    return value.toNumber();
-  }
-  return value;
-}
+const BUFFER_MINUTES = 15;
+
+
 
 function toClientValue(value) {
   if (value == null) return value;
@@ -192,6 +189,32 @@ export async function createPublicBooking(rawInput) {
     }
   }
 
+  // Real availability enforcement using the same engine that powers slot blocking.
+  // For now, public bookings are checked against the operator's schedule.
+  for (const v of visitWindows) {
+    const availability = await checkAvailability({
+      sitterId: operatorId,
+      startTime: v.startTime,
+      endTime: v.endTime,
+      bufferMinutes: BUFFER_MINUTES,
+    });
+
+    if (!availability.valid) {
+      return {
+        ok: false,
+        error: "Selected time slot is no longer available.",
+        reason: availability.reason || null,
+        conflicts: (availability.conflicts || []).map((conflict) => ({
+          id: conflict.id,
+          startTime: conflict.startTime,
+          endTime: conflict.endTime,
+          status: conflict.status,
+        })),
+      };
+    }
+  }
+
+  // Keep the operator conflict check as an additional safeguard.
   const conflictCheck = await checkConflictsForOperator({
     operatorId,
     visits: visitWindows.map((v) => ({

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cancelBooking } from "../actions";
-
+import { getBookingNextAction } from "@/lib/getBookingNextAction";
 import CollapsibleCard from "@/components/ui/CollapsibleCard";
 import CancelBookingDetailForm from "@/app/dashboard/operator/_components/CancelBookingDetailForm";
 import {
@@ -93,61 +93,6 @@ function getFirstUpcomingVisit(visits = []) {
   );
 }
 
-function getNextAction(booking, firstUpcomingVisit) {
-  if (booking.status === "REQUESTED") {
-    return {
-      title: "Confirm booking",
-      description: "This booking is waiting for operator confirmation.",
-      tone: "amber",
-    };
-  }
-
-  if (booking.status === "CONFIRMED" && !booking.sitterId) {
-    return {
-      title: "Assign a sitter",
-      description: firstUpcomingVisit
-        ? `Assign a sitter before ${formatDateOnly(
-            firstUpcomingVisit.startTime
-          )} at ${formatTimeOnly(firstUpcomingVisit.startTime)}.`
-        : "This confirmed booking still has no sitter assigned.",
-      tone: "amber",
-    };
-  }
-
-  if (booking.status === "CONFIRMED" && booking.sitterId) {
-    return {
-      title: "Ready for service",
-      description: firstUpcomingVisit
-        ? `Next visit is ${formatDateOnly(
-            firstUpcomingVisit.startTime
-          )} at ${formatTimeOnly(firstUpcomingVisit.startTime)}.`
-        : "Booking is confirmed and assigned.",
-      tone: "green",
-    };
-  }
-
-  if (booking.status === "COMPLETED") {
-    return {
-      title: "Booking completed",
-      description: "This booking has already been completed.",
-      tone: "blue",
-    };
-  }
-
-  if (booking.status === "CANCELED") {
-    return {
-      title: "Booking canceled",
-      description: "This booking is no longer active.",
-      tone: "red",
-    };
-  }
-
-  return {
-    title: "Review booking",
-    description: "Check booking details and status.",
-    tone: "zinc",
-  };
-}
 
 function toneClasses(tone) {
   switch (tone) {
@@ -226,12 +171,18 @@ export default async function OperatorBookingDetailPage({
 
   const canConfirm = booking.status === "REQUESTED";
   const canCancel = !["CANCELED", "COMPLETED"].includes(booking.status);
-  const canComplete = booking.status === "CONFIRMED";
+  const hasVisits = booking.visits.length > 0;
+  const allVisitsCompleted = booking.visits.every(
+    (v) => v.status === "COMPLETED"
+  );
+
+  const canComplete =
+    booking.status === "CONFIRMED" && hasVisits && allVisitsCompleted;
 
   const groupedVisits = groupVisitsByDate(booking.visits);
   const scheduleSummary = getScheduleSummary(booking.visits, booking);
   const firstUpcomingVisit = getFirstUpcomingVisit(booking.visits);
-  const nextAction = getNextAction(booking, firstUpcomingVisit);
+  const nextAction = getBookingNextAction(booking, firstUpcomingVisit);
 
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">

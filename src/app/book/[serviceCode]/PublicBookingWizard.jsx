@@ -8,10 +8,9 @@ import BookingStepSchedule from "../ steps/BookingStepSchedule";
 import BookingStepClientInfo from "../ steps/BookingStepClientInfo";
 import BookingStepAddOns from "../ steps/BookingStepAddOns";
 import BookingStepReview from "../ steps/BookingStepReview";
-
+import { validateScheduleAvailabilityStep } from "../validatePublicBookingStep";
 const BOOKING_START_MIN = 7 * 60; // 07:00
 const BOOKING_END_MIN = 22 * 60; // 22:00
-
 
 function prettyDate(d) {
   try {
@@ -62,12 +61,12 @@ export default function PublicBookingWizard({
   const [error, setError] = useState(null);
   const [booking, setBooking] = useState(null);
 
-  // Service is already chosen by the route: /book/[serviceCode]
   const serviceCode = initialService.code;
-  const serviceType = initialService.serviceType;
   const svc =
     serviceOptions.find((s) => s.code === serviceCode) || initialService;
 
+  const serviceType = svc.serviceType || svc.category;
+  const sitterId = svc?.sitterId || svc?.providerUserId || null;
   const [client, setClient] = useState({
     name: "",
     email: "",
@@ -97,7 +96,7 @@ export default function PublicBookingWizard({
 
   const [weightClass, setWeightClass] = useState("");
   const [range, setRange] = useState();
-  const [dates, setDates] = useState([]); // always ["YYYY-MM-DD"]
+  const [dates, setDates] = useState([]);
   const [scheduleMode, setScheduleMode] = useState("SAME");
 
   const [times, setTimes] = useState({
@@ -241,7 +240,6 @@ export default function PublicBookingWizard({
   }
 
   function validateStep(targetStep) {
-    // Going to Your Info -> validate Schedule first
     if (targetStep === 2) {
       if (isRange) {
         if (!range?.from || !range?.to) {
@@ -264,11 +262,16 @@ export default function PublicBookingWizard({
       }
 
       if (scheduleMode === "SAME") {
-        const msg = validateWindow(times.startTime, times.endTime);
-        if (msg) {
-          setError(msg);
+        if (selectedDateStrs.length !== 1) {
+          setError("Please select exactly one date for this booking.");
           return false;
         }
+
+        if (!times.startTime || !times.endTime) {
+          setError("Please select an available time slot.");
+          return false;
+        }
+
         return true;
       }
 
@@ -295,7 +298,6 @@ export default function PublicBookingWizard({
       return true;
     }
 
-    // Going to Add-ons -> validate Client Info
     if (targetStep === 3) {
       if (!client.name?.trim() || !client.email?.trim()) {
         setError("Name and email are required.");
@@ -325,7 +327,6 @@ export default function PublicBookingWizard({
       return true;
     }
 
-    // Going to Review -> validate Add-ons
     if (targetStep === 4) {
       if (addOns.bath.enabled) {
         const totalDogs =
@@ -343,13 +344,44 @@ export default function PublicBookingWizard({
     return true;
   }
 
-  function handleNext() {
-    const target = step + 1;
-    if (validateStep(target)) {
-      goNext();
-    }
-  }
+  async function handleNext() {
+    
 
+    const target = step + 1;
+    setError(null);
+
+    
+
+    // 1. Run existing sync validation first
+    if (!validateStep(target)) return;
+
+    // 2. Availability re-check BEFORE leaving Schedule step
+    if (step === 1) {
+      try {
+        const availabilityError = await validateScheduleAvailabilityStep({
+          sitterId,
+          isRange,
+          scheduleMode,
+          selectedDateStrs,
+          times,
+          slotsByDate,
+          durationMinutes: svc.durationMinutes || 30,
+          bufferMinutes: 15,
+        });
+
+        if (availabilityError) {
+          setError(availabilityError);
+          return;
+        }
+      } catch (err) {
+        console.error(err);
+        setError("Could not verify availability. Please try again.");
+        return;
+      }
+    }
+
+    goNext();
+  }
   function buildAddOnsPayload() {
     const addOnsPayload = [];
 
@@ -490,9 +522,16 @@ export default function PublicBookingWizard({
         <li className={`step ${step >= 4 ? "step-primary" : ""}`}>Review</li>
       </ul>
 
+      {step === 1 && !sitterId && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Booking is not configured correctly. This service is missing a
+          sitter/provider.
+        </div>
+      )}
+
       <div className="card bg-base-100 shadow-md">
         <div className="card-body space-y-4">
-          {step === 1 && (
+          {step === 1 && sitterId && (
             <BookingStepSchedule
               isRange={isRange}
               scheduleMode={scheduleMode}
@@ -510,6 +549,10 @@ export default function PublicBookingWizard({
               addSlot={addSlot}
               updateSlot={updateSlot}
               removeSlot={removeSlot}
+              sitterId={sitterId}
+              durationMinutes={svc.durationMinutes || 30}
+              bufferMinutes={15}
+              clearError={() => setError("")}
             />
           )}
 
@@ -581,7 +624,6 @@ export default function PublicBookingWizard({
                 type="button"
                 className="btn btn-primary btn-sm"
                 onClick={handleNext}
-                disabled={pending}
               >
                 Next
               </button>

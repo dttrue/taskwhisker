@@ -53,9 +53,10 @@ export function getBookingNextVisit(booking, now = new Date()) {
   );
 }
 
-export function groupBookings(bookings, now = new Date()) {
+export function groupBookings(bookings = [], now = new Date()) {
   const requested = [];
   const today = [];
+  const overdue = [];
   const upcoming = [];
   const completed = [];
   const canceled = [];
@@ -76,21 +77,47 @@ export function groupBookings(bookings, now = new Date()) {
       continue;
     }
 
-    const hasVisitToday =
-      booking.visits?.some((visit) =>
-        isSameDay(new Date(visit.startTime), now)
-      ) || false;
+    const visits = booking.visits || [];
 
-    if (hasVisitToday) {
+    const hasVisitToday = visits.some((visit) =>
+      isSameDay(new Date(visit.startTime), now)
+    );
+
+    const hasOverdueVisit = visits.some((visit) => {
+      if (visit.status === "COMPLETED" || visit.status === "CANCELED") {
+        return false;
+      }
+
+      const end = new Date(visit.endTime);
+      if (Number.isNaN(end.getTime())) return false;
+
+      return end < now;
+    });
+
+    const hasFutureVisit = visits.some((visit) => {
+      if (visit.status === "COMPLETED" || visit.status === "CANCELED") {
+        return false;
+      }
+
+      const start = new Date(visit.startTime);
+      if (Number.isNaN(start.getTime())) return false;
+
+      return start > now;
+    });
+
+    if (hasOverdueVisit) {
+      overdue.push(booking);
+    } else if (hasVisitToday) {
       today.push(booking);
-    } else {
+    } else if (hasFutureVisit) {
       upcoming.push(booking);
+    } else {
+      overdue.push(booking);
     }
   }
 
-  return { requested, today, upcoming, completed, canceled };
+  return { requested, today, overdue, upcoming, completed, canceled };
 }
-
 export function getNeedsAttentionBooking(bookings, now = new Date()) {
   const priorityPool = bookings
     .filter(

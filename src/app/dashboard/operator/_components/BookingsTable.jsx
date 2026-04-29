@@ -1,6 +1,6 @@
 // src/app/dashboard/operator/_components/BookingsTable.jsx
 "use client";
-
+import { completeVisitAsOperator } from "../bookings/actions";
 import { formatMoney } from "../lib/format";
 import CancelBookingForm from "./CancelBookingForm";
 import {
@@ -51,11 +51,32 @@ function BookingActions({
   completeBooking,
   cancelBooking,
   listQs,
-  layout = "row", // "row" (desktop table) | "stack" (mobile card)
+  layout = "row",
 }) {
+  const isTerminal =
+    booking.status === "COMPLETED" || booking.status === "CANCELED";
+
   const canConfirm = booking.status === "REQUESTED";
   const canCancel = ["REQUESTED", "CONFIRMED"].includes(booking.status);
-  const canComplete = booking.status === "CONFIRMED";
+
+  const hasVisits = (booking.visits || []).length > 0;
+  const allVisitsCompleted = (booking.visits || []).every(
+    (v) => v.status === "COMPLETED"
+  );
+
+  const canComplete =
+    booking.status === "CONFIRMED" && hasVisits && allVisitsCompleted;
+
+  const overdueVisits = isTerminal
+    ? []
+    : (booking.visits || []).filter((v) => {
+        if (v.status !== "CONFIRMED") return false;
+
+        const end = new Date(v.endTime);
+        if (Number.isNaN(end.getTime())) return false;
+
+        return end < new Date();
+      });
 
   const containerBase = "flex gap-2";
   const containerClass =
@@ -71,46 +92,72 @@ function BookingActions({
 
   return (
     <div className={containerClass}>
-      <form action={confirmBooking} className="flex-1 sm:flex-none">
-        <input type="hidden" name="bookingId" value={booking.id} />
-        <button
-          type="submit"
-          disabled={!canConfirm}
-          className={
-            canConfirm
-              ? `${buttonBase} w-full border border-green-600 text-green-600 hover:bg-green-600 hover:text-white`
-              : `${buttonBase} w-full border border-zinc-200 text-zinc-400 cursor-not-allowed`
-          }
-        >
-          Confirm
-        </button>
-      </form>
+      {!isTerminal && (
+        <>
+          <form action={confirmBooking} className="flex-1 sm:flex-none">
+            <input type="hidden" name="bookingId" value={booking.id} />
+            <button
+              type="submit"
+              disabled={!canConfirm}
+              className={
+                canConfirm
+                  ? `${buttonBase} w-full border border-green-600 text-green-600 hover:bg-green-600 hover:text-white`
+                  : `${buttonBase} w-full border border-zinc-200 text-zinc-400 cursor-not-allowed`
+              }
+            >
+              Confirm
+            </button>
+          </form>
 
-      <form action={completeBooking} className="flex-1 sm:flex-none">
-        <input type="hidden" name="bookingId" value={booking.id} />
-        <button
-          type="submit"
-          disabled={!canComplete}
-          className={
-            canComplete
-              ? `${buttonBase} w-full border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white`
-              : `${buttonBase} w-full border border-zinc-200 text-zinc-400 cursor-not-allowed`
-          }
-        >
-          Complete
-        </button>
-      </form>
+          <form action={completeBooking} className="flex-1 sm:flex-none">
+            <input type="hidden" name="bookingId" value={booking.id} />
+            <button
+              type="submit"
+              disabled={!canComplete}
+              className={
+                canComplete
+                  ? `${buttonBase} w-full border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white`
+                  : `${buttonBase} w-full border border-zinc-200 text-zinc-400 cursor-not-allowed`
+              }
+            >
+              Complete
+            </button>
+          </form>
 
-      <div className="flex-1 sm:flex-none">
-        <CancelBookingForm
-          bookingId={booking.id}
-          status={booking.status}
-          canCancel={canCancel}
-          cancelBooking={cancelBooking}
-          // list view keeps REQUESTED optional, CONFIRMED required
-          requireReasonForRequested={false}
-        />
-      </div>
+          {overdueVisits.map((visit) => (
+            <form
+              key={visit.id}
+              action={completeVisitAsOperator.bind(null, visit.id)}
+              className="flex-1 sm:flex-none"
+            >
+              <button
+                type="submit"
+                className={`${buttonBase} w-full border border-amber-600 text-amber-700 hover:bg-amber-600 hover:text-white`}
+              >
+                Complete missed visit
+              </button>
+            </form>
+          ))}
+
+          <div className="flex-1 sm:flex-none">
+            <CancelBookingForm
+              bookingId={booking.id}
+              status={booking.status}
+              canCancel={canCancel}
+              cancelBooking={cancelBooking}
+              requireReasonForRequested={false}
+            />
+          </div>
+        </>
+      )}
+
+      {isTerminal && (
+        <div className="flex-1 sm:flex-none text-xs text-zinc-500 italic">
+          {booking.status === "COMPLETED"
+            ? "This booking has been completed."
+            : "This booking was canceled."}
+        </div>
+      )}
 
       <div className="flex-1 sm:flex-none sm:self-center">
         <a

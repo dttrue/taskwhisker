@@ -83,16 +83,14 @@ export async function confirmBooking(arg1, arg2) {
     select: {
       id: true,
       status: true,
-      sitterId: true,
-      startTime: true,
-      endTime: true,
+      clientTotalCents: true,
+      platformFeeCents: true,
+      sitterPayoutCents: true,
       visits: {
         select: {
           id: true,
-          startTime: true,
-          endTime: true,
+          status: true,
         },
-        orderBy: { startTime: "asc" },
       },
     },
   });
@@ -143,6 +141,8 @@ export async function confirmBooking(arg1, arg2) {
     }
   }
 
+  
+
   await prisma.$transaction([
     prisma.booking.update({
       where: { id: bookingId },
@@ -166,6 +166,8 @@ export async function confirmBooking(arg1, arg2) {
   revalidateOperator(bookingId);
   return { ok: true };
 }
+
+
 
 // ---- CANCEL ----
 export async function cancelBooking(arg1, arg2) {
@@ -244,7 +246,7 @@ export async function completeBooking(arg1, arg2) {
   if (!bookingId) {
     return { ok: false, error: "Missing booking id." };
   }
-
+  
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     select: {
@@ -275,6 +277,24 @@ export async function completeBooking(arg1, arg2) {
     };
   }
 
+  const visits = await prisma.visit.findMany({
+    where: { bookingId },
+    select: { status: true },
+  });
+
+  const hasVisits = visits.length > 0;
+  const allVisitsCompleted = visits.every(
+    (visit) => visit.status === "COMPLETED"
+  );
+
+  if (!hasVisits || !allVisitsCompleted) {
+    return {
+      ok: false,
+      error:
+        "All visits must be completed before the booking can be completed.",
+    };
+  }
+
   const expected = booking.platformFeeCents + booking.sitterPayoutCents;
   if (expected !== booking.clientTotalCents) {
     return {
@@ -301,6 +321,80 @@ export async function completeBooking(arg1, arg2) {
   ]);
 
   revalidateOperator(bookingId);
+  return { ok: true };
+}
+
+export async function completeVisitAsOperator(visitId) {
+  const session = await requireRole(["OPERATOR"]);
+  const actorId = await getActorId(session);
+
+  const visit = await prisma.visit.findUnique({
+    where: { id: visitId },
+    select: {
+      id: true,
+      status: true,
+      bookingId: true,
+    },
+  });
+
+  if (!visit) return { ok: false, error: "Visit not found." };
+
+  if (visit.status !== "CONFIRMED") {
+    return { ok: false, error: "Only confirmed visits can be completed." };
+  }
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.visit.update({
+      where: { id: visit.id },
+      data: {
+        status: "COMPLETED",
+        completedAt: now,
+      },
+    });
+
+    const remainingActiveVisits = await tx.visit.count({
+      where: {
+        bookingId: visit.bookingId,
+        status: {
+          notIn: ["COMPLETED", "CANCELED"],
+        },
+      },
+    });
+
+    if (remainingActiveVisits === 0) {
+      const booking = await tx.booking.findUnique({
+        where: { id: visit.bookingId },
+        select: { status: true },
+      });
+
+      if (booking && booking.status !== "COMPLETED") {
+        await tx.booking.update({
+          where: { id: visit.bookingId },
+          data: {
+            status: "COMPLETED",
+            completedAt: now,
+          },
+        });
+
+        await tx.bookingHistory.create({
+          data: {
+            bookingId: visit.bookingId,
+            fromStatus: booking.status,
+            toStatus: "COMPLETED",
+            changedByUserId: actorId,
+            note: "Operator completed overdue visit and auto-completed booking.",
+          },
+        });
+      }
+    }
+  });
+
+  revalidatePath("/dashboard/operator");
+  revalidatePath(`/dashboard/operator/bookings/${visit.bookingId}`);
+  revalidatePath("/dashboard/sitter");
+
   return { ok: true };
 }
 

@@ -367,6 +367,7 @@ export function groupBookings(bookings = [], now) {
   if (!now) {
     return {
       today: [],
+      overdue: [],
       upcoming: bookings.filter(
         (b) => b.status !== "COMPLETED" && b.status !== "CANCELED"
       ),
@@ -379,6 +380,7 @@ export function groupBookings(bookings = [], now) {
   const graceMs = GRACE_MINUTES * 60 * 1000;
 
   const today = [];
+  const overdue = [];
   const upcoming = [];
   const completed = [];
   const canceled = [];
@@ -399,10 +401,15 @@ export function groupBookings(bookings = [], now) {
     let hasTodayVisit = false;
     let hasRemainingTodayVisit = false;
     let hasFutureVisit = false;
+    let hasOverdueVisit = false;
 
     for (const visit of visits) {
       const start = new Date(visit.startTime);
       if (Number.isNaN(start.getTime())) continue;
+
+      if (isVisitOverdue(visit, now)) {
+        hasOverdueVisit = true;
+      }
 
       const isToday = isSameDay(start, now);
 
@@ -419,18 +426,21 @@ export function groupBookings(bookings = [], now) {
       }
     }
 
-    if (hasTodayVisit && hasRemainingTodayVisit) {
+    if (hasOverdueVisit) {
+      overdue.push(booking);
+    } else if (hasTodayVisit && hasRemainingTodayVisit) {
       today.push(booking);
     } else if (hasFutureVisit) {
       upcoming.push(booking);
-    } else {
+    } else if (shouldAutoCompleteBooking(visits)) {
       completed.push(booking);
+    } else {
+      overdue.push(booking);
     }
   }
 
-  return { today, upcoming, completed, canceled };
+  return { today, overdue, upcoming, completed, canceled };
 }
-
 export function getSitterMapBookings(bookings = [], now) {
   if (!now) return [];
 
@@ -665,6 +675,25 @@ export function serializeVisitEntry(entry) {
   };
 }
 
+export function isVisitOverdue(visit, now = new Date()) {
+  if (!visit) return false;
+
+  if (visit.status === "COMPLETED" || visit.status === "CANCELED") {
+    return false;
+  }
+
+  const end = new Date(visit.endTime);
+  if (Number.isNaN(end.getTime())) return false;
+
+  return end.getTime() < now.getTime();
+}
+
+export function getOverdueVisitEntries(bookings = [], now = new Date()) {
+  return getVisitEntries(bookings)
+    .filter(({ visit }) => isVisitOverdue(visit, now))
+    .sort((a, b) => new Date(a.visit.startTime) - new Date(b.visit.startTime));
+}
+
 export function getCompletedVisitEntries(bookings = []) {
   return getVisitEntries(bookings)
     .filter(({ visit }) => visit?.status === "COMPLETED")
@@ -680,6 +709,7 @@ export function getCanceledVisitEntries(bookings = []) {
 export function getVisitDisplayLabel(visit, now) {
   if (visit.status === "COMPLETED") return "Done";
   if (visit.status === "CANCELED") return "Canceled";
+  if (isVisitOverdue(visit, now)) return "Overdue";
 
   if (new Date(visit.startTime) <= now) {
     return "Ready now";

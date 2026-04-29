@@ -1,5 +1,6 @@
 // src/app/book/[serviceCode]/page.jsx
 import { notFound } from "next/navigation";
+import { prisma } from "@/lib/db";
 import { getPublicServices, getPublicExtras } from "../actions";
 import PublicBookingWizard from "./PublicBookingWizard";
 
@@ -31,7 +32,22 @@ export default async function BookServicePage({ params }) {
   const rawServices = await getPublicServices();
   const rawExtraOptions = await getPublicExtras();
 
-  const services = toPlain(rawServices);
+  const providerUser = await prisma.user.findFirst({
+    where: {
+      email: "lunajobs13@gmail.com",
+      role: "SITTER",
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  const services = toPlain(rawServices).map((service) => ({
+    ...service,
+    sitterId:
+      service.sitterId || service.providerUserId || providerUser?.id || null,
+  }));
+
   const extraOptions = toPlain(rawExtraOptions);
 
   const initialService = services.find((s) => s.code === serviceCode);
