@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 export async function completeVisitAsSitter(formData) {
   const session = await requireRole(["SITTER"]);
   const visitId = formData.get("visitId");
+  const lateReason = String(formData.get("lateReason") || "").trim();
 
   if (!visitId) {
     return { ok: false, error: "Missing visit id." };
@@ -21,6 +22,7 @@ export async function completeVisitAsSitter(formData) {
       sitterId: true,
       bookingId: true,
       startTime: true,
+      endTime: true,
     },
   });
 
@@ -48,11 +50,24 @@ export async function completeVisitAsSitter(formData) {
   }
 
   const now = new Date();
+  const startTime = visit.startTime ? new Date(visit.startTime) : null;
+  const endTime = visit.endTime ? new Date(visit.endTime) : null;
 
-  if (visit.startTime && new Date(visit.startTime) > now) {
+  if (startTime && startTime > now) {
     return {
       ok: false,
       error: "This visit cannot be completed before it starts.",
+    };
+  }
+
+  const isMissedVisit =
+    endTime && !Number.isNaN(endTime.getTime()) && endTime < now;
+
+  if (isMissedVisit && lateReason.length < 10) {
+    return {
+      ok: false,
+      error:
+        "Please explain why this missed visit is being completed late. Minimum 10 characters.",
     };
   }
 
@@ -64,6 +79,18 @@ export async function completeVisitAsSitter(formData) {
         completedAt: now,
       },
     });
+
+    if (isMissedVisit) {
+      await tx.bookingHistory.create({
+        data: {
+          bookingId: visit.bookingId,
+          fromStatus: null,
+          toStatus: null,
+          changedByUserId: session.user.id,
+          note: `Missed visit completed late by sitter. Reason: ${lateReason}`,
+        },
+      });
+    }
 
     const remainingVisits = await tx.visit.findMany({
       where: {
@@ -111,6 +138,7 @@ export async function completeVisitAsSitter(formData) {
   revalidatePath("/dashboard/sitter");
   revalidatePath("/dashboard/operator");
   revalidatePath(`/dashboard/operator/bookings/${visit.bookingId}`);
+  revalidatePath(`/dashboard/sitter/bookings/${visit.bookingId}`);
 
   return { ok: true };
 }

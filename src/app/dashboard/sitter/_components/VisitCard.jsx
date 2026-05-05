@@ -10,6 +10,7 @@ import {
   formatTime,
   isSameDay,
   getRelativeDayLabel,
+  isVisitOverdue,
 } from "../lib/sitterDashboardUtils";
 
 function getVisitState(visit, now, isToday) {
@@ -32,6 +33,16 @@ function getVisitState(visit, now, isToday) {
       cardClass: "border-zinc-200 bg-white opacity-80",
       helperText: "This visit was canceled.",
       actionLabel: "Visit canceled",
+    };
+  }
+
+  if (isVisitOverdue(visit, now)) {
+    return {
+      label: "Missed",
+      badgeClass: "bg-amber-100 text-amber-800",
+      cardClass: "border-amber-200 bg-amber-50/40",
+      helperText: "This visit ended before it was marked complete.",
+      actionLabel: "Complete missed visit",
     };
   }
 
@@ -81,6 +92,7 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
   const isCompletable = canCompleteVisit(visit, now);
   const state = getVisitState(visit, now, isToday);
   const dayLabel = getRelativeDayLabel(start, now);
+  
 
   return (
     <article
@@ -130,13 +142,32 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
               const result = await completeVisitAsSitter(formData);
               if (result?.ok) {
                 onComplete?.(visit.id);
+              } else if (result?.error) {
+                alert(result.error);
               }
             }}
+            className="flex flex-col gap-2"
           >
             <input type="hidden" name="visitId" value={visit.id} />
+
+            {/* 🔥 Only show for missed visits */}
+            {isVisitOverdue(visit, now) ? (
+              <textarea
+                name="lateReason"
+                required
+                minLength={10}
+                placeholder="Explain why this visit is being completed late..."
+                className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-300"
+              />
+            ) : null}
+
+            <p className="text-xs text-amber-700">
+              Required for missed visits. This will be visible to the operator.
+            </p>
+
             <button
               type="submit"
-              className="inline-flex items-center rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800"
+              className="inline-flex items-center justify-center rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800"
             >
               {state.actionLabel}
             </button>

@@ -175,14 +175,27 @@ export default async function OperatorBookingDetailPage({
   const allVisitsCompleted = booking.visits.every(
     (v) => v.status === "COMPLETED"
   );
-
+  const hasLateNotes = booking.history.some((h) =>
+    h.note?.toLowerCase().includes("late")
+  );
   const canComplete =
     booking.status === "CONFIRMED" && hasVisits && allVisitsCompleted;
-
+  const lateNoteCount = booking.history.filter((h) =>
+    h.note?.toLowerCase().includes("late")
+  ).length;
   const groupedVisits = groupVisitsByDate(booking.visits);
   const scheduleSummary = getScheduleSummary(booking.visits, booking);
   const firstUpcomingVisit = getFirstUpcomingVisit(booking.visits);
-  const nextAction = getBookingNextAction(booking, firstUpcomingVisit);
+  const nextAction = getBookingNextAction(booking, firstUpcomingVisit) ?? {
+    tone: "zinc",
+    title: "No immediate action",
+    description: "There is no recommended action for this booking right now.",
+  };
+  const missedVisitEvents = booking.history.filter((h) =>
+    h.note?.toLowerCase().includes("missed visit")
+  );
+
+  const missedVisitEventCount = missedVisitEvents.length;
 
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
@@ -249,6 +262,27 @@ export default async function OperatorBookingDetailPage({
             </div>
           </div>
         </header>
+
+        {lateNoteCount > 0 || missedVisitEventCount > 0 ? (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm space-y-1">
+            <p className="text-sm font-semibold text-amber-900">
+              ⚠️ Booking requires attention
+            </p>
+
+            {missedVisitEventCount > 0 && (
+              <p className="text-sm text-amber-800">
+                • {missedVisitEventCount} missed visit
+                {missedVisitEventCount > 1 ? "s" : ""}
+              </p>
+            )}
+
+            {lateNoteCount > 0 && (
+              <p className="text-sm text-amber-800">
+                • {lateNoteCount} late completion{lateNoteCount > 1 ? "s" : ""}
+              </p>
+            )}
+          </section>
+        ) : null}
 
         {/* Next Action */}
         <section
@@ -485,47 +519,63 @@ export default async function OperatorBookingDetailPage({
             <div className="p-4 text-sm text-zinc-600">No history yet.</div>
           ) : (
             <div className="space-y-3 p-4">
-              {booking.history.map((h) => (
-                <div key={h.id} className="text-sm">
-                  <div className="text-zinc-900">
-                    {h.toStatus ? (
-                      <>
-                        <span className="font-medium">
-                          {h.fromStatus || "—"}
-                        </span>{" "}
-                        → <span className="font-medium">{h.toStatus}</span>
-                      </>
-                    ) : h.fromSitterId || h.toSitterId ? (
-                      <>
-                        <span className="font-medium">
-                          {h.fromSitter?.name || h.fromSitter?.email || "—"}
-                        </span>{" "}
-                        →{" "}
-                        <span className="font-medium">
-                          {h.toSitter?.name ||
-                            h.toSitter?.email ||
-                            "Unassigned"}
-                        </span>
-                        <span className="text-zinc-500"> · sitter</span>
-                      </>
-                    ) : (
-                      <span className="text-zinc-500">Unknown change</span>
-                    )}
+              {booking.history.map((h) => {
+                const isLateNote = h.note?.toLowerCase().includes("late");
 
-                    {h.changedBy?.email ? (
-                      <span className="text-zinc-500">
-                        {" "}
-                        · by {h.changedBy.email}
-                      </span>
+                return (
+                  <div key={h.id} className="text-sm">
+                    <div className="text-zinc-900">
+                      {h.toStatus ? (
+                        <>
+                          <span className="font-medium">
+                            {h.fromStatus || "—"}
+                          </span>{" "}
+                          → <span className="font-medium">{h.toStatus}</span>
+                        </>
+                      ) : h.fromSitterId || h.toSitterId ? (
+                        <>
+                          <span className="font-medium">
+                            {h.fromSitter?.name || h.fromSitter?.email || "—"}
+                          </span>{" "}
+                          →{" "}
+                          <span className="font-medium">
+                            {h.toSitter?.name ||
+                              h.toSitter?.email ||
+                              "Unassigned"}
+                          </span>
+                          <span className="text-zinc-500"> · sitter</span>
+                        </>
+                      ) : (
+                        <span className="text-zinc-500">Unknown change</span>
+                      )}
+
+                      {h.changedBy?.email ? (
+                        <span className="text-zinc-500">
+                          {" "}
+                          · by {h.changedBy.email}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="text-xs text-zinc-500">
+                      {new Date(h.createdAt).toLocaleString()}
+                    </div>
+
+                    {h.note ? (
+                      <div
+                        className={`mt-1 rounded-md border px-2 py-1 text-xs ${
+                          isLateNote
+                            ? "border-amber-200 bg-amber-50 text-amber-900"
+                            : "border-zinc-200 bg-zinc-50 text-zinc-700"
+                        }`}
+                      >
+                        {isLateNote ? "⚠️ " : ""}
+                        {h.note}
+                      </div>
                     ) : null}
                   </div>
-
-                  <div className="text-xs text-zinc-500">
-                    {new Date(h.createdAt).toLocaleString()}
-                    {h.note ? ` · ${h.note}` : ""}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CollapsibleCard>

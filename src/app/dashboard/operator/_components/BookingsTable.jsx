@@ -1,49 +1,23 @@
 // src/app/dashboard/operator/_components/BookingsTable.jsx
 "use client";
+
 import { completeVisitAsOperator } from "../bookings/actions";
 import { formatMoney } from "../lib/format";
 import CancelBookingForm from "./CancelBookingForm";
+import { getRiskySitterSummary } from "../../operator/lib/getRiskySitterSummary";
+import { getBookingReliability } from "../../operator/lib/getBookingReliability";
+import { ReliabilityBadge }from "../booking-list/ReliabilityBadge";
+import MissedVisitBadge from "../booking-list/MissedVisitBadge";
+import CompletedAtLabel from "../booking-list/CompletedAtLabel";
+import StatusBadge from "../booking-list/StatusBadge";
+import { getOverdueVisits, formatVisitSummary } from "../../lib/bookingDisplayUtils";
 import {
   STATUS_LABELS,
   STATUS_DOT_CLASSES,
-  STATUS_PILL_CLASSES,
   STATUS_CARD_BORDER_CLASSES,
 } from "@/lib/statusStyles";
+import RiskySitterSummary from "../booking-list/RiskySitterSummary";
 
-
-
-function formatVisitSummary(visits = []) {
-  if (!visits.length) return "No visits";
-
-  const firstTwo = visits.slice(0, 2).map((v) =>
-    new Date(v.startTime).toLocaleString(undefined, {
-      month: "numeric",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    })
-  );
-
-  if (visits.length <= 2) {
-    return firstTwo.join(" • ");
-  }
-
-  return `${firstTwo.join(" • ")} • +${visits.length - 2} more`;
-}
-
-function StatusBadge({ status }) {
-  const base =
-    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border";
-
-  const pillClasses =
-    STATUS_PILL_CLASSES[status] || "bg-zinc-100 text-zinc-700 border-zinc-200";
-
-  return (
-    <span className={`${base} ${pillClasses}`}>
-      {STATUS_LABELS[status] || status}
-    </span>
-  );
-}
 
 function BookingActions({
   booking,
@@ -69,14 +43,7 @@ function BookingActions({
 
   const overdueVisits = isTerminal
     ? []
-    : (booking.visits || []).filter((v) => {
-        if (v.status !== "CONFIRMED") return false;
-
-        const end = new Date(v.endTime);
-        if (Number.isNaN(end.getTime())) return false;
-
-        return end < new Date();
-      });
+    : getOverdueVisits(booking.visits || []);
 
   const containerBase = "flex gap-2";
   const containerClass =
@@ -85,7 +52,7 @@ function BookingActions({
       : `${containerBase} items-start justify-end`;
 
   const buttonBase = "text-xs font-semibold px-3 py-1.5 rounded-md transition";
-
+  
   const viewHref = listQs
     ? `/dashboard/operator/bookings/${booking.id}?${listQs}`
     : `/dashboard/operator/bookings/${booking.id}`;
@@ -182,69 +149,99 @@ export default function BookingsTable({
     return <div className="p-6 text-sm text-zinc-600">No bookings found.</div>;
   }
 
+  const now = new Date();
+  const riskySitters = getRiskySitterSummary(bookings, now);
+
+  const sortedBookings = [...bookings].sort((a, b) => {
+    const aReliability = getBookingReliability(a, now);
+    const bReliability = getBookingReliability(b, now);
+
+    return aReliability.score - bReliability.score;
+  });
+
   return (
     <div className="space-y-3">
-      {/* Mobile: card layout */}
-      <div className="md:hidden space-y-3">
-        {bookings.map((b) => (
-          <div
-            key={b.id}
-            className={`rounded-lg border bg-white p-3 shadow-sm transition md:hover:shadow-md ${
-              STATUS_CARD_BORDER_CLASSES[b.status] || "border-zinc-200"
-            }`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              {/* Left side: client, sitter, date */}
-              <div>
-                <div className="text-sm font-semibold text-zinc-900">
-                  {b.client?.name || "—"}
+      <RiskySitterSummary riskySitters={riskySitters} />
+
+      <div className="space-y-3 md:hidden">
+        {sortedBookings.map((b) => {
+          const overdueVisits = getOverdueVisits(b.visits || [], now);
+          const reliability = getBookingReliability(b);
+          const isRisky = reliability.level === "risky";
+          const isWatch = reliability.level === "watch";
+          return (
+            <div
+              key={b.id}
+              className={`rounded-lg border p-3 shadow-sm transition md:hover:shadow-md ${
+                isRisky
+                  ? "border-red-300 bg-red-50"
+                  : isWatch
+                  ? "border-amber-300 bg-amber-50"
+                  : `${
+                      STATUS_CARD_BORDER_CLASSES[b.status] || "border-zinc-200"
+                    } bg-white`
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-zinc-900">
+                    {b.client?.name || "—"}
+                  </div>
+                  <div className="mt-1 flex flex-col gap-0.5">
+                    <div className="text-xs text-zinc-500">
+                      {b.sitter?.name || b.sitter?.email || "Unassigned"}
+                    </div>
+
+                    <ReliabilityBadge reliability={reliability} />
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {b.visits?.length
+                      ? formatVisitSummary(b.visits)
+                      : new Date(b.startTime).toLocaleString()}
+                  </div>
+
+                  <MissedVisitBadge count={overdueVisits.length} />
+
+                  {b.status === "COMPLETED" && (
+                    <CompletedAtLabel value={b.completedAt} />
+                  )}
                 </div>
-                <div className="text-xs text-zinc-500">
-                  {b.sitter?.name || b.sitter?.email || "Unassigned"}
-                </div>
-                <div className="text-xs text-zinc-500 mt-1">
-                  {b.visits?.length
-                    ? formatVisitSummary(b.visits)
-                    : new Date(b.startTime).toLocaleString()}
+
+                <div className="text-right">
+                  <div className="inline-flex items-center justify-end gap-1">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        STATUS_DOT_CLASSES[b.status] || "bg-zinc-400"
+                      }`}
+                    />
+                    <span className="text-xs font-medium text-zinc-800">
+                      {STATUS_LABELS[b.status] || b.status}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 text-xs text-zinc-500">Total</div>
+                  <div className="text-sm font-semibold text-zinc-900">
+                    {formatMoney(b.clientTotalCents)}
+                  </div>
                 </div>
               </div>
 
-              {/* Right side: status + total */}
-              <div className="text-right">
-                <div className="inline-flex items-center gap-1 justify-end">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      STATUS_DOT_CLASSES[b.status] || "bg-zinc-400"
-                    }`}
-                  />
-                  <span className="text-xs font-medium text-zinc-800">
-                    {STATUS_LABELS[b.status] || b.status}
-                  </span>
-                </div>
-
-                <div className="mt-2 text-xs text-zinc-500">Total</div>
-                <div className="text-sm font-semibold text-zinc-900">
-                  {formatMoney(b.clientTotalCents)}
-                </div>
+              <div className="mt-3">
+                <BookingActions
+                  booking={b}
+                  confirmBooking={confirmBooking}
+                  completeBooking={completeBooking}
+                  cancelBooking={cancelBooking}
+                  listQs={listQs}
+                  layout="stack"
+                />
               </div>
             </div>
-
-            <div className="mt-3">
-              <BookingActions
-                booking={b}
-                confirmBooking={confirmBooking}
-                completeBooking={completeBooking}
-                cancelBooking={cancelBooking}
-                listQs={listQs}
-                layout="stack"
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Desktop: original table */}
-      <div className="hidden md:block overflow-x-auto">
+      <div className="hidden overflow-x-auto md:block">
         <table className="min-w-full text-sm">
           <thead className="text-left text-zinc-500">
             <tr className="border-b border-zinc-200">
@@ -258,41 +255,55 @@ export default function BookingsTable({
           </thead>
 
           <tbody>
-            {bookings.map((b) => (
-              <tr key={b.id} className="border-b border-zinc-100">
-                <td className="p-3">
-                  <div className="text-sm text-zinc-900">
-                    {b.visits?.length || 0} visit
-                    {b.visits?.length === 1 ? "" : "s"}
-                  </div>
-                  <div className="text-xs text-zinc-500">
-                    {b.visits?.length
-                      ? formatVisitSummary(b.visits)
-                      : new Date(b.startTime).toLocaleString()}
-                  </div>
-                </td>
-                <td className="p-3">{b.client?.name || "—"}</td>
-                <td className="p-3">
-                  {b.sitter?.name || b.sitter?.email || "Unassigned"}
-                </td>
-                <td className="p-3">
-                  <StatusBadge status={b.status} />
-                </td>
-                <td className="p-3 whitespace-nowrap font-medium text-zinc-900">
-                  {formatMoney(b.clientTotalCents)}
-                </td>
-                <td className="p-3">
-                  <BookingActions
-                    booking={b}
-                    confirmBooking={confirmBooking}
-                    completeBooking={completeBooking}
-                    cancelBooking={cancelBooking}
-                    listQs={listQs}
-                    layout="row"
-                  />
-                </td>
-              </tr>
-            ))}
+            {sortedBookings.map((b) => {
+              const overdueVisits = getOverdueVisits(b.visits || [], now);
+              const reliability = getBookingReliability(b, now);
+              return (
+                <tr key={b.id} className="border-b border-zinc-100">
+                  <td className="p-3">
+                    <div className="text-sm text-zinc-900">
+                      {b.visits?.length || 0} visit
+                      {b.visits?.length === 1 ? "" : "s"}
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      {b.visits?.length
+                        ? formatVisitSummary(b.visits)
+                        : new Date(b.startTime).toLocaleString()}
+                    </div>
+
+                    <MissedVisitBadge count={overdueVisits.length} />
+
+                    {b.status === "COMPLETED" && (
+                      <CompletedAtLabel value={b.completedAt} />
+                    )}
+                  </td>
+
+                  <td className="p-3">{b.client?.name || "—"}</td>
+                  <td className="p-3">
+                    <div>
+                      {b.sitter?.name || b.sitter?.email || "Unassigned"}
+                    </div>
+                    <ReliabilityBadge reliability={reliability} />
+                  </td>
+                  <td className="p-3">
+                    <StatusBadge status={b.status} />
+                  </td>
+                  <td className="whitespace-nowrap p-3 font-medium text-zinc-900">
+                    {formatMoney(b.clientTotalCents)}
+                  </td>
+                  <td className="p-3">
+                    <BookingActions
+                      booking={b}
+                      confirmBooking={confirmBooking}
+                      completeBooking={completeBooking}
+                      cancelBooking={cancelBooking}
+                      listQs={listQs}
+                      layout="row"
+                    />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

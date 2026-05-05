@@ -8,7 +8,7 @@ import VisitHistorySection from "./VisitHistorySection";
 import UpcomingVisitsSection from "./UpcomingVisitsSection";
 import SitterRoutePanel from "./SitterRoutePanel";
 import TodayVisitsSection from "./TodayVisitsSection";
-
+import ShiftStatusCard from "./ShiftStatusCard";
 import {
   formatMoney,
   formatDateTime,
@@ -25,6 +25,7 @@ import {
   getCompletedVisitEntries,
   getCanceledVisitEntries,
   serializeVisitEntry,
+  getOverdueVisitEntries,
 } from "../lib/sitterDashboardUtils";
 
 export default function SitterDashboardLive({ bookings = [] }) {
@@ -91,6 +92,12 @@ export default function SitterDashboardLive({ bookings = [] }) {
 
   const derived = useMemo(() => {
     const { today } = groupBookings(localBookings, now);
+    const overdueVisitEntries = getOverdueVisitEntries(localBookings, now).map(
+      (entry) => serializeVisitEntry(entry)
+    );
+    
+    const overdueVisitCount = overdueVisitEntries.length;
+    const hasBlockingMissedVisits = overdueVisitCount > 0;
 
     const todayVisitEntries = getRemainingTodayVisitEntries(
       localBookings,
@@ -134,7 +141,7 @@ export default function SitterDashboardLive({ bookings = [] }) {
     const todayVisitCount = getRemainingVisitCountForToday(localBookings, now);
     const remainingTodayPayout = getRemainingPayoutForToday(localBookings, now);
     const completedThisWeek = getCompletedThisWeekCount(localBookings, now);
-
+    
     const earnedToday = completedVisitEntries.reduce(
       (sum, v) => sum + (v.sitterPayoutCents || 0),
       0
@@ -199,6 +206,9 @@ export default function SitterDashboardLive({ bookings = [] }) {
       tomorrowCount,
       earnedToday,
       totalTodayPayout,
+      overdueVisitEntries,
+      overdueVisitCount,
+      hasBlockingMissedVisits,
     };
   }, [localBookings, now]);
 
@@ -236,6 +246,7 @@ export default function SitterDashboardLive({ bookings = [] }) {
             Your live route, next visits, and shift progress.
           </p>
         </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <StatCard
             title="Remaining stops today"
@@ -263,9 +274,19 @@ export default function SitterDashboardLive({ bookings = [] }) {
             value={formatMoney(derived.remainingTodayPayout)}
             helper="Estimated from remaining stops today"
           />
+          <ShiftStatusCard
+            overdueVisitCount={derived.overdueVisitCount}
+            todayVisitCount={derived.todayVisitCount}
+            nextUp={derived.nextUp}
+          />
         </div>
-        
-        {derived.hasActiveRoute ? (
+
+        {derived.hasBlockingMissedVisits ? (
+          <div className="flex items-center gap-2 rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900">
+            <span className="h-2 w-2 rounded-full bg-amber-500 animate-subtle-pulse" />
+            Route locked — complete missed visits to continue.
+          </div>
+        ) : derived.hasActiveRoute ? (
           <div ref={routePanelRef}>
             <SitterRoutePanel
               bookings={derived.remainingSitterMapBookings}
@@ -276,15 +297,30 @@ export default function SitterDashboardLive({ bookings = [] }) {
             />
           </div>
         ) : null}
+
+        {/* 🔥 NEW: Missed Visits (HIGH PRIORITY) */}
+        {derived.overdueVisitCount > 0 ? (
+          <VisitHistorySection
+            title="Missed Visits"
+            description={`Visits that ended before being completed (${derived.overdueVisitCount}).`}
+            visits={derived.overdueVisitEntries}
+            now={now}
+            emptyMessage="No missed visits."
+            onCompleteVisit={handleVisitCompleted}
+          />
+        ) : null}
+
         <TodayVisitsSection
           visits={derived.todayVisitEntries}
           now={now}
           onCompleteVisit={handleVisitCompleted}
         />
+
         <UpcomingVisitsSection
           visits={derived.upcomingVisitEntries}
           now={now}
         />
+
         {derived.completedVisitCount > 0 ? (
           <VisitHistorySection
             title="Completed"
@@ -293,6 +329,7 @@ export default function SitterDashboardLive({ bookings = [] }) {
             now={now}
           />
         ) : null}
+
         {derived.canceledVisitCount > 0 ? (
           <VisitHistorySection
             title="Canceled"
