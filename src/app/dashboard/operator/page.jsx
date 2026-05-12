@@ -22,6 +22,8 @@ import {
   groupBookings,
   getNeedsAttentionBooking,
 } from "./lib/dashboardUtils";
+import { bookingNeedsReview } from "./lib/bookingNeedsReview";
+
 
 function StatCard({ label, value, subtext }) {
   return (
@@ -57,6 +59,7 @@ function toClientValue(value) {
     for (const [key, val] of Object.entries(value)) {
       out[key] = toClientValue(val);
     }
+
     return out;
   }
 
@@ -80,6 +83,7 @@ function Section({
   const visibleBookings = collapsedByDefault
     ? []
     : bookings.slice(0, maxVisible);
+
   const hiddenCount = Math.max(bookings.length - visibleBookings.length, 0);
 
   return (
@@ -153,6 +157,7 @@ export default async function OperatorDashboard({ searchParams }) {
   const hasRange = !isDefault;
 
   const status = resolveStatus(sp);
+  const review = sp?.review || "all";
 
   const {
     bookings: rawBookings,
@@ -165,52 +170,77 @@ export default async function OperatorDashboard({ searchParams }) {
     to,
   });
 
-  const bookings = toClientValue(rawBookings);
+  const allBookings = toClientValue(rawBookings);
+  const now = new Date();
+  const needsReviewCount = allBookings.filter((b) =>
+    bookingNeedsReview(b, now)
+  ).length;
+
+  const bookings =
+    review === "needs-review"
+      ? allBookings.filter((b) => bookingNeedsReview(b, now))
+      : allBookings;
+  
+  const filteredBookingCount = bookings.length;    
 
   const fromStr = formatDateOnly(from);
   const toStr = formatDateOnly(to);
 
-  const hrefForStatus = (s) => {
-    const u = new URLSearchParams();
-    if (s !== "ALL") u.set("status", s);
+  const addSharedParams = (u) => {
     if (fromStr) u.set("from", fromStr);
     if (toStr) u.set("to", toStr);
+    if (review && review !== "all") u.set("review", review);
+  };
+
+  const hrefForStatus = (s) => {
+    const u = new URLSearchParams();
+
+    if (s !== "ALL") u.set("status", s);
+    addSharedParams(u);
+
     const qs = u.toString();
     return qs ? `/dashboard/operator?${qs}` : "/dashboard/operator";
   };
 
   const hrefForSectionStatus = (sectionStatus) => {
     const u = new URLSearchParams();
+
     if (sectionStatus && sectionStatus !== "ALL") {
       u.set("status", sectionStatus);
     }
-    if (fromStr) u.set("from", fromStr);
-    if (toStr) u.set("to", toStr);
+
+    addSharedParams(u);
+
     const qs = u.toString();
     return qs ? `/dashboard/operator?${qs}` : "/dashboard/operator";
   };
 
   const u = new URLSearchParams();
+
   if (status !== "ALL") u.set("status", status);
-  if (fromStr) u.set("from", fromStr);
-  if (toStr) u.set("to", toStr);
+  addSharedParams(u);
+
   const listQs = u.toString();
 
   const overviewHref = listQs
     ? `/dashboard/operator?${listQs}`
     : "/dashboard/operator";
 
-  const now = new Date();
+  
+
   const { requested, today, upcoming, completed, canceled } = groupBookings(
     bookings,
     now
+  );
+
+  const confirmed = bookings.filter(
+    (booking) => booking.status === "CONFIRMED"
   );
 
   const todayVisitCount = getTodayVisitCount(bookings, now);
   const confirmedRevenue = getConfirmedRevenue(bookings);
   const unassignedCount = bookings.filter((b) => !b.sitterId).length;
   const needsAttention = getNeedsAttentionBooking(bookings, now);
-
   const showGroupedDashboard = status === "ALL";
 
   return (
@@ -220,9 +250,11 @@ export default async function OperatorDashboard({ searchParams }) {
           <div className="text-xs uppercase tracking-wide text-zinc-500">
             Internal MVP
           </div>
+
           <h1 className="text-2xl font-semibold text-zinc-900">
             Operator Dashboard
           </h1>
+
           <p className="text-sm text-zinc-600">
             Signed in as{" "}
             <span className="font-medium">{session.user.email}</span> ·{" "}
@@ -232,30 +264,47 @@ export default async function OperatorDashboard({ searchParams }) {
           </p>
         </header>
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           <StatCard
             label="Requested"
             value={metrics?.REQUESTED?.count ?? 0}
             subtext="Bookings waiting for action"
           />
+
           <StatCard
             label="Unassigned"
             value={unassignedCount}
             subtext="Bookings without a sitter"
           />
+
           <StatCard
             label="Today's Visits"
             value={todayVisitCount}
             subtext="Visits scheduled for today"
           />
+
           <StatCard
             label="Confirmed Revenue"
             value={formatMoney(confirmedRevenue)}
             subtext="From confirmed bookings"
           />
-        </section>
 
-        
+          <StatCard
+            label="Needs Review"
+            value={needsReviewCount}
+            subtext="Missed visits awaiting review"
+          />
+
+          <StatCard
+            label="Filtered Results"
+            value={filteredBookingCount}
+            subtext={
+              review === "needs-review"
+                ? "Bookings currently needing review"
+                : "Bookings currently shown"
+            }
+          />
+        </section>
 
         <OperatorMap bookings={mapBookings} />
 
@@ -270,14 +319,17 @@ export default async function OperatorDashboard({ searchParams }) {
                 <h2 className="text-xl font-semibold text-zinc-900">
                   {needsAttention.booking.client?.name || "—"}
                 </h2>
+
                 <div className="mt-1 text-sm text-zinc-700">
                   {needsAttention.booking.serviceSummary || "Booking"}
                 </div>
+
                 <div className="mt-2 text-sm font-medium text-amber-700">
                   {needsAttention.booking.status === "REQUESTED"
                     ? "Awaiting confirmation"
                     : "Confirmed but still unassigned"}
                 </div>
+
                 <div className="mt-1 text-xs text-zinc-500">
                   {needsAttention.booking.visits?.length || 0} visit
                   {needsAttention.booking.visits?.length === 1
@@ -291,9 +343,11 @@ export default async function OperatorDashboard({ searchParams }) {
 
               <div className="text-left md:text-right">
                 <div className="text-xs text-zinc-500">Client Total</div>
+
                 <div className="text-lg font-semibold text-zinc-900">
                   {formatMoney(needsAttention.booking.clientTotalCents)}
                 </div>
+
                 <a
                   href={
                     listQs
@@ -311,15 +365,24 @@ export default async function OperatorDashboard({ searchParams }) {
 
         <section className="rounded-xl border border-zinc-200 bg-white shadow-sm">
           <div className="p-4 border-b border-zinc-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="font-semibold text-zinc-900">
-              {hasRange
-                ? "Filtered bookings"
-                : showGroupedDashboard
-                ? "Bookings overview"
-                : "Bookings"}
-            </h2>
+            <div>
+              <h2 className="font-semibold text-zinc-900">
+                {hasRange || review !== "all"
+                  ? "Filtered bookings"
+                  : showGroupedDashboard
+                  ? "Bookings overview"
+                  : "Bookings"}
+              </h2>
 
-            <DateRangeFilter from={fromStr} to={toStr} />
+              {review === "needs-review" ? (
+                <p className="mt-1 text-xs font-medium text-amber-700">
+                  Showing bookings with missed visits that still need operator
+                  review.
+                </p>
+              ) : null}
+            </div>
+
+            <DateRangeFilter from={fromStr} to={toStr} review={review} />
           </div>
 
           <div className="p-4 border-b border-zinc-200">
@@ -350,6 +413,18 @@ export default async function OperatorDashboard({ searchParams }) {
                 listQs={listQs}
                 maxVisible={2}
                 viewAllHref={hrefForSectionStatus("REQUESTED")}
+              />
+
+              <Section
+                title="Confirmed"
+                description="Confirmed bookings that are not scheduled for today."
+                bookings={confirmed}
+                confirmBooking={confirmBooking}
+                cancelBooking={cancelBooking}
+                completeBooking={completeBooking}
+                listQs={listQs}
+                maxVisible={2}
+                viewAllHref={hrefForSectionStatus("CONFIRMED")}
               />
 
               <Section

@@ -7,8 +7,9 @@ import { revalidatePath } from "next/cache";
 
 export async function completeVisitAsSitter(formData) {
   const session = await requireRole(["SITTER"]);
+
   const visitId = formData.get("visitId");
-  const lateReason = String(formData.get("lateReason") || "").trim();
+  const lateReason = formData.get("lateReason")?.toString().trim() || "";
 
   if (!visitId) {
     return { ok: false, error: "Missing visit id." };
@@ -50,47 +51,47 @@ export async function completeVisitAsSitter(formData) {
   }
 
   const now = new Date();
-  const startTime = visit.startTime ? new Date(visit.startTime) : null;
-  const endTime = visit.endTime ? new Date(visit.endTime) : null;
 
-  if (startTime && startTime > now) {
+  const visitStart = visit.startTime ? new Date(visit.startTime) : null;
+  const visitEnd = visit.endTime ? new Date(visit.endTime) : null;
+
+  const isMissedVisit =
+    visitEnd && !Number.isNaN(visitEnd.getTime()) && visitEnd < now;
+
+  if (visitStart && visitStart > now) {
     return {
       ok: false,
       error: "This visit cannot be completed before it starts.",
     };
   }
 
-  const isMissedVisit =
-    endTime && !Number.isNaN(endTime.getTime()) && endTime < now;
-
   if (isMissedVisit && lateReason.length < 10) {
     return {
       ok: false,
-      error:
-        "Please explain why this missed visit is being completed late. Minimum 10 characters.",
+      error: "Please explain why this missed visit is being completed late.",
     };
   }
 
   await prisma.$transaction(async (tx) => {
     await tx.visit.update({
-      where: { id: visitId },
+      where: { id: visit.id },
       data: {
         status: "COMPLETED",
         completedAt: now,
       },
     });
 
-    if (isMissedVisit) {
-      await tx.bookingHistory.create({
-        data: {
-          bookingId: visit.bookingId,
-          fromStatus: null,
-          toStatus: null,
-          changedByUserId: session.user.id,
-          note: `Missed visit completed late by sitter. Reason: ${lateReason}`,
-        },
-      });
-    }
+    await tx.bookingHistory.create({
+      data: {
+        bookingId: visit.bookingId,
+        fromStatus: null,
+        toStatus: null,
+        changedByUserId: session.user.id,
+        note: isMissedVisit
+          ? `Sitter completed missed visit late. Reason: ${lateReason}`
+          : "Sitter completed visit.",
+      },
+    });
 
     const remainingVisits = await tx.visit.findMany({
       where: {
@@ -119,7 +120,10 @@ export async function completeVisitAsSitter(formData) {
       ) {
         await tx.booking.update({
           where: { id: visit.bookingId },
-          data: { status: "COMPLETED", completedAt: now },
+          data: {
+            status: "COMPLETED",
+            completedAt: now,
+          },
         });
 
         await tx.bookingHistory.create({

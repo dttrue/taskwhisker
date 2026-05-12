@@ -1,6 +1,6 @@
 // src/app/dashboard/operator/_components/DateRangeFilter.jsx
 
-export default function DateRangeFilter({ from, to }) {
+export default function DateRangeFilter({ from, to, review = "all" }) {
   return (
     <form method="GET" className="flex flex-col sm:flex-row sm:items-end gap-3">
       {/* Date Inputs */}
@@ -12,8 +12,7 @@ export default function DateRangeFilter({ from, to }) {
             name="from"
             defaultValue={from || ""}
             className="h-10 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
-                       focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900
-                       transition"
+                       focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900"
           />
         </div>
 
@@ -24,18 +23,30 @@ export default function DateRangeFilter({ from, to }) {
             name="to"
             defaultValue={to || ""}
             className="h-10 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
-                       focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900
-                       transition"
+                       focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900"
           />
         </div>
+      </div>
+
+      {/* Review Filter */}
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-zinc-500">Review</label>
+        <select
+          name="review"
+          defaultValue={review || "all"}
+          className="h-10 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
+                     focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900"
+        >
+          <option value="all">All</option>
+          <option value="needs-review">Needs review</option>
+        </select>
       </div>
 
       {/* Actions */}
       <div className="flex gap-2">
         <button
           type="submit"
-          className="h-10 rounded-md bg-zinc-900 px-4 text-sm font-semibold text-white
-                     hover:bg-zinc-800 transition"
+          className="h-10 rounded-md bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800"
         >
           Apply
         </button>
@@ -43,7 +54,7 @@ export default function DateRangeFilter({ from, to }) {
         <a
           href="/dashboard/operator"
           className="h-10 inline-flex items-center rounded-md border border-zinc-200 px-4
-                     text-sm font-medium text-zinc-700 hover:border-zinc-300 transition"
+                     text-sm font-medium text-zinc-700 hover:border-zinc-300"
         >
           Reset
         </a>

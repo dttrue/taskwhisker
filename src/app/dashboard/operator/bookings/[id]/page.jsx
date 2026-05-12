@@ -3,7 +3,7 @@ import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cancelBooking } from "../actions";
+import { cancelBooking, reviewMissedVisitHistory } from "../actions";
 import { getBookingNextAction } from "@/lib/getBookingNextAction";
 import CollapsibleCard from "@/components/ui/CollapsibleCard";
 import CancelBookingDetailForm from "@/app/dashboard/operator/_components/CancelBookingDetailForm";
@@ -109,6 +109,12 @@ function toneClasses(tone) {
   }
 }
 
+const REVIEW_STATUS_LABELS = {
+  EXCUSED: "Excused",
+  SITTER_FAULT: "Sitter fault",
+  NEEDS_FOLLOW_UP: "Needs follow-up",
+};
+
 function SummaryCard({ label, children }) {
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -191,11 +197,20 @@ export default async function OperatorBookingDetailPage({
     title: "No immediate action",
     description: "There is no recommended action for this booking right now.",
   };
+
+  
+  
+
   const missedVisitEvents = booking.history.filter((h) =>
     h.note?.toLowerCase().includes("missed visit")
   );
 
-  const missedVisitEventCount = missedVisitEvents.length;
+  const unresolvedMissedEvents = missedVisitEvents.filter(
+    (h) => !h.missedVisitReviewStatus
+  );
+
+  const unresolvedMissedCount = unresolvedMissedEvents.length;
+  const totalMissedCount = missedVisitEvents.length;
 
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
@@ -263,22 +278,30 @@ export default async function OperatorBookingDetailPage({
           </div>
         </header>
 
-        {lateNoteCount > 0 || missedVisitEventCount > 0 ? (
+        {lateNoteCount > 0 || unresolvedMissedCount > 0 ? (
           <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm space-y-1">
             <p className="text-sm font-semibold text-amber-900">
               ⚠️ Booking requires attention
             </p>
 
-            {missedVisitEventCount > 0 && (
+            {totalMissedCount > 0 && (
               <p className="text-sm text-amber-800">
-                • {missedVisitEventCount} missed visit
-                {missedVisitEventCount > 1 ? "s" : ""}
+                • {totalMissedCount} missed visit
+                {totalMissedCount > 1 ? "s" : ""}
+              </p>
+            )}
+
+            {unresolvedMissedCount > 0 && (
+              <p className="text-sm text-red-700 font-medium">
+                • {unresolvedMissedCount} need
+                {unresolvedMissedCount === 1 ? "s" : ""} review
               </p>
             )}
 
             {lateNoteCount > 0 && (
               <p className="text-sm text-amber-800">
-                • {lateNoteCount} late completion{lateNoteCount > 1 ? "s" : ""}
+                • {lateNoteCount} late completion
+                {lateNoteCount > 1 ? "s" : ""}
               </p>
             )}
           </section>
@@ -521,6 +544,11 @@ export default async function OperatorBookingDetailPage({
             <div className="space-y-3 p-4">
               {booking.history.map((h) => {
                 const isLateNote = h.note?.toLowerCase().includes("late");
+                const isMissedVisitNote = h.note
+                  ?.toLowerCase()
+                  .includes("missed visit");
+                const needsReview =
+                  isMissedVisitNote && !h.missedVisitReviewStatus;
 
                 return (
                   <div key={h.id} className="text-sm">
@@ -571,6 +599,79 @@ export default async function OperatorBookingDetailPage({
                       >
                         {isLateNote ? "⚠️ " : ""}
                         {h.note}
+                      </div>
+                    ) : null}
+                    {needsReview ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <form
+                          action={reviewMissedVisitHistory.bind(null, {
+                            historyId: h.id,
+                            status: "EXCUSED",
+                            note: "Operator marked this missed visit as excused.",
+                          })}
+                        >
+                          <button
+                            type="submit"
+                            className="rounded-md border border-emerald-600 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white"
+                          >
+                            Excuse
+                          </button>
+                        </form>
+
+                        <form
+                          action={reviewMissedVisitHistory.bind(null, {
+                            historyId: h.id,
+                            status: "SITTER_FAULT",
+                            note: "Operator marked this missed visit as sitter fault.",
+                          })}
+                        >
+                          <button
+                            type="submit"
+                            className="rounded-md border border-red-600 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white"
+                          >
+                            Sitter fault
+                          </button>
+                        </form>
+
+                        <form
+                          action={reviewMissedVisitHistory.bind(null, {
+                            historyId: h.id,
+                            status: "NEEDS_FOLLOW_UP",
+                            note: "Operator marked this missed visit as needing follow-up.",
+                          })}
+                        >
+                          <button
+                            type="submit"
+                            className="rounded-md border border-amber-600 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-600 hover:text-white"
+                          >
+                            Follow up
+                          </button>
+                        </form>
+                      </div>
+                    ) : null}
+
+                    {h.missedVisitReviewStatus ? (
+                      <div
+                        className={`mt-2 rounded-md border px-2 py-1 text-xs ${
+                          h.missedVisitReviewStatus === "EXCUSED"
+                            ? "border-green-200 bg-green-50 text-green-900"
+                            : h.missedVisitReviewStatus === "SITTER_FAULT"
+                            ? "border-red-200 bg-red-50 text-red-900"
+                            : h.missedVisitReviewStatus === "NEEDS_FOLLOW_UP"
+                            ? "border-amber-200 bg-amber-50 text-amber-900"
+                            : "border-zinc-200 bg-zinc-50 text-zinc-700"
+                        }`}
+                      >
+                        Reviewed:{" "}
+                        <span className="font-semibold">
+                          {REVIEW_STATUS_LABELS[h.missedVisitReviewStatus] ??
+                            h.missedVisitReviewStatus}
+                        </span>
+                        {h.missedVisitReviewNote ? (
+                          <div className="mt-1 text-xs opacity-90">
+                            {h.missedVisitReviewNote}
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>

@@ -1,13 +1,19 @@
 // src/app/dashboard/operator/lib/sitterReliability.js
 
 export function getSitterReliability({
-  missedCount = 0,
-  lateCount = 0,
+  sitterFaultCount = 0,
+  excusedCount = 0, // not used in penalty but useful later
+  followUpCount = 0,
   unresolvedMissedCount = 0,
+  lateCount = 0,
 }) {
   const score = Math.max(
     0,
-    100 - missedCount * 25 - lateCount * 10 - unresolvedMissedCount * 35
+    100 -
+      sitterFaultCount * 25 -
+      followUpCount * 10 -
+      unresolvedMissedCount * 35 -
+      lateCount * 10
   );
 
   let level = "excellent";

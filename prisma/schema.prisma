@@ -147,12 +147,24 @@ model BookingHistory {
   fromSitterId    String?
   toSitterId      String?
   note            String?
-  booking         Booking        @relation(fields: [bookingId], references: [id])
-  changedBy       User?          @relation("HistoryChangedBy", fields: [changedByUserId], references: [id])
-  fromSitter      User?          @relation("HistoryFromSitter", fields: [fromSitterId], references: [id])
-  toSitter        User?          @relation("HistoryToSitter", fields: [toSitterId], references: [id])
+
+  // Missed visit review / accountability
+  missedVisitReviewStatus String?
+  missedVisitReviewedAt DateTime?
+  missedVisitReviewedById String?
+  missedVisitReviewNote String?
+
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  changedBy User?   @relation("HistoryChangedBy", fields: [changedByUserId], references: [id])
+
+  fromSitter User? @relation("HistoryFromSitter", fields: [fromSitterId], references: [id])
+  toSitter   User? @relation("HistoryToSitter", fields: [toSitterId], references: [id])
+
+  missedVisitReviewedBy User? @relation("MissedVisitReviewedBy", fields: [missedVisitReviewedById], references: [id])
 
   @@index([bookingId, createdAt])
+  @@index([missedVisitReviewStatus])
+  @@index([missedVisitReviewedById])
 }
 
 model User {
@@ -185,6 +197,9 @@ model User {
   historyEntries    BookingHistory[] @relation("HistoryChangedBy")
   historyFromSitter BookingHistory[] @relation("HistoryFromSitter")
   historyToSitter   BookingHistory[] @relation("HistoryToSitter")
+  
+  // Missed visit review relations
+  missedVisitReviews BookingHistory[] @relation("MissedVisitReviewedBy")
 }
 
 model Account {

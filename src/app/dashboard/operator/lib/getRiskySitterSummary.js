@@ -11,19 +11,35 @@ export function getRiskySitterSummary(bookings = [], now = new Date()) {
       sitterId: booking.sitterId,
       sitterName:
         booking.sitter.name || booking.sitter.email || "Unknown sitter",
-      missedCount: 0,
+      sitterFaultCount: 0,
+      followUpCount: 0,
+      excusedCount: 0,
       lateCount: 0,
       unresolvedMissedCount: 0,
     };
 
     const history = booking.history || [];
 
-    existing.missedCount += history.filter((h) =>
-      h.note?.toLowerCase().includes("missed visit")
+    existing.sitterFaultCount += history.filter(
+      (h) => h.missedVisitReviewStatus === "SITTER_FAULT"
+    ).length;
+
+    existing.followUpCount += history.filter(
+      (h) => h.missedVisitReviewStatus === "NEEDS_FOLLOW_UP"
+    ).length;
+
+    existing.excusedCount += history.filter(
+      (h) => h.missedVisitReviewStatus === "EXCUSED"
     ).length;
 
     existing.lateCount += history.filter((h) =>
       h.note?.toLowerCase().includes("late")
+    ).length;
+
+    existing.unresolvedMissedCount += history.filter(
+      (h) =>
+        h.note?.toLowerCase().includes("missed visit") &&
+        !h.missedVisitReviewStatus
     ).length;
 
     existing.unresolvedMissedCount += (booking.visits || []).filter((v) => {
@@ -42,7 +58,9 @@ export function getRiskySitterSummary(bookings = [], now = new Date()) {
     .map((sitter) => ({
       ...sitter,
       reliability: getSitterReliability({
-        missedCount: sitter.missedCount,
+        sitterFaultCount: sitter.sitterFaultCount,
+        followUpCount: sitter.followUpCount,
+        excusedCount: sitter.excusedCount,
         lateCount: sitter.lateCount,
         unresolvedMissedCount: sitter.unresolvedMissedCount,
       }),

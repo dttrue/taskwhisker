@@ -536,3 +536,51 @@ export async function assignSitter(arg1, arg2) {
   revalidateOperator(bookingId);
   return { ok: true };
 }
+
+// ---- REVIEW MISSED VISIT ----
+export async function reviewMissedVisitHistory({
+  historyId,
+  status, // "EXCUSED" | "SITTER_FAULT" | "NEEDS_FOLLOW_UP"
+  note,
+}) {
+  const session = await requireRole(["OPERATOR"]);
+  const actorId = await getActorId(session);
+
+  if (!historyId) {
+    return { ok: false, error: "Missing historyId." };
+  }
+
+  if (!["EXCUSED", "SITTER_FAULT", "NEEDS_FOLLOW_UP"].includes(status)) {
+    return { ok: false, error: "Invalid review status." };
+  }
+
+  const history = await prisma.bookingHistory.findUnique({
+    where: { id: historyId },
+    select: {
+      id: true,
+      bookingId: true,
+      missedVisitReviewStatus: true,
+    },
+  });
+
+  if (!history) {
+    return { ok: false, error: "History entry not found." };
+  }
+  
+  if (history.missedVisitReviewStatus) {
+    return { ok: false, error: "Already reviewed." };
+  }
+
+  await prisma.bookingHistory.update({
+    where: { id: historyId },
+    data: {
+      missedVisitReviewStatus: status,
+      missedVisitReviewedAt: new Date(),
+      missedVisitReviewedById: actorId,
+      missedVisitReviewNote: note || null,
+    },
+  });
+
+  revalidatePath(`/dashboard/operator/bookings/${bookingId}`);
+  return { ok: true };
+}
