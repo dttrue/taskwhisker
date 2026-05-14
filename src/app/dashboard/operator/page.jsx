@@ -5,7 +5,7 @@ import {
   cancelBooking,
   completeBooking,
 } from "./bookings/actions";
-
+import Link from "next/link";
 import MetricsBar from "./_components/MetricsBar";
 import DateRangeFilter from "./_components/DateRangeFilter";
 import BookingsTable from "./_components/BookingsTable";
@@ -23,6 +23,8 @@ import {
   getNeedsAttentionBooking,
 } from "./lib/dashboardUtils";
 import { bookingNeedsReview } from "./lib/bookingNeedsReview";
+
+
 
 
 function StatCard({ label, value, subtext }) {
@@ -246,22 +248,30 @@ export default async function OperatorDashboard({ searchParams }) {
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
       <div className="max-w-6xl mx-auto space-y-6">
-        <header className="space-y-1">
-          <div className="text-xs uppercase tracking-wide text-zinc-500">
-            Internal MVP
+        <header className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold text-zinc-900">
+              Operator Dashboard
+            </h1>
+
+            <p className="text-sm text-zinc-600">
+              Signed in as{" "}
+              <span className="font-medium">{session.user.email}</span> ·{" "}
+              <span className="uppercase text-xs tracking-wide">
+                {session.user.role}
+              </span>
+            </p>
           </div>
 
-          <h1 className="text-2xl font-semibold text-zinc-900">
-            Operator Dashboard
-          </h1>
-
-          <p className="text-sm text-zinc-600">
-            Signed in as{" "}
-            <span className="font-medium">{session.user.email}</span> ·{" "}
-            <span className="uppercase text-xs tracking-wide">
-              {session.user.role}
-            </span>
-          </p>
+          {/* 🚨 TRIAGE BUTTON */}
+          {needsReviewCount > 0 && (
+            <Link
+              href="/dashboard/operator/triage"
+              className="inline-block rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+            >
+              🔴 {needsReviewCount} need review
+            </Link>
+          )}
         </header>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">

@@ -4,6 +4,7 @@
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/auth";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 async function getActorId(session) {
   if (session?.user?.id) {
@@ -25,6 +26,89 @@ async function getActorId(session) {
   throw new Error("Stale session: user not found. Sign out and sign back in.");
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function reviewMissedVisit({
+  visitId,
+  status,
+  note,
+  isTriageMode = false,
+  nextBookingId = null,
+}) {
+  const session = await requireRole(["OPERATOR"]);
+  const actorId = await getActorId(session);
+
+  if (!visitId) {
+    return { ok: false, error: "Missing visitId." };
+  }
+
+  if (!["EXCUSED", "SITTER_FAULT", "NEEDS_FOLLOW_UP"].includes(status)) {
+    return { ok: false, error: "Invalid review status." };
+  }
+
+  const visit = await prisma.visit.findUnique({
+    where: { id: visitId },
+    select: {
+      id: true,
+      bookingId: true,
+      status: true,
+      endTime: true,
+    },
+  });
+
+  if (!visit) {
+    return { ok: false, error: "Visit not found." };
+  }
+
+  if (visit.status !== "CONFIRMED") {
+    return {
+      ok: false,
+      error: "Only unresolved confirmed visits can be reviewed.",
+    };
+  }
+
+  const now = new Date();
+  const end = new Date(visit.endTime);
+
+  if (Number.isNaN(end.getTime()) || end >= now) {
+    return { ok: false, error: "This visit is not overdue yet." };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.visit.update({
+      where: { id: visit.id },
+      data: {
+        status: "CANCELED",
+      },
+    });
+
+    await tx.bookingHistory.create({
+      data: {
+        bookingId: visit.bookingId,
+        changedByUserId: actorId,
+        note: note || "Operator reviewed overdue missed visit.",
+        missedVisitReviewStatus: status,
+        missedVisitReviewedAt: now,
+        missedVisitReviewedById: actorId,
+        missedVisitReviewNote: note || null,
+      },
+    });
+  });
+
+  revalidatePath("/dashboard/operator");
+  revalidatePath(`/dashboard/operator/bookings/${visit.bookingId}`);
+  revalidatePath("/dashboard/sitter");
+
+  if (isTriageMode && nextBookingId) {
+    // Let the UI show "Saving..." before navigating
+    await sleep(400); // 300–500ms is ideal
+
+    redirect(`/dashboard/operator/bookings/${nextBookingId}?mode=triage`);
+  }
+  return { ok: true };
+}
 async function resolveAssignableSitterIdForOperator(session) {
   const operatorEmail = session?.user?.email;
   if (!operatorEmail) return null;

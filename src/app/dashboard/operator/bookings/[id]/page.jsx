@@ -3,7 +3,12 @@ import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cancelBooking, reviewMissedVisitHistory } from "../actions";
+import ReviewSubmitButton from "@/app/dashboard/operator/_components/ReviewSubmitButton";
+import {
+  cancelBooking,
+  reviewMissedVisitHistory,
+  reviewMissedVisit,
+} from "../actions";
 import { getBookingNextAction } from "@/lib/getBookingNextAction";
 import CollapsibleCard from "@/components/ui/CollapsibleCard";
 import CancelBookingDetailForm from "@/app/dashboard/operator/_components/CancelBookingDetailForm";
@@ -18,7 +23,7 @@ import {
   STATUS_PILL_CLASSES,
   STATUS_CARD_BORDER_CLASSES,
 } from "@/lib/statusStyles";
-
+import { getNextBookingNeedingReview } from "../../lib/getNextBookingNeedingReview";
 function formatMoney(cents = 0) {
   return `$${(cents / 100).toFixed(2)}`;
 }
@@ -134,7 +139,7 @@ export default async function OperatorBookingDetailPage({
 
   const { id } = await Promise.resolve(params);
   const sp = await Promise.resolve(searchParams);
-
+  const isTriageMode = sp?.mode === "triage";
   if (!id) notFound();
 
   const qs = new URLSearchParams(sp || {}).toString();
@@ -169,6 +174,8 @@ export default async function OperatorBookingDetailPage({
     );
   }
 
+  
+
   const sitters = await prisma.user.findMany({
     where: { role: "SITTER" },
     select: { id: true, name: true, email: true },
@@ -198,9 +205,6 @@ export default async function OperatorBookingDetailPage({
     description: "There is no recommended action for this booking right now.",
   };
 
-  
-  
-
   const missedVisitEvents = booking.history.filter((h) =>
     h.note?.toLowerCase().includes("missed visit")
   );
@@ -211,6 +215,36 @@ export default async function OperatorBookingDetailPage({
 
   const unresolvedMissedCount = unresolvedMissedEvents.length;
   const totalMissedCount = missedVisitEvents.length;
+
+  const now = new Date();
+
+  const unresolvedMissedVisits = booking.visits.filter((visit) => {
+    if (visit.status !== "CONFIRMED") return false; 
+
+    const end = new Date(visit.endTime);
+    if (Number.isNaN(end.getTime())) return false;
+
+    return end < now;
+  });
+
+  const shouldAutoAdvanceAfterThisVisit = unresolvedMissedVisits.length === 1;
+
+  const allBookings = await prisma.booking.findMany({
+    where: {
+      operatorId: booking.operatorId,
+      status: "CONFIRMED",
+    },
+    include: {
+      visits: true,
+      history: true,
+    },
+  });
+
+  const nextBooking = getNextBookingNeedingReview(allBookings, booking.id, now);
+
+  if (isTriageMode && unresolvedMissedVisits.length === 0 && nextBooking) {
+    redirect(`/dashboard/operator/bookings/${nextBooking.id}?mode=triage`);
+  }
 
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
@@ -306,6 +340,113 @@ export default async function OperatorBookingDetailPage({
             )}
           </section>
         ) : null}
+
+        {/* 🔥 ADD IT HERE — NOT INSIDE */}
+        {unresolvedMissedVisits.length > 0 && (
+          <section className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm space-y-3">
+            <p className="text-sm font-semibold text-red-900">
+              🚨 Missed visits need review
+            </p>
+
+            {unresolvedMissedVisits.map((visit) => (
+              <div
+                key={visit.id}
+                className="rounded-lg border border-red-200 bg-white p-3 text-sm"
+              >
+                <div className="text-zinc-900 font-medium">
+                  Missed visit: {formatDateOnly(visit.startTime)} ·{" "}
+                  {formatTimeOnly(visit.startTime)}
+                </div>
+
+                <div className="text-xs text-zinc-500 mt-1">
+                  Ended at {formatTimeOnly(visit.endTime)}
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <form
+                    action={reviewMissedVisit.bind(null, {
+                      visitId: visit.id,
+                      status: "EXCUSED",
+                      note: "Operator marked as excused",
+                      isTriageMode,
+                      nextBookingId: shouldAutoAdvanceAfterThisVisit
+                        ? nextBooking?.id || null
+                        : null,
+                    })}
+                  >
+                    <ReviewSubmitButton
+                      pendingText="Excusing..."
+                      className="rounded-md border border-emerald-600 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white"
+                    >
+                      Excuse
+                    </ReviewSubmitButton>
+                  </form>
+
+                  <form
+                    action={reviewMissedVisit.bind(null, {
+                      visitId: visit.id,
+                      status: "SITTER_FAULT",
+                      note: "Operator marked sitter fault",
+                      isTriageMode,
+                      nextBookingId: shouldAutoAdvanceAfterThisVisit
+                        ? nextBooking?.id || null
+                        : null,
+                    })}
+                  >
+                    <ReviewSubmitButton
+                      pendingText="Saving..."
+                      className="rounded-md border border-red-600 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white"
+                    >
+                      Sitter fault
+                    </ReviewSubmitButton>
+                  </form>
+
+                  <form
+                    action={reviewMissedVisit.bind(null, {
+                      visitId: visit.id,
+                      status: "NEEDS_FOLLOW_UP",
+                      note: "Operator marked follow-up",
+                      isTriageMode,
+                      nextBookingId: shouldAutoAdvanceAfterThisVisit
+                        ? nextBooking?.id || null
+                        : null,
+                    })}
+                  >
+                    <ReviewSubmitButton
+                      pendingText="Saving..."
+                      className="rounded-md border border-amber-600 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-600 hover:text-white"
+                    >
+                      Follow up
+                    </ReviewSubmitButton>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {isTriageMode && (
+          <p className="text-xs text-zinc-500 mt-2">
+            Moving through unresolved bookings
+          </p>
+        )}
+
+        {isTriageMode && nextBooking && unresolvedMissedVisits.length > 1 && (
+          <div className="flex justify-end">
+            <Link
+              href={`/dashboard/operator/bookings/${nextBooking.id}?mode=triage`}
+              className="inline-block rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              Skip to next issue →
+            </Link>
+          </div>
+        )}
+
+        {!nextBooking && unresolvedMissedVisits.length === 0 && (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-800">
+            ✅ All triage issues resolved
+          </div>
+        )}
 
         {/* Next Action */}
         <section
