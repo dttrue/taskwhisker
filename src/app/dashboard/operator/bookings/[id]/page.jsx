@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ReviewSubmitButton from "@/app/dashboard/operator/_components/ReviewSubmitButton";
+import MissedVisitCard from "@/app/dashboard/operator/_components/MissedVisitCard";
 import {
   cancelBooking,
   reviewMissedVisitHistory,
@@ -301,10 +302,19 @@ export default async function OperatorBookingDetailPage({
               </div>
             </div>
 
-            <div className="flex items-start justify-end">
+            <div className="flex flex-col items-end gap-2 text-sm">
+              {isTriageMode && (
+                <Link
+                  href="/dashboard/operator/triage"
+                  className="underline text-red-700 hover:text-red-900"
+                >
+                  ← Back to triage queue
+                </Link>
+              )}
+
               <Link
-                className="text-sm underline text-zinc-600 hover:text-zinc-900"
                 href={backHref}
+                className="underline text-zinc-600 hover:text-zinc-900"
               >
                 Back to list
               </Link>
@@ -349,82 +359,20 @@ export default async function OperatorBookingDetailPage({
             </p>
 
             {unresolvedMissedVisits.map((visit) => (
-              <div
+              <MissedVisitCard
                 key={visit.id}
-                className="rounded-lg border border-red-200 bg-white p-3 text-sm"
-              >
-                <div className="text-zinc-900 font-medium">
-                  Missed visit: {formatDateOnly(visit.startTime)} ·{" "}
-                  {formatTimeOnly(visit.startTime)}
-                </div>
-
-                <div className="text-xs text-zinc-500 mt-1">
-                  Ended at {formatTimeOnly(visit.endTime)}
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <form
-                    action={reviewMissedVisit.bind(null, {
-                      visitId: visit.id,
-                      status: "EXCUSED",
-                      note: "Operator marked as excused",
-                      isTriageMode,
-                      nextBookingId: shouldAutoAdvanceAfterThisVisit
-                        ? nextBooking?.id || null
-                        : null,
-                    })}
-                  >
-                    <ReviewSubmitButton
-                      pendingText="Excusing..."
-                      className="rounded-md border border-emerald-600 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white"
-                    >
-                      Excuse
-                    </ReviewSubmitButton>
-                  </form>
-
-                  <form
-                    action={reviewMissedVisit.bind(null, {
-                      visitId: visit.id,
-                      status: "SITTER_FAULT",
-                      note: "Operator marked sitter fault",
-                      isTriageMode,
-                      nextBookingId: shouldAutoAdvanceAfterThisVisit
-                        ? nextBooking?.id || null
-                        : null,
-                    })}
-                  >
-                    <ReviewSubmitButton
-                      pendingText="Saving..."
-                      className="rounded-md border border-red-600 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white"
-                    >
-                      Sitter fault
-                    </ReviewSubmitButton>
-                  </form>
-
-                  <form
-                    action={reviewMissedVisit.bind(null, {
-                      visitId: visit.id,
-                      status: "NEEDS_FOLLOW_UP",
-                      note: "Operator marked follow-up",
-                      isTriageMode,
-                      nextBookingId: shouldAutoAdvanceAfterThisVisit
-                        ? nextBooking?.id || null
-                        : null,
-                    })}
-                  >
-                    <ReviewSubmitButton
-                      pendingText="Saving..."
-                      className="rounded-md border border-amber-600 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-600 hover:text-white"
-                    >
-                      Follow up
-                    </ReviewSubmitButton>
-                  </form>
-                </div>
-              </div>
+                visit={visit}
+                reviewMissedVisit={reviewMissedVisit}
+                isTriageMode={isTriageMode}
+                nextBookingId={
+                  shouldAutoAdvanceAfterThisVisit
+                    ? nextBooking?.id || null
+                    : null
+                }
+              />
             ))}
           </section>
         )}
-
         {isTriageMode && (
           <p className="text-xs text-zinc-500 mt-2">
             Moving through unresolved bookings
@@ -443,8 +391,21 @@ export default async function OperatorBookingDetailPage({
         )}
 
         {!nextBooking && unresolvedMissedVisits.length === 0 && (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-800">
-            ✅ All triage issues resolved
+          <div className="rounded-xl border border-green-200 bg-green-50 p-4 shadow-sm">
+            <p className="text-sm font-semibold text-green-900">
+              ✅ Triage complete
+            </p>
+
+            <p className="mt-1 text-sm text-green-800">
+              All unresolved booking issues have been reviewed.
+            </p>
+
+            <Link
+              href="/dashboard/operator/triage"
+              className="mt-3 inline-block text-sm font-medium text-green-900 underline hover:text-green-700"
+            >
+              Return to triage queue
+            </Link>
           </div>
         )}
 

@@ -49,10 +49,10 @@ export default async function OperatorTriagePage() {
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
       <div className="mx-auto max-w-5xl space-y-6">
         <p className="text-sm font-medium text-zinc-600">
-          {bookings.length === 0
+          {triageBookings.length === 0
             ? "✅ All issues resolved"
-            : `${bookings.length} issue${
-                bookings.length > 1 ? "s" : ""
+            : `${triageBookings.length} issue${
+                triageBookings.length > 1 ? "s" : ""
               } remaining`}
         </p>
         <header className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
@@ -122,7 +122,7 @@ export default async function OperatorTriagePage() {
                       </span>
 
                       <Link
-                        href={`/dashboard/operator/bookings/${booking.id}?review=needs-review`}
+                        href={`/dashboard/operator/bookings/${booking.id}?review=needs-review&mode=triage`}
                         className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
                       >
                         Review booking
