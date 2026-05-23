@@ -85,6 +85,8 @@ model Booking {
   operator User  @relation("BookingOperator", fields: [operatorId], references: [id])
   sitter   User? @relation("BookingSitter", fields: [sitterId], references: [id])
 
+  conversation Conversation?
+
   // 🔹 CHILD VISITS
   visits Visit[]
 
@@ -111,9 +113,9 @@ model BookingLineItem {
 }
 
 model Visit {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   completedAt DateTime?
 
   bookingId String
@@ -150,9 +152,9 @@ model BookingHistory {
 
   // Missed visit review / accountability
   missedVisitReviewStatus String?
-  missedVisitReviewedAt DateTime?
+  missedVisitReviewedAt   DateTime?
   missedVisitReviewedById String?
-  missedVisitReviewNote String?
+  missedVisitReviewNote   String?
 
   booking   Booking @relation(fields: [bookingId], references: [id])
   changedBy User?   @relation("HistoryChangedBy", fields: [changedByUserId], references: [id])
@@ -197,9 +199,44 @@ model User {
   historyEntries    BookingHistory[] @relation("HistoryChangedBy")
   historyFromSitter BookingHistory[] @relation("HistoryFromSitter")
   historyToSitter   BookingHistory[] @relation("HistoryToSitter")
-  
+
   // Missed visit review relations
   missedVisitReviews BookingHistory[] @relation("MissedVisitReviewedBy")
+
+  sentMessages Message[] @relation("MessageSender")
+}
+
+model Conversation {
+  id        String  @id @default(cuid())
+  bookingId String  @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  senderUserId String?
+  senderUser   User?   @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+
+  senderType  MessageSenderType
+  messageType MessageType       @default(TEXT)
+
+  body String
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderUserId])
+  @@index([senderType])
 }
 
 model Account {
@@ -286,4 +323,17 @@ enum VisitStatus {
   CONFIRMED
   COMPLETED
   CANCELED
+}
+
+enum MessageSenderType {
+  CLIENT
+  SITTER
+  OPERATOR
+  SYSTEM
+}
+
+enum MessageType {
+  TEXT
+  SYSTEM
+  ALERT
 }

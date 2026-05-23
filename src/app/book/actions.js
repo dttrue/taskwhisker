@@ -3,7 +3,7 @@
 
 import { prisma } from "@/lib/db";
 import { BookingStatus, VisitStatus } from "@prisma/client";
-
+import { createSystemMessage } from "@/lib/messaging/createSystemMessage";
 import { publicBookingSchema } from "./bookingSchemas";
 import { assertValidTimeRange } from "./bookingTimeUtils";
 import { combineDateTime, getDateListFromRange } from "./bookingDateUtils";
@@ -452,6 +452,12 @@ export async function createPublicBooking(rawInput) {
         changedByUserId: null,
         note: "Booking created by client via public booking link.",
       },
+    });
+
+    await createSystemMessage({
+      tx,
+      bookingId: booking.id,
+      body: "Booking request created.",
     });
 
     const result = await tx.booking.findUnique({

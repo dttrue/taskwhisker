@@ -136,6 +136,13 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
           View booking
         </Link>
 
+        <Link
+          href={`/dashboard/sitter/messages/${bookingId}`}
+          className="inline-flex items-center rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+        >
+          Message client
+        </Link>
+
         {isCompletable ? (
           <form
             action={async (formData) => {
