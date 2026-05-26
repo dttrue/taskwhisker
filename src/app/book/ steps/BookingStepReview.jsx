@@ -1,6 +1,6 @@
 // src/app/book/steps/BookingStepReview.jsx
 "use client";
-
+import Link from "next/link";
 import { useMemo } from "react";
 import { formatTimeSlots, formatTime12h } from "../bookingFormUtils";
 import { formatServiceAddress } from "@/lib/formatAddress";
@@ -284,7 +284,18 @@ export default function BookingStepReview({
 
       {booking && (
         <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-          Booking created! ID: <span className="font-mono">{booking.id}</span>
+          <p>
+            Booking created! ID: <span className="font-mono">{booking.id}</span>
+          </p>
+
+          {booking.clientLinkToken ? (
+            <Link
+              href={`/client/bookings/${booking.clientLinkToken}/messages`}
+              className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800"
+            >
+              Message sitter
+            </Link>
+          ) : null}
         </div>
       )}
     </div>

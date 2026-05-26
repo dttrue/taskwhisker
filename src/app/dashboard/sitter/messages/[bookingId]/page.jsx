@@ -1,6 +1,8 @@
 // src/app/dashboard/sitter/messages/[bookingId]/page.jsx
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/db";
 import { getBookingConversation } from "@/lib/messaging/getBookingConversation";
 import SitterMessageForm from "./SitterMessageForm";
 import MessageAutoRefresh from "@/components/messaging/MessageAutoRefresh";
@@ -26,6 +28,26 @@ function getSenderLabel(message) {
 export default async function SitterBookingMessagesPage({ params }) {
   const { bookingId } = await params;
 
+  const session = await auth();
+
+  if (!session?.user?.email) {
+    redirect("/login");
+  }
+
+  const sitter = await prisma.user.findUnique({
+    where: {
+      email: session.user.email,
+    },
+  });
+
+  if (!sitter) {
+    redirect("/login");
+  }
+
+  if (sitter.role !== "SITTER") {
+    redirect("/dashboard/operator");
+  }
+
   const conversation = await getBookingConversation(bookingId);
 
   if (!conversation) {
@@ -33,6 +55,10 @@ export default async function SitterBookingMessagesPage({ params }) {
   }
 
   const { booking, messages } = conversation;
+
+  if (booking.sitterId !== sitter.id) {
+    notFound();
+  }
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6">

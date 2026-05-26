@@ -7,7 +7,6 @@ import { createSystemMessage } from "@/lib/messaging/createSystemMessage";
 import { publicBookingSchema } from "./bookingSchemas";
 import { assertValidTimeRange } from "./bookingTimeUtils";
 import { combineDateTime, getDateListFromRange } from "./bookingDateUtils";
-import { checkConflictsForOperator } from "./bookingConflictUtils";
 import { checkAvailability } from "@/lib/calendar/checkAvailability";
 import { formatServiceAddress } from "@/lib/formatAddress";
 import { geocodeAddress } from "@/lib/geocodeAddress";
@@ -76,6 +75,20 @@ export async function createPublicBooking(rawInput) {
   if (!operator) {
     throw new Error("Operator user not found in DB. Check your seed data.");
   }
+
+  const defaultSitter = await prisma.user.findFirst({
+    where: {
+      email: "lunajobs13@gmail.com",
+      role: "SITTER",
+    },
+  });
+  if (!defaultSitter) {
+    throw new Error(
+      "Default sitter user not found in DB. Check your seed data."
+    );
+  }
+
+  const defaultSitterId = defaultSitter.id;
 
   const operatorId = operator.id;
 
@@ -190,10 +203,10 @@ export async function createPublicBooking(rawInput) {
   }
 
   // Real availability enforcement using the same engine that powers slot blocking.
-  // For now, public bookings are checked against the operator's schedule.
+  // Public bookings are checked against the default sitter's schedule.
   for (const v of visitWindows) {
     const availability = await checkAvailability({
-      sitterId: operatorId,
+      sitterId: defaultSitterId,
       startTime: v.startTime,
       endTime: v.endTime,
       bufferMinutes: BUFFER_MINUTES,
@@ -214,22 +227,7 @@ export async function createPublicBooking(rawInput) {
     }
   }
 
-  // Keep the operator conflict check as an additional safeguard.
-  const conflictCheck = await checkConflictsForOperator({
-    operatorId,
-    visits: visitWindows.map((v) => ({
-      startTime: v.startTime,
-      endTime: v.endTime,
-    })),
-  });
-
-  if (conflictCheck.hasConflict) {
-    return {
-      ok: false,
-      error: "Requested time conflicts with an existing booking.",
-      conflictVisitId: conflictCheck.conflictVisitId,
-    };
-  }
+  
 
   const visitsCount = visitWindows.length;
   const baseServiceTotalCents = pricePerVisitCents * visitsCount;
@@ -370,6 +368,7 @@ export async function createPublicBooking(rawInput) {
       data: {
         client: { connect: { id: dbClient.id } },
         operator: { connect: { id: operatorId } },
+        sitter: { connect: { id: defaultSitterId } },
 
         startTime: earliestStart,
         endTime: latestEnd,
@@ -434,7 +433,7 @@ export async function createPublicBooking(rawInput) {
           data: {
             bookingId: booking.id,
             operatorId,
-            sitterId: null,
+            sitterId: defaultSitterId,
             date: new Date(`${v.dateStr}T00:00:00`),
             startTime: v.startTime,
             endTime: v.endTime,
@@ -480,6 +479,7 @@ export async function createPublicBooking(rawInput) {
     ok: true,
     booking: {
       id: fullBooking.id,
+      clientLinkToken: fullBooking.clientLinkToken,
       status: fullBooking.status,
       serviceSummary: fullBooking.serviceSummary,
       serviceType: fullBooking.serviceType,

@@ -2,6 +2,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 
 export async function sendSitterBookingMessage(formData) {
@@ -14,6 +16,44 @@ export async function sendSitterBookingMessage(formData) {
 
   if (!body) {
     throw new Error("Message cannot be empty.");
+  }
+
+  const session = await auth();
+
+  if (!session?.user?.email) {
+    redirect("/login");
+  }
+
+  const sitter = await prisma.user.findUnique({
+    where: {
+      email: session.user.email,
+    },
+  });
+
+  if (!sitter) {
+    redirect("/login");
+  }
+
+  if (sitter.role !== "SITTER") {
+    redirect("/dashboard/operator");
+  }
+
+  const booking = await prisma.booking.findUnique({
+    where: {
+      id: bookingId,
+    },
+    select: {
+      id: true,
+      sitterId: true,
+    },
+  });
+
+  if (!booking) {
+    throw new Error("Booking not found.");
+  }
+
+  if (booking.sitterId !== sitter.id) {
+    throw new Error("You do not have permission to message this client.");
   }
 
   const conversation = await prisma.conversation.upsert({
@@ -29,6 +69,7 @@ export async function sendSitterBookingMessage(formData) {
   await prisma.message.create({
     data: {
       conversationId: conversation.id,
+      senderUserId: sitter.id,
       senderType: "SITTER",
       messageType: "TEXT",
       body,
@@ -36,5 +77,6 @@ export async function sendSitterBookingMessage(formData) {
   });
 
   revalidatePath(`/dashboard/sitter/messages/${bookingId}`);
+  revalidatePath(`/dashboard/sitter/messages`);
   revalidatePath(`/dashboard/messages/${bookingId}`);
 }
