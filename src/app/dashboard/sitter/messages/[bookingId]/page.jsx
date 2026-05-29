@@ -4,8 +4,10 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getBookingConversation } from "@/lib/messaging/getBookingConversation";
+import { markConversationRead } from "@/lib/messaging/readState";
 import SitterMessageForm from "./SitterMessageForm";
 import MessageAutoRefresh from "@/components/messaging/MessageAutoRefresh";
+
 function formatDateTime(value) {
   if (!value) return "—";
 
@@ -60,9 +62,16 @@ export default async function SitterBookingMessagesPage({ params }) {
     notFound();
   }
 
+  await markConversationRead({
+    conversationId: conversation.id,
+    userId: sitter.id,
+    participantType: "SITTER",
+  });
+
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6">
       <MessageAutoRefresh intervalMs={10000} />
+
       <div className="mx-auto max-w-xl space-y-4">
         <Link
           href="/dashboard/sitter"

@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getSitterConversations } from "@/lib/messaging/getSitterConversations";
-
+import { countUnreadMessagesForParticipant } from "@/lib/messaging/readState";
+import MessageAutoRefresh from "@/components/messaging/MessageAutoRefresh";
 function formatDateTime(value) {
   if (!value) return "—";
 
@@ -50,8 +51,6 @@ function getMessagePreview(message) {
 }
 
 export default async function SitterMessagesInboxPage() {
-  // TEMP DEV TEST:
-  // Later we replace this with the logged-in sitter session user.
   const session = await auth();
 
   if (!session?.user?.email) {
@@ -72,34 +71,14 @@ export default async function SitterMessagesInboxPage() {
     redirect("/dashboard/operator");
   }
 
-  if (!sitter) {
-    return (
-      <main className="min-h-screen bg-zinc-50 px-4 py-6">
-        <div className="mx-auto max-w-xl space-y-4">
-          <Link
-            href="/dashboard/sitter"
-            className="text-sm text-zinc-600 underline hover:text-zinc-900"
-          >
-            Back to sitter dashboard
-          </Link>
-
-          <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <h1 className="text-2xl font-bold text-zinc-950">Inbox</h1>
-            <p className="mt-2 text-sm text-zinc-500">
-              No sitter user found. Seed or create a sitter first.
-            </p>
-          </section>
-        </div>
-      </main>
-    );
-  }
-
   const conversations = await getSitterConversations({
     sitterId: sitter.id,
   });
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6 pb-24">
+      <MessageAutoRefresh intervalMs={10000} />
+
       <div className="mx-auto max-w-xl space-y-4">
         <Link
           href="/dashboard/sitter"
@@ -129,16 +108,29 @@ export default async function SitterMessagesInboxPage() {
           ) : (
             conversations.map((conversation) => {
               const booking = conversation.booking;
-              const latestMessage = conversation.messages[0];
+              const latestMessage = conversation.messages?.[0] ?? null;
+              const participant = conversation.participants?.[0] ?? null;
+
+              const unreadCount = countUnreadMessagesForParticipant({
+                messages: conversation.messages ?? [],
+                lastReadAt: participant?.lastReadAt ?? null,
+                unreadSenderTypes: ["CLIENT"],
+              });
+
+              const hasUnread = unreadCount > 0;
 
               return (
                 <Link
                   key={conversation.id}
                   href={`/dashboard/sitter/messages/${booking.id}`}
-                  className="block rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-400 hover:shadow-md"
+                  className={`block rounded-2xl border bg-white p-4 shadow-sm transition hover:border-zinc-400 hover:shadow-md ${
+                    hasUnread
+                      ? "border-emerald-400 ring-2 ring-emerald-100"
+                      : "border-zinc-200"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <h2 className="text-base font-bold text-zinc-950">
                         {booking.client?.name || "Client"}
                       </h2>
@@ -151,14 +143,28 @@ export default async function SitterMessagesInboxPage() {
                       </p>
                     </div>
 
-                    <p className="shrink-0 text-xs text-zinc-500">
-                      {formatShortDate(
-                        latestMessage?.createdAt || booking.updatedAt
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      {hasUnread && (
+                        <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-red-600 px-2 py-1 text-xs font-black leading-none text-white shadow-md ring-2 ring-white">
+                          {unreadCount}
+                        </span>
                       )}
-                    </p>
+
+                      <p className="text-xs text-zinc-500">
+                        {formatShortDate(
+                          latestMessage?.createdAt || booking.updatedAt
+                        )}
+                      </p>
+                    </div>
                   </div>
 
-                  <p className="mt-3 line-clamp-2 text-sm text-zinc-700">
+                  <p
+                    className={`mt-3 line-clamp-2 text-sm ${
+                      hasUnread
+                        ? "font-semibold text-zinc-950"
+                        : "text-zinc-700"
+                    }`}
+                  >
                     {getMessagePreview(latestMessage)}
                   </p>
 

@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 function HomeIcon() {
   return (
@@ -68,81 +69,152 @@ function SettingsIcon() {
   );
 }
 
-const navItems = [
-  {
-    label: "Home",
-    href: "/dashboard/sitter",
-    icon: <HomeIcon />,
-  },
-  {
-    label: "Inbox",
-    href: "/dashboard/sitter/messages",
-    icon: <InboxIcon />,
-  },
-  {
-    label: "Settings",
-    href: "/dashboard/sitter/settings",
-    icon: <SettingsIcon />,
-  },
-];
-
 export default function SitterMobileDock() {
   const pathname = usePathname();
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
-  
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadUnreadCount() {
+      try {
+        const res = await fetch("/api/sitter/unread-messages", {
+          cache: "no-store",
+        });
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        if (isMounted) {
+          setUnreadMessagesCount(Number(data.count || 0));
+        }
+      } catch (error) {
+        console.error("Failed to load sitter unread message count:", error);
+      }
+    }
+
+    loadUnreadCount();
+
+    const interval = setInterval(loadUnreadCount, 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [pathname]);
+
+  const navItems = [
+    {
+      label: "Home",
+      href: "/dashboard/sitter",
+      icon: <HomeIcon />,
+      badgeCount: 0,
+    },
+    {
+      label: "Inbox",
+      href: "/dashboard/sitter/messages",
+      icon: <InboxIcon />,
+      badgeCount: unreadMessagesCount,
+    },
+    {
+      label: "Settings",
+      href: "/dashboard/sitter/settings",
+      icon: <SettingsIcon />,
+      badgeCount: 0,
+    },
+  ];
 
   return (
-  <nav
-    style={{
-      position: "fixed",
-      left: 0,
-      right: 0,
-      bottom: 0,
-      zIndex: 999999,
-      height: 58,
-      background: "white",
-      borderTop: "1px solid #e4e4e7",
-      boxShadow: "0 -3px 10px rgba(0,0,0,0.08)",
-    }}
-  >
-    <div
+    <nav
       style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
-        height: "100%",
-        maxWidth: 480,
-        margin: "0 auto",
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 999999,
+        height: 58,
+        background: "white",
+        borderTop: "1px solid #e4e4e7",
+        boxShadow: "0 -3px 10px rgba(0,0,0,0.08)",
       }}
     >
-      {navItems.map((item) => {
-        const isActive =
-          pathname === item.href ||
-          (item.href !== "/dashboard/sitter" &&
-            pathname.startsWith(`${item.href}/`));
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          height: "100%",
+          maxWidth: 480,
+          margin: "0 auto",
+        }}
+      >
+        {navItems.map((item) => {
+          const isActive =
+            pathname === item.href ||
+            (item.href !== "/dashboard/sitter" &&
+              pathname.startsWith(`${item.href}/`));
 
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 2,
-              fontSize: 11,
-              fontWeight: 700,
-              background: isActive ? "#18181b" : "white",
-              color: isActive ? "white" : "#71717a",
-              textDecoration: "none",
-            }}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </Link>
-        );
-      })}
-    </div>
-  </nav>
-);
+          const showBadge = Number(item.badgeCount) > 0;
+          const badgeLabel =
+            Number(item.badgeCount) > 99 ? "99+" : String(item.badgeCount);
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 2,
+                fontSize: 11,
+                fontWeight: 700,
+                background: isActive ? "#18181b" : "white",
+                color: isActive ? "white" : "#71717a",
+                textDecoration: "none",
+                position: "relative",
+              }}
+            >
+              {showBadge && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 5,
+                    right: "calc(50% - 28px)",
+                    minWidth: 18,
+                    height: 18,
+                    padding: "0 5px",
+                    borderRadius: 999,
+                    background: "#dc2626",
+                    color: "white",
+                    fontSize: 11,
+                    fontWeight: 900,
+                    lineHeight: "18px",
+                    textAlign: "center",
+                    boxShadow: "0 0 0 2px white",
+                    zIndex: 10,
+                  }}
+                >
+                  {badgeLabel}
+                </span>
+              )}
+
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {item.icon}
+              </span>
+
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
 }

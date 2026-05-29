@@ -201,9 +201,11 @@ model User {
   historyToSitter   BookingHistory[] @relation("HistoryToSitter")
 
   // Missed visit review relations
-  missedVisitReviews BookingHistory[] @relation("MissedVisitReviewedBy")
+    missedVisitReviews BookingHistory[] @relation("MissedVisitReviewedBy")
 
   sentMessages Message[] @relation("MessageSender")
+
+  conversationParticipants ConversationParticipant[]
 }
 
 model Conversation {
@@ -211,7 +213,8 @@ model Conversation {
   bookingId String  @unique
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  messages Message[]
+  messages     Message[]
+  participants ConversationParticipant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -237,6 +240,25 @@ model Message {
   @@index([conversationId, createdAt])
   @@index([senderUserId])
   @@index([senderType])
+}
+
+model ConversationParticipant {
+  id              String            @id @default(cuid())
+  conversationId  String
+  userId          String?
+  participantType MessageSenderType
+  participantKey  String
+  lastReadAt      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  conversation    Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user            User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([conversationId, participantKey])
+  @@index([conversationId])
+  @@index([userId])
+  @@index([participantType])
 }
 
 model Account {
@@ -299,6 +321,8 @@ model ServiceAddOn {
   serviceId String
   service   Service @relation(fields: [serviceId], references: [id])
 }
+
+
 
 enum Role {
   OPERATOR

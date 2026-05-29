@@ -13,11 +13,17 @@ export async function getSitterConversations({ sitterId }) {
       },
     },
     include: {
+      participants: {
+        where: {
+          userId: sitterId,
+          participantType: "SITTER",
+        },
+      },
       messages: {
         orderBy: {
           createdAt: "desc",
         },
-        take: 1,
+        take: 20,
       },
       booking: {
         include: {

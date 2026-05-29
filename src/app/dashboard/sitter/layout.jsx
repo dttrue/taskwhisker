@@ -3,7 +3,7 @@ import { requireRole } from "@/auth";
 import SitterMobileDock from "./_components/SitterMobileDock";
 
 export default async function SitterLayout({ children }) {
-  await requireRole(["SITTER"]);
+  await requireRole("SITTER");
 
   return (
     <>
