@@ -10,7 +10,8 @@ import { combineDateTime, getDateListFromRange } from "./bookingDateUtils";
 import { checkAvailability } from "@/lib/calendar/checkAvailability";
 import { formatServiceAddress } from "@/lib/formatAddress";
 import { geocodeAddress } from "@/lib/geocodeAddress";
-
+import { sendClientBookingConfirmationEmail } from "@/lib/email/sendClientBookingConfirmationEmail";
+import { sendSitterBookingNotificationEmail } from "@/lib/email/sendSitterBookingNotificationEmail";
 const BUFFER_MINUTES = 15;
 
 
@@ -463,6 +464,7 @@ export async function createPublicBooking(rawInput) {
       where: { id: booking.id },
       include: {
         client: true,
+        sitter: true,
         lineItems: true,
         visits: true,
       },
@@ -475,6 +477,45 @@ export async function createPublicBooking(rawInput) {
     return result;
   });
 
+  const appUrl = process.env.APP_URL || "http://localhost:3000";
+
+  const clientMessageUrl = `${appUrl}/client/bookings/${fullBooking.clientLinkToken}/messages`;
+  const sitterMessageUrl = `${appUrl}/dashboard/sitter/messages/${fullBooking.id}`;
+
+  // Temporary until we build a dedicated booking portal page.
+  // Later this can become: /client/bookings/[clientLinkToken]
+  const bookingUrl = clientMessageUrl;
+
+  try {
+    await sendClientBookingConfirmationEmail({
+      to: process.env.TEST_CLIENT_EMAIL || fullBooking.client.email,
+      clientName: fullBooking.client.name,
+      serviceSummary: fullBooking.serviceSummary,
+      startTime: fullBooking.startTime,
+      endTime: fullBooking.endTime,
+      bookingUrl,
+      messageUrl: clientMessageUrl,
+    });
+  } catch (error) {
+    console.error("Failed to send client booking confirmation email:", error);
+  }
+
+  try {
+    await sendSitterBookingNotificationEmail({
+      to: process.env.TEST_SITTER_EMAIL || fullBooking.sitter?.email,
+      sitterName: fullBooking.sitter?.name,
+      clientName: fullBooking.client.name,
+      serviceSummary: fullBooking.serviceSummary,
+      startTime: fullBooking.startTime,
+      endTime: fullBooking.endTime,
+      messageUrl: sitterMessageUrl,
+    });
+  } catch (error) {
+    console.error("Failed to send sitter booking notification email:", error);
+  }
+
+
+   
   return toClientValue({
     ok: true,
     booking: {
