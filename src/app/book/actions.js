@@ -479,12 +479,9 @@ export async function createPublicBooking(rawInput) {
 
   const appUrl = process.env.APP_URL || "http://localhost:3000";
 
-  const clientMessageUrl = `${appUrl}/client/bookings/${fullBooking.clientLinkToken}/messages`;
+  const bookingUrl = `${appUrl}/client/bookings/${fullBooking.clientLinkToken}`;
+  const clientMessageUrl = `${bookingUrl}/messages`;
   const sitterMessageUrl = `${appUrl}/dashboard/sitter/messages/${fullBooking.id}`;
-
-  // Temporary until we build a dedicated booking portal page.
-  // Later this can become: /client/bookings/[clientLinkToken]
-  const bookingUrl = clientMessageUrl;
 
   try {
     await sendClientBookingConfirmationEmail({

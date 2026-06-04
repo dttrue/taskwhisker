@@ -69,20 +69,24 @@ export async function sendClientBookingConfirmationEmail({
           <p><strong>End:</strong> ${formatDateTime(endTime)}</p>
         </div>
 
-        <p>You can use the link below to message your sitter and return to this booking later:</p>
+        <p>You can use the link below to view your booking details and message your sitter:</p>
 
-        <p>
-          <a 
-            href="${messageUrl}" 
-            style="display: inline-block; background: #18181b; color: white; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-weight: bold;"
-          >
-            Message your sitter
-          </a>
-        </p>
+<p>
+  <a 
+    href="${bookingUrl}" 
+    style="display: inline-block; background: #18181b; color: white; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-weight: bold;"
+  >
+    View booking details
+  </a>
+</p>
+
+<p style="font-size: 14px; color: #52525b;">
+  Need to send a message? You can message your sitter from your booking page.
+</p>
 
         <p style="font-size: 14px; color: #52525b;">
           If the button does not work, copy and paste this link into your browser:<br />
-          <a href="${messageUrl}">${messageUrl}</a>
+          <a href="${bookingUrl}">${bookingUrl}</a>
         </p>
 
         ${
