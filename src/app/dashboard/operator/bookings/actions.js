@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
+import { createSystemMessage } from "@/lib/messaging/createSystemMessage";
 async function getActorId(session) {
   if (session?.user?.id) {
     const byId = await prisma.user.findUnique({
@@ -318,6 +318,92 @@ export async function cancelBooking(arg1, arg2) {
   ]);
 
   revalidateOperator(bookingId);
+  return { ok: true };
+}
+
+// ---- APPROVE CLIENT CANCELLATION REQUEST ----
+export async function approveClientCancellationRequest(arg1, arg2) {
+  const session = await requireRole(["OPERATOR"]);
+  const actorId = await getActorId(session);
+
+  const bookingId = resolveBookingId(arg1, arg2);
+
+  if (!bookingId) {
+    return { ok: false, error: "Missing booking id." };
+  }
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: {
+      id: true,
+      status: true,
+      clientLinkToken: true,
+    },
+  });
+
+  if (!booking) {
+    return { ok: false, error: "Booking not found." };
+  }
+
+  if (booking.status === "CANCELED") {
+    return { ok: false, error: "Booking is already canceled." };
+  }
+
+  if (booking.status === "COMPLETED") {
+    return { ok: false, error: "Cannot cancel a completed booking." };
+  }
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: "CANCELED",
+        canceledAt: now,
+      },
+    });
+
+    await tx.visit.updateMany({
+      where: {
+        bookingId,
+        status: {
+          notIn: ["COMPLETED", "CANCELED"],
+        },
+      },
+      data: {
+        status: "CANCELED",
+      },
+    });
+
+    await tx.bookingHistory.create({
+      data: {
+        bookingId,
+        fromStatus: booking.status,
+        toStatus: "CANCELED",
+        note: "Operator approved client cancellation request.",
+        changedByUserId: actorId,
+      },
+    });
+
+    await createSystemMessage({
+      tx,
+      bookingId,
+      body: "Cancellation approved. This booking has been canceled.",
+    });
+  });
+
+  revalidatePath("/dashboard/operator");
+  revalidatePath(`/dashboard/operator/bookings/${bookingId}`);
+  revalidatePath("/dashboard/sitter");
+  revalidatePath("/dashboard/sitter/messages");
+  revalidatePath(`/dashboard/sitter/messages/${bookingId}`);
+
+  if (booking.clientLinkToken) {
+    revalidatePath(`/client/bookings/${booking.clientLinkToken}`);
+    revalidatePath(`/client/bookings/${booking.clientLinkToken}/messages`);
+  }
+
   return { ok: true };
 }
 
@@ -665,6 +751,6 @@ export async function reviewMissedVisitHistory({
     },
   });
 
-  revalidatePath(`/dashboard/operator/bookings/${bookingId}`);
+  revalidatePath(`/dashboard/operator/bookings/${history.bookingId}`);
   return { ok: true };
 }

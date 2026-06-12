@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function HomeIcon() {
   return (
@@ -70,15 +70,21 @@ function SettingsIcon() {
 }
 
 export default function SitterMobileDock() {
+  const inFlightRef = useRef(false);
   const pathname = usePathname();
+
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadUnreadCount() {
+      if (inFlightRef.current) return;
+
+      inFlightRef.current = true;
+
       try {
-        const res = await fetch("/api/sitter/unread-messages", {
+        const res = await fetch(`/api/sitter/unread-messages?t=${Date.now()}`, {
           cache: "no-store",
         });
 
@@ -89,14 +95,16 @@ export default function SitterMobileDock() {
         if (isMounted) {
           setUnreadMessagesCount(Number(data.count || 0));
         }
-      } catch (error) {
-        console.error("Failed to load sitter unread message count:", error);
+      } catch {
+        // Keep dock quiet if unread count fails.
+      } finally {
+        inFlightRef.current = false;
       }
     }
 
     loadUnreadCount();
 
-    const interval = setInterval(loadUnreadCount, 10000);
+    const interval = setInterval(loadUnreadCount, 30000);
 
     return () => {
       isMounted = false;
@@ -176,38 +184,41 @@ export default function SitterMobileDock() {
                 position: "relative",
               }}
             >
-              {showBadge && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: 5,
-                    right: "calc(50% - 28px)",
-                    minWidth: 18,
-                    height: 18,
-                    padding: "0 5px",
-                    borderRadius: 999,
-                    background: "#dc2626",
-                    color: "white",
-                    fontSize: 11,
-                    fontWeight: 900,
-                    lineHeight: "18px",
-                    textAlign: "center",
-                    boxShadow: "0 0 0 2px white",
-                    zIndex: 10,
-                  }}
-                >
-                  {badgeLabel}
-                </span>
-              )}
-
               <span
                 style={{
+                  position: "relative",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
                 {item.icon}
+
+                {showBadge && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: -9,
+                      right: -13,
+                      minWidth: 18,
+                      height: 18,
+                      padding: "0 5px",
+                      borderRadius: 999,
+                      background: "#dc2626",
+                      color: "white",
+                      fontSize: 11,
+                      fontWeight: 900,
+                      lineHeight: "18px",
+                      textAlign: "center",
+                      boxShadow: isActive
+                        ? "0 0 0 2px #18181b"
+                        : "0 0 0 2px white",
+                      zIndex: 20,
+                    }}
+                  >
+                    {badgeLabel}
+                  </span>
+                )}
               </span>
 
               <span>{item.label}</span>

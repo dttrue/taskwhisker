@@ -4,11 +4,23 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getUnreadMessageCountForSitter } from "@/lib/messaging/getUnreadMessageCountForSitter";
 
+export const dynamic = "force-dynamic";
+
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+};
+
 export async function GET() {
   const session = await auth();
 
   if (!session?.user?.email) {
-    return NextResponse.json({ count: 0 }, { status: 401 });
+    return NextResponse.json(
+      { count: 0 },
+      {
+        status: 401,
+        headers: NO_STORE_HEADERS,
+      }
+    );
   }
 
   const sitter = await prisma.user.findUnique({
@@ -22,7 +34,13 @@ export async function GET() {
   });
 
   if (!sitter || sitter.role !== "SITTER") {
-    return NextResponse.json({ count: 0 }, { status: 403 });
+    return NextResponse.json(
+      { count: 0 },
+      {
+        status: 403,
+        headers: NO_STORE_HEADERS,
+      }
+    );
   }
 
   const count = await getUnreadMessageCountForSitter({
@@ -32,9 +50,7 @@ export async function GET() {
   return NextResponse.json(
     { count },
     {
-      headers: {
-        "Cache-Control": "no-store",
-      },
+      headers: NO_STORE_HEADERS,
     }
   );
 }

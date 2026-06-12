@@ -11,7 +11,10 @@ export default function CancelBookingRequestForm({
   const formRef = useRef(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const isDisabled = disabled || isPending || submitted;
 
   function handleSubmit(formData) {
     setMessage("");
@@ -21,11 +24,13 @@ export default function CancelBookingRequestForm({
       const result = await requestClientBookingCancellation(formData);
 
       if (!result?.ok) {
+        setSubmitted(false);
         setError(result?.error || "Something went wrong.");
         return;
       }
 
       formRef.current?.reset();
+      setSubmitted(true);
       setMessage(
         "Cancellation request sent. Your sitter/operator will review it."
       );
@@ -59,7 +64,7 @@ export default function CancelBookingRequestForm({
         name="reason"
         rows={3}
         required
-        disabled={disabled || isPending}
+        disabled={isDisabled}
         placeholder="Tell us why you need to cancel..."
         className="mt-2 w-full resize-none rounded-xl border border-red-200 bg-white p-3 text-sm text-zinc-900 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:opacity-60"
       />
@@ -74,10 +79,14 @@ export default function CancelBookingRequestForm({
 
       <button
         type="submit"
-        disabled={disabled || isPending}
+        disabled={isDisabled}
         className="mt-3 w-full rounded-xl bg-red-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isPending ? "Sending request..." : "Send cancellation request"}
+        {submitted
+          ? "Cancellation request sent"
+          : isPending
+          ? "Sending request..."
+          : "Send cancellation request"}
       </button>
     </form>
   );

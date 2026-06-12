@@ -1,11 +1,19 @@
 // src/lib/messaging/getUnreadMessageCountForSitter.js
 import { prisma } from "@/lib/db";
-import { countUnreadMessagesForParticipant } from "@/lib/messaging/readState";
+import {
+  countUnreadMessagesForParticipant,
+  getParticipantKey,
+} from "@/lib/messaging/readState";
 
 export async function getUnreadMessageCountForSitter({ sitterId }) {
   if (!sitterId) {
     throw new Error("getUnreadMessageCountForSitter requires sitterId.");
   }
+
+  const participantKey = getParticipantKey({
+    participantType: "SITTER",
+    userId: sitterId,
+  });
 
   const conversations = await prisma.conversation.findMany({
     where: {
@@ -16,15 +24,15 @@ export async function getUnreadMessageCountForSitter({ sitterId }) {
     include: {
       participants: {
         where: {
-          userId: sitterId,
-          participantType: "SITTER",
+          participantKey,
         },
+        take: 1,
       },
       messages: {
         orderBy: {
           createdAt: "desc",
         },
-        take: 20,
+        take: 50,
       },
     },
   });
