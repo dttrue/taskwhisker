@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getClientBookingConversation } from "@/lib/messaging/getClientBookingConversation";
 import ClientMessageForm from "./ClientMessageForm";
 import MessageAutoRefresh from "@/components/messaging/MessageAutoRefresh";
+
 function formatDateTime(value) {
   if (!value) return "—";
 
@@ -22,6 +23,24 @@ function getSenderLabel(message) {
   return "Unknown";
 }
 
+function getClosedMessagingCopy(status) {
+  if (status === "CANCELED") {
+    return {
+      title: "Messaging closed",
+      body: "This booking has been canceled. Messaging for this booking is now closed.",
+    };
+  }
+
+  if (status === "COMPLETED") {
+    return {
+      title: "Messaging closed",
+      body: "This booking is complete. Messaging for this booking is now closed.",
+    };
+  }
+
+  return null;
+}
+
 export default async function ClientBookingMessagesPage({ params }) {
   const { clientLinkToken } = await params;
 
@@ -32,10 +51,13 @@ export default async function ClientBookingMessagesPage({ params }) {
   }
 
   const messages = booking.conversation?.messages || [];
+  const closedMessagingCopy = getClosedMessagingCopy(booking.status);
+  const messagingClosed = Boolean(closedMessagingCopy);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6">
       <MessageAutoRefresh intervalMs={10000} />
+
       <div className="mx-auto max-w-xl space-y-4">
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -67,6 +89,16 @@ export default async function ClientBookingMessagesPage({ params }) {
               {formatDateTime(booking.endTime)}
             </p>
           </div>
+
+          {messagingClosed && (
+            <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
+              <p className="font-semibold text-zinc-950">
+                {closedMessagingCopy.title}
+              </p>
+
+              <p className="mt-1">{closedMessagingCopy.body}</p>
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -113,7 +145,19 @@ export default async function ClientBookingMessagesPage({ params }) {
             )}
           </div>
 
-          <ClientMessageForm clientLinkToken={clientLinkToken} />
+          <div className="mt-4">
+            {messagingClosed ? (
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
+                <p className="font-semibold text-zinc-950">
+                  {closedMessagingCopy.title}
+                </p>
+
+                <p className="mt-1">{closedMessagingCopy.body}</p>
+              </div>
+            ) : (
+              <ClientMessageForm clientLinkToken={clientLinkToken} />
+            )}
+          </div>
         </section>
       </div>
     </main>

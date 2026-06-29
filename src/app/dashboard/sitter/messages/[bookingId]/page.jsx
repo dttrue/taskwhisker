@@ -6,7 +6,10 @@ import { prisma } from "@/lib/db";
 import { getBookingConversation } from "@/lib/messaging/getBookingConversation";
 import { markConversationRead } from "@/lib/messaging/readState";
 import SitterMessageForm from "./SitterMessageForm";
+import ApproveCancellationRequestButton from "./ApproveCancellationRequestButton";
 import MessageAutoRefresh from "@/components/messaging/MessageAutoRefresh";
+
+const CLOSED_MESSAGE_STATUSES = ["CANCELED", "COMPLETED"];
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -25,6 +28,28 @@ function getSenderLabel(message) {
   if (message.senderType === "SITTER") return "You";
   if (message.senderType === "OPERATOR") return "Operator";
   return "Unknown";
+}
+
+function isCancellationRequestMessage(message) {
+  return (
+    message.senderType === "CLIENT" &&
+    String(message.body || "")
+      .trim()
+      .toLowerCase()
+      .startsWith("cancellation request:")
+  );
+}
+
+function getClosedMessagingCopy(status) {
+  if (status === "CANCELED") {
+    return "This booking has been canceled. Messaging for this booking is now closed.";
+  }
+
+  if (status === "COMPLETED") {
+    return "This booking is complete. Messaging for this booking is now closed.";
+  }
+
+  return null;
 }
 
 export default async function SitterBookingMessagesPage({ params }) {
@@ -67,6 +92,16 @@ export default async function SitterBookingMessagesPage({ params }) {
     userId: sitter.id,
     participantType: "SITTER",
   });
+
+  const messagingClosed = CLOSED_MESSAGE_STATUSES.includes(booking.status);
+  const closedMessagingCopy = getClosedMessagingCopy(booking.status);
+
+  const cancellationRequest = [...messages]
+    .reverse()
+    .find(isCancellationRequestMessage);
+
+  const hasOpenCancellationRequest =
+    Boolean(cancellationRequest) && !messagingClosed;
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6">
@@ -114,6 +149,34 @@ export default async function SitterBookingMessagesPage({ params }) {
               {formatDateTime(booking.endTime)}
             </p>
           </div>
+
+          {hasOpenCancellationRequest && (
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+              <p className="text-sm font-bold text-red-950">
+                Cancellation requested
+              </p>
+
+              <p className="mt-1 text-sm text-red-800">
+                The client requested to cancel this booking. Approving will mark
+                the booking and its unfinished visits as canceled.
+              </p>
+
+              {cancellationRequest?.body && (
+                <div className="mt-3 rounded-xl border border-red-100 bg-white p-3 text-sm text-zinc-700">
+                  {cancellationRequest.body}
+                </div>
+              )}
+
+              <ApproveCancellationRequestButton bookingId={booking.id} />
+            </div>
+          )}
+
+          {messagingClosed && closedMessagingCopy && (
+            <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
+              <p className="font-semibold text-zinc-950">Messaging closed</p>
+              <p className="mt-1">{closedMessagingCopy}</p>
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -157,7 +220,13 @@ export default async function SitterBookingMessagesPage({ params }) {
             )}
           </div>
 
-          <SitterMessageForm bookingId={booking.id} />
+          {messagingClosed ? (
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+              {closedMessagingCopy}
+            </div>
+          ) : (
+            <SitterMessageForm bookingId={booking.id} />
+          )}
         </section>
       </div>
     </main>
