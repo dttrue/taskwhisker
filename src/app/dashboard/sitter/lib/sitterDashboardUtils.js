@@ -35,7 +35,6 @@ export function getRelativeDayLabel(date, now) {
   const d = new Date(date);
   const n = new Date(now);
 
-  // normalize both to midnight (prevents time drift issues)
   d.setHours(0, 0, 0, 0);
   n.setHours(0, 0, 0, 0);
 
@@ -50,6 +49,26 @@ export function getRelativeDayLabel(date, now) {
 
 export function isSameDay(a, b) {
   return toBusinessDayKey(a) === toBusinessDayKey(b);
+}
+
+export function hasOpenCancellationRequest(booking) {
+  if (!booking) return false;
+
+  if (booking.status === "CANCELED" || booking.status === "COMPLETED") {
+    return false;
+  }
+
+  const messages = booking.conversation?.messages || [];
+
+  return messages.some((message) => {
+    return (
+      message.senderType === "CLIENT" &&
+      String(message.body || "")
+        .trim()
+        .toLowerCase()
+        .startsWith("cancellation request:")
+    );
+  });
 }
 
 export function getRemainingVisitCountForToday(
@@ -83,10 +102,8 @@ export function getRemainingVisitCountForToday(
 export function serializeValue(value) {
   if (value === null || value === undefined) return value;
 
-  // Dates
   if (value instanceof Date) return value.toISOString();
 
-  // Prisma Decimal
   if (typeof value === "object" && value?.toNumber) {
     return value.toNumber();
   }
@@ -243,7 +260,7 @@ export function shouldAutoCompleteBooking(visits = []) {
   if (!visits.length) return false;
 
   return visits.every(
-    (v) => v.status === "COMPLETED" || v.status === "CANCELED"
+    (visit) => visit.status === "COMPLETED" || visit.status === "CANCELED"
   );
 }
 
@@ -358,7 +375,9 @@ export function getCompletedThisWeekCount(bookings = [], now) {
 
   return bookings.filter((booking) => {
     if (booking.status !== "COMPLETED") return false;
+
     const completedAt = booking.updatedAt ? new Date(booking.updatedAt) : null;
+
     return completedAt && completedAt >= startOfWeek;
   }).length;
 }
@@ -369,10 +388,11 @@ export function groupBookings(bookings = [], now) {
       today: [],
       overdue: [],
       upcoming: bookings.filter(
-        (b) => b.status !== "COMPLETED" && b.status !== "CANCELED"
+        (booking) =>
+          booking.status !== "COMPLETED" && booking.status !== "CANCELED"
       ),
-      completed: bookings.filter((b) => b.status === "COMPLETED"),
-      canceled: bookings.filter((b) => b.status === "CANCELED"),
+      completed: bookings.filter((booking) => booking.status === "COMPLETED"),
+      canceled: bookings.filter((booking) => booking.status === "CANCELED"),
     };
   }
 
@@ -400,7 +420,7 @@ export function groupBookings(bookings = [], now) {
 
     let hasTodayVisit = false;
     let hasRemainingTodayVisit = false;
-    let hasFutureVisit = false;
+    let hasFutureVisitValue = false;
     let hasOverdueVisit = false;
 
     for (const visit of visits) {
@@ -422,7 +442,7 @@ export function groupBookings(bookings = [], now) {
       }
 
       if (start.getTime() + graceMs > now.getTime()) {
-        hasFutureVisit = true;
+        hasFutureVisitValue = true;
       }
     }
 
@@ -430,7 +450,7 @@ export function groupBookings(bookings = [], now) {
       overdue.push(booking);
     } else if (hasTodayVisit && hasRemainingTodayVisit) {
       today.push(booking);
-    } else if (hasFutureVisit) {
+    } else if (hasFutureVisitValue) {
       upcoming.push(booking);
     } else if (shouldAutoCompleteBooking(visits)) {
       completed.push(booking);
@@ -441,6 +461,7 @@ export function groupBookings(bookings = [], now) {
 
   return { today, overdue, upcoming, completed, canceled };
 }
+
 export function getSitterMapBookings(bookings = [], now) {
   if (!now) return [];
 
@@ -481,6 +502,7 @@ export function getSitterMapBookings(bookings = [], now) {
         todayVisitStart: todayVisit?.startTime || null,
         sitterPayoutCents: booking.sitterPayoutCents || 0,
         visits: booking.visits || [],
+        hasOpenCancellationRequest: hasOpenCancellationRequest(booking),
       };
     })
     .filter(
@@ -575,6 +597,7 @@ export function getVisitEntries(bookings = []) {
     const payoutPerVisit = Math.round(
       (booking.sitterPayoutCents || 0) / totalVisits
     );
+    const openCancellationRequest = hasOpenCancellationRequest(booking);
 
     return visits.map((visit) => {
       const address = [
@@ -599,6 +622,7 @@ export function getVisitEntries(bookings = []) {
         address,
         lat: booking.serviceLat != null ? Number(booking.serviceLat) : null,
         lng: booking.serviceLng != null ? Number(booking.serviceLng) : null,
+        hasOpenCancellationRequest: openCancellationRequest,
         booking,
       };
     });
@@ -665,6 +689,7 @@ export function serializeVisitEntry(entry) {
     address: entry.address,
     lat: entry.lat,
     lng: entry.lng,
+    hasOpenCancellationRequest: Boolean(entry.hasOpenCancellationRequest),
     visit: {
       id: entry.visit?.id,
       status: entry.visit?.status,

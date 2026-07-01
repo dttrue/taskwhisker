@@ -21,6 +21,16 @@ export default async function SitterDashboardPage() {
       visits: {
         orderBy: { startTime: "asc" },
       },
+      conversation: {
+        include: {
+          messages: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 20,
+          },
+        },
+      },
     },
   });
 

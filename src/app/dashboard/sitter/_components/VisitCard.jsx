@@ -83,6 +83,7 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
     serviceSummary,
     payoutPerVisitCents,
     address,
+    hasOpenCancellationRequest = false,
   } = entry;
 
   const start = new Date(visit.startTime);
@@ -92,7 +93,6 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
   const isCompletable = canCompleteVisit(visit, now);
   const state = getVisitState(visit, now, isToday);
   const dayLabel = getRelativeDayLabel(start, now);
-  
 
   return (
     <article
@@ -102,11 +102,18 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-zinc-900">{clientName}</p>
+
             <span
               className={`rounded-full px-2.5 py-1 text-xs font-medium ${state.badgeClass}`}
             >
               {state.label}
             </span>
+
+            {hasOpenCancellationRequest && visit.status !== "CANCELED" ? (
+              <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">
+                Cancellation requested
+              </span>
+            ) : null}
           </div>
 
           <p className="mt-1 text-sm text-zinc-600">{serviceSummary}</p>
@@ -116,6 +123,16 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
           {formatMoney(payoutPerVisitCents)}
         </span>
       </div>
+
+      {hasOpenCancellationRequest && visit.status !== "CANCELED" ? (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <p className="font-bold text-red-950">Cancellation requested</p>
+          <p className="mt-1">
+            The client requested to cancel this booking. Open messages to review
+            and approve the cancellation.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-3 space-y-1 text-sm text-zinc-600">
         <p className="font-medium text-zinc-800">
@@ -138,15 +155,31 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
 
         <Link
           href={`/dashboard/sitter/messages/${bookingId}`}
-          className="inline-flex items-center rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+          className="inline-flex items-center rounded-lg px-3 py-2 text-sm font-bold transition"
+          style={
+            hasOpenCancellationRequest && visit.status !== "CANCELED"
+              ? {
+                  backgroundColor: "#b91c1c",
+                  color: "white",
+                  border: "1px solid #991b1b",
+                }
+              : {
+                  backgroundColor: "white",
+                  color: "#3f3f46",
+                  border: "1px solid #e4e4e7",
+                }
+          }
         >
-          Message client
+          {hasOpenCancellationRequest && visit.status !== "CANCELED"
+            ? "Review cancellation"
+            : "Message client"}
         </Link>
 
         {isCompletable ? (
           <form
             action={async (formData) => {
               const result = await completeVisitAsSitter(formData);
+
               if (result?.ok) {
                 onComplete?.(visit.id);
               } else if (result?.error) {
@@ -157,7 +190,6 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
           >
             <input type="hidden" name="visitId" value={visit.id} />
 
-            {/* 🔥 Only show for missed visits */}
             {isVisitOverdue(visit, now) ? (
               <textarea
                 name="lateReason"
@@ -168,9 +200,12 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
               />
             ) : null}
 
-            <p className="text-xs text-amber-700">
-              Required for missed visits. This will be visible to the operator.
-            </p>
+            {isVisitOverdue(visit, now) ? (
+              <p className="text-xs text-amber-700">
+                Required for missed visits. This will be visible to the
+                operator.
+              </p>
+            ) : null}
 
             <button
               type="submit"
