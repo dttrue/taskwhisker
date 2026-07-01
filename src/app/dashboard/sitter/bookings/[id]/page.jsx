@@ -98,7 +98,7 @@ export default async function SitterBookingDetailPage({ params }) {
   const sitterId = session.user?.id;
   const resolvedParams = await params;
   const bookingId = resolvedParams?.id;
-
+  
   if (!sitterId || !bookingId) {
     notFound();
   }
@@ -146,6 +146,11 @@ export default async function SitterBookingDetailPage({ params }) {
       (visit) => visit.status !== "COMPLETED" && visit.status !== "CANCELED"
     ).length || 0;
   const visitProgressLabel = getVisitProgressLabel(booking.visits || []);
+
+  const isCanceledBooking = booking.status === "CANCELED";
+  const sitterPayoutDisplay = isCanceledBooking
+    ? "Canceled"
+    : formatMoney(booking.sitterPayoutCents || 0);
 
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
@@ -203,8 +208,13 @@ export default async function SitterBookingDetailPage({ params }) {
               <div className="text-xs uppercase tracking-wide text-zinc-500">
                 Payout
               </div>
-              <div className="mt-1 text-lg font-semibold text-zinc-900">
-                {formatMoney(booking.sitterPayoutCents || 0)}
+
+              <div
+                className={`mt-1 text-lg font-semibold ${
+                  isCanceledBooking ? "text-rose-700" : "text-zinc-900"
+                }`}
+              >
+                {sitterPayoutDisplay}
               </div>
             </div>
           </div>
@@ -497,10 +507,21 @@ export default async function SitterBookingDetailPage({ params }) {
                 <div className="border-t border-zinc-200 pt-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-zinc-500">Sitter payout</span>
-                    <span className="text-sm font-medium text-zinc-800">
-                      {formatMoney(booking.sitterPayoutCents || 0)}
+
+                    <span
+                      className={`text-sm font-medium ${
+                        isCanceledBooking ? "text-rose-700" : "text-zinc-800"
+                      }`}
+                    >
+                      {sitterPayoutDisplay}
                     </span>
                   </div>
+
+                  {isCanceledBooking ? (
+                    <p className="mt-2 text-xs text-zinc-500">
+                      This booking was canceled, so payout is not active.
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </DetailCard>
