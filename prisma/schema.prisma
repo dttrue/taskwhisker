@@ -50,6 +50,16 @@ model Booking {
   completedAt       DateTime?
   confirmedAt       DateTime?
 
+     // -----------------------------
+  // CANCELLATION FEE
+  // -----------------------------
+  cancellationFeeCents        Int      @default(0)
+  cancellationFeeWaived       Boolean  @default(false)
+  cancellationFeeRateBps      Int      @default(0)
+  cancellationFeeReviewedAt   DateTime?
+  cancellationFeeReviewedById String?
+  cancellationFeeReviewedBy   User?    @relation("BookingCancellationFeeReviewedBy", fields: [cancellationFeeReviewedById], references: [id])
+
   serviceSummary String?
 
   // 🔹 optional service reference
@@ -99,6 +109,7 @@ model Booking {
   @@index([sitterId, startTime])
   @@index([operatorId, startTime])
   @@index([serviceLat, serviceLng])
+  @@index([cancellationFeeReviewedById])
 }
 
 model BookingLineItem {
@@ -137,6 +148,7 @@ model Visit {
   @@index([operatorId, date])
   @@index([sitterId, date])
   @@index([startTime, endTime])
+  
 }
 
 model BookingHistory {
@@ -188,6 +200,8 @@ model User {
 
   // 🔹 Bookings where this user is the OPERATOR (Bridget)
   operatorBookings Booking[] @relation("BookingOperator")
+
+  cancellationFeeReviews Booking[] @relation("BookingCancellationFeeReviewedBy")
 
   // 🔹 Visits where this user is the OPERATOR
   visitsAsOperator Visit[] @relation("VisitOperator")

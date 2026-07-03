@@ -13,6 +13,16 @@ import {
   isVisitOverdue,
 } from "../lib/sitterDashboardUtils";
 
+function formatVisitDate(value) {
+  if (!value) return "—";
+
+  return new Date(value).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function getVisitState(visit, now, isToday) {
   const start = new Date(visit.startTime);
 
@@ -93,6 +103,7 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
   const isCompletable = canCompleteVisit(visit, now);
   const state = getVisitState(visit, now, isToday);
   const dayLabel = getRelativeDayLabel(start, now);
+  const dateLabel = formatVisitDate(start);
 
   return (
     <article
@@ -137,6 +148,10 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
       <div className="mt-3 space-y-1 text-sm text-zinc-600">
         <p className="font-medium text-zinc-800">
           {dayLabel ? `${dayLabel} · ` : ""}
+          {dateLabel}
+        </p>
+
+        <p className="text-zinc-700">
           {formatTime(start)} – {formatTime(end)}
         </p>
 

@@ -6,6 +6,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { createSystemMessage } from "@/lib/messaging/createSystemMessage";
 
+const CANCELLATION_FEE_RATE_BPS = 1500; // 15%
+
 function isCancellationRequestMessage(message) {
   return (
     message.senderType === "CLIENT" &&
@@ -16,7 +18,14 @@ function isCancellationRequestMessage(message) {
   );
 }
 
-export async function approveClientCancellationRequestAsSitter({ bookingId }) {
+function formatMoney(cents = 0) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+export async function approveClientCancellationRequestAsSitter({
+  bookingId,
+  waiveCancellationFee = false,
+}) {
   const session = await auth();
 
   if (!session?.user?.email) {
@@ -59,6 +68,7 @@ export async function approveClientCancellationRequestAsSitter({ bookingId }) {
       status: true,
       sitterId: true,
       clientLinkToken: true,
+      clientTotalCents: true,
       conversation: {
         select: {
           messages: {
@@ -117,6 +127,30 @@ export async function approveClientCancellationRequestAsSitter({ bookingId }) {
 
   const now = new Date();
 
+  const cancellationFeeWaived = Boolean(waiveCancellationFee);
+
+  const cancellationFeeCents = cancellationFeeWaived
+    ? 0
+    : Math.round(
+        ((booking.clientTotalCents || 0) * CANCELLATION_FEE_RATE_BPS) / 10000
+      );
+
+  const cancellationFeeRateBps = cancellationFeeWaived
+    ? 0
+    : CANCELLATION_FEE_RATE_BPS;
+
+  const cancellationFeeMessage = cancellationFeeWaived
+    ? "Cancellation approved. This booking has been canceled. The cancellation fee was waived."
+    : `Cancellation approved. This booking has been canceled. A ${formatMoney(
+        cancellationFeeCents
+      )} cancellation fee applies.`;
+
+  const historyNote = cancellationFeeWaived
+    ? "Assigned sitter approved client cancellation request and waived the cancellation fee."
+    : `Assigned sitter approved client cancellation request with a ${formatMoney(
+        cancellationFeeCents
+      )} cancellation fee.`;
+
   await prisma.$transaction(async (tx) => {
     await tx.booking.update({
       where: {
@@ -125,6 +159,11 @@ export async function approveClientCancellationRequestAsSitter({ bookingId }) {
       data: {
         status: "CANCELED",
         canceledAt: now,
+        cancellationFeeCents,
+        cancellationFeeWaived,
+        cancellationFeeRateBps,
+        cancellationFeeReviewedAt: now,
+        cancellationFeeReviewedById: sitter.id,
       },
     });
 
@@ -146,14 +185,14 @@ export async function approveClientCancellationRequestAsSitter({ bookingId }) {
         fromStatus: booking.status,
         toStatus: "CANCELED",
         changedByUserId: sitter.id,
-        note: "Assigned sitter approved client cancellation request.",
+        note: historyNote,
       },
     });
 
     await createSystemMessage({
       tx,
       bookingId: booking.id,
-      body: "Cancellation approved. This booking has been canceled.",
+      body: cancellationFeeMessage,
     });
   });
 
@@ -171,5 +210,7 @@ export async function approveClientCancellationRequestAsSitter({ bookingId }) {
 
   return {
     ok: true,
+    cancellationFeeCents,
+    cancellationFeeWaived,
   };
 }

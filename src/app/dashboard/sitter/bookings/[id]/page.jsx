@@ -17,6 +17,22 @@ import {
 import CompleteVisitButton from "../../_components/CompleteVisitButton";
 import CollapsibleCard from "@/components/ui/CollapsibleCard";
 
+function formatReadableText(value) {
+  if (!value) return "";
+
+  return String(value)
+    .replaceAll("_", " ")
+    .replace(/\bSMALL\b/g, "Small")
+    .replace(/\bMEDIUM\b/g, "Medium")
+    .replace(/\bLARGE\b/g, "Large")
+    .replace(/\bEXTRA LARGE\b/g, "Extra Large")
+    .replace(/\bDOG\b/g, "Dog")
+    .replace(/\bCAT\b/g, "Cat")
+    .replace(/\b26 50\b/g, "26–50")
+    .replace(/\b51 100\b/g, "51–100")
+    .replace(/\b0 25\b/g, "0–25")
+    .replace(/\b100 PLUS\b/g, "100+");
+}
 
 function getStatusPillClasses(status) {
   switch (status) {
@@ -152,6 +168,15 @@ export default async function SitterBookingDetailPage({ params }) {
     ? "Canceled"
     : formatMoney(booking.sitterPayoutCents || 0);
 
+  const hasCancellationFeeDecision =
+    isCanceledBooking && booking.cancellationFeeReviewedAt;
+
+  const cancellationFeeDisplay = !isCanceledBooking
+    ? null
+    : booking.cancellationFeeWaived
+    ? "Waived"
+    : formatMoney(booking.cancellationFeeCents || 0);
+
   return (
     <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
       <div className="mx-auto max-w-5xl space-y-6">
@@ -164,19 +189,29 @@ export default async function SitterBookingDetailPage({ params }) {
               ← Back to sitter dashboard
             </Link>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold text-zinc-900">
-                {booking.client?.name || "Client"}
-              </h1>
-
-              <span
-                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusPillClasses(
-                  booking.status
-                )}`}
-              >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-zinc-500">Status</span>
+              <span className="font-medium text-zinc-800">
                 {booking.status}
               </span>
             </div>
+
+            {isCanceledBooking ? (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-zinc-500">Cancellation fee</span>
+                <span
+                  className={`font-medium ${
+                    booking.cancellationFeeWaived
+                      ? "text-emerald-700"
+                      : "text-zinc-800"
+                  }`}
+                >
+                  {hasCancellationFeeDecision
+                    ? cancellationFeeDisplay
+                    : "Not reviewed"}
+                </span>
+              </div>
+            ) : null}
 
             <p className="mt-2 text-sm text-zinc-600">
               {booking.serviceSummary || "Service booking"}
@@ -415,7 +450,7 @@ export default async function SitterBookingDetailPage({ params }) {
                         Pet details
                       </div>
                       <p className="mt-2 text-sm text-zinc-700">
-                        {booking.petDetails}
+                        {formatReadableText(booking.petDetails)}
                       </p>
                     </div>
                   ) : null}
@@ -426,7 +461,7 @@ export default async function SitterBookingDetailPage({ params }) {
                         Booking notes
                       </div>
                       <p className="mt-2 text-sm text-zinc-700">
-                        {booking.notes}
+                        {formatReadableText(booking.notes)}
                       </p>
                     </div>
                   ) : null}
@@ -434,6 +469,12 @@ export default async function SitterBookingDetailPage({ params }) {
               </DetailCard>
             )}
           </div>
+
+          {isCanceledBooking ? (
+            <p className="mt-2 text-xs text-zinc-500">
+              This booking was canceled, so sitter payout is not active.
+            </p>
+          ) : null}
 
           <div className="space-y-6">
             <DetailCard title="Client">
@@ -483,12 +524,22 @@ export default async function SitterBookingDetailPage({ params }) {
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-zinc-500">Remaining visits</span>
-                  <span className="font-medium text-zinc-800">
-                    {remainingVisits}
-                  </span>
-                </div>
+                {isCanceledBooking ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-zinc-500">Cancellation fee</span>
+                    <span
+                      className={`font-medium ${
+                        booking.cancellationFeeWaived
+                          ? "text-emerald-700"
+                          : "text-zinc-800"
+                      }`}
+                    >
+                      {hasCancellationFeeDecision
+                        ? cancellationFeeDisplay
+                        : "Not reviewed"}
+                    </span>
+                  </div>
+                ) : null}
 
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-zinc-500">Completed visits</span>

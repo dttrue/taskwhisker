@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import CancelBookingRequestForm from "./CancelBookingRequestForm";
+
 function formatDateTime(value) {
   if (!value) return "—";
 
@@ -78,6 +79,17 @@ export default async function ClientBookingPortalPage({ params }) {
 
   const messageHref = `/client/bookings/${booking.clientLinkToken}/messages`;
 
+  const isCanceledBooking = booking.status === "CANCELED";
+
+  const hasCancellationFeeDecision =
+    isCanceledBooking && booking.cancellationFeeReviewedAt;
+
+  const cancellationFeeDisplay = !isCanceledBooking
+    ? null
+    : booking.cancellationFeeWaived
+    ? "Waived"
+    : formatMoney(booking.cancellationFeeCents || 0);
+
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6">
       <div className="mx-auto max-w-xl space-y-4">
@@ -130,7 +142,49 @@ export default async function ClientBookingPortalPage({ params }) {
               <span className="font-semibold text-zinc-950">Total:</span>{" "}
               {formatMoney(booking.clientTotalCents)}
             </p>
+
+            {isCanceledBooking ? (
+              <p>
+                <span className="font-semibold text-zinc-950">
+                  Cancellation fee:
+                </span>{" "}
+                <span
+                  className={
+                    booking.cancellationFeeWaived
+                      ? "font-semibold text-emerald-700"
+                      : "font-semibold text-zinc-800"
+                  }
+                >
+                  {hasCancellationFeeDecision
+                    ? cancellationFeeDisplay
+                    : "Pending review"}
+                </span>
+              </p>
+            ) : null}
           </div>
+
+          {isCanceledBooking ? (
+            <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-800">
+              <p className="font-bold text-red-950">Booking canceled</p>
+
+              <p className="mt-1">
+                This booking has been canceled. Your message thread remains
+                visible for reference, but new messages are closed.
+              </p>
+
+              {hasCancellationFeeDecision ? (
+                <p className="mt-2">
+                  {booking.cancellationFeeWaived
+                    ? "The cancellation fee was waived."
+                    : `A ${cancellationFeeDisplay} cancellation fee applies.`}
+                </p>
+              ) : (
+                <p className="mt-2">
+                  The cancellation fee is still pending review.
+                </p>
+              )}
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -186,9 +240,28 @@ export default async function ClientBookingPortalPage({ params }) {
               ))}
             </div>
 
-            <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-3 text-sm font-bold">
-              <span>Total</span>
-              <span>{formatMoney(booking.clientTotalCents)}</span>
+            <div className="mt-4 space-y-2 border-t border-zinc-200 pt-3 text-sm">
+              <div className="flex items-center justify-between font-bold">
+                <span>Total</span>
+                <span>{formatMoney(booking.clientTotalCents)}</span>
+              </div>
+
+              {isCanceledBooking ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">Cancellation fee</span>
+                  <span
+                    className={`font-semibold ${
+                      booking.cancellationFeeWaived
+                        ? "text-emerald-700"
+                        : "text-zinc-950"
+                    }`}
+                  >
+                    {hasCancellationFeeDecision
+                      ? cancellationFeeDisplay
+                      : "Pending review"}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </section>
         )}
@@ -210,24 +283,24 @@ export default async function ClientBookingPortalPage({ params }) {
               backgroundColor: "#18181b",
             }}
           >
-            Message sitter
+            View messages
           </Link>
         </section>
 
-        <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-bold text-zinc-950">Need to cancel?</h2>
+        {!isCanceledBooking && booking.status !== "COMPLETED" ? (
+          <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <h2 className="text-lg font-bold text-zinc-950">Need to cancel?</h2>
 
-          <p className="mt-2 text-sm text-zinc-600">
-            Submit a cancellation request so the booking can be reviewed.
-          </p>
+            <p className="mt-2 text-sm text-zinc-600">
+              Submit a cancellation request so the booking can be reviewed.
+            </p>
 
-          <CancelBookingRequestForm
-            clientLinkToken={booking.clientLinkToken}
-            disabled={
-              booking.status === "CANCELED" || booking.status === "COMPLETED"
-            }
-          />
-        </section>
+            <CancelBookingRequestForm
+              clientLinkToken={booking.clientLinkToken}
+              disabled={false}
+            />
+          </section>
+        ) : null}
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 shadow-sm">
           <p>
