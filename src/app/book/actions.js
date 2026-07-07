@@ -11,6 +11,7 @@ import { checkAvailability } from "@/lib/calendar/checkAvailability";
 import { formatServiceAddress } from "@/lib/formatAddress";
 import { geocodeAddress } from "@/lib/geocodeAddress";
 import { sendClientBookingConfirmationEmail } from "@/lib/email/sendClientBookingConfirmationEmail";
+import { checkBlockedClient } from "@/lib/blocklist/checkBlockedClient";
 import { sendSitterBookingNotificationEmail } from "@/lib/email/sendSitterBookingNotificationEmail";
 const BUFFER_MINUTES = 15;
 
@@ -306,6 +307,39 @@ export async function createPublicBooking(rawInput) {
     accessInstructions: accessInstructions ?? null,
     locationNotes: locationNotes ?? null,
   };
+
+  const blockCheck = await checkBlockedClient({
+    name: client.name,
+    email: client.email,
+    phone: client.phone,
+    addressLine1:
+      bookingServiceAddress.serviceAddressLine1 ||
+      normalizedClientAddress.addressLine1,
+    addressLine2:
+      bookingServiceAddress.serviceAddressLine2 ||
+      normalizedClientAddress.addressLine2,
+    city: bookingServiceAddress.serviceCity || normalizedClientAddress.city,
+    state: bookingServiceAddress.serviceState || normalizedClientAddress.state,
+    postalCode:
+      bookingServiceAddress.servicePostalCode ||
+      normalizedClientAddress.postalCode,
+  });
+
+  if (blockCheck.blocked) {
+    console.warn("Blocked client booking attempt", {
+      matchType: blockCheck.matchType,
+      blockedClientId: blockCheck.blockedClientId,
+      email: client.email,
+      phone: client.phone,
+    });
+
+    return {
+      ok: false,
+      error:
+        "We’re unable to accept this booking request. Please contact us directly if you believe this is a mistake.",
+      reason: "BLOCKED_CLIENT",
+    };
+  }
 
   const formattedServiceAddress = formatServiceAddress({
     addressLine1: bookingServiceAddress.serviceAddressLine1,

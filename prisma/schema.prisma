@@ -181,6 +181,34 @@ model BookingHistory {
   @@index([missedVisitReviewedById])
 }
 
+model BlockedClient {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name         String?
+  email        String?
+  phone        String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+
+  reason   String?
+  isActive Boolean @default(true)
+
+  createdByUserId String?
+  createdByUser   User?   @relation("BlockedClientCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([email])
+  @@index([phone])
+  @@index([name])
+  @@index([postalCode])
+  @@index([isActive])
+  @@index([createdByUserId])
+}
+
 model User {
   id                 String    @id @default(cuid())
   email              String    @unique
@@ -200,6 +228,9 @@ model User {
 
   // 🔹 Bookings where this user is the OPERATOR (Bridget)
   operatorBookings Booking[] @relation("BookingOperator")
+  
+   
+  blockedClientsCreated BlockedClient[] @relation("BlockedClientCreatedBy")
 
   cancellationFeeReviews Booking[] @relation("BookingCancellationFeeReviewedBy")
 
