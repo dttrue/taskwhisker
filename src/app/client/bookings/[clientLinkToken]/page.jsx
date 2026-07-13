@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import CancelBookingRequestForm from "./CancelBookingRequestForm";
+import ScheduleChangeRequestForm from "./ScheduleChangeRequestForm";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -80,6 +81,8 @@ export default async function ClientBookingPortalPage({ params }) {
   const messageHref = `/client/bookings/${booking.clientLinkToken}/messages`;
 
   const isCanceledBooking = booking.status === "CANCELED";
+  const isCompletedBooking = booking.status === "COMPLETED";
+  const canRequestChanges = !isCanceledBooking && !isCompletedBooking;
 
   const hasCancellationFeeDecision =
     isCanceledBooking && booking.cancellationFeeReviewedAt;
@@ -287,7 +290,26 @@ export default async function ClientBookingPortalPage({ params }) {
           </Link>
         </section>
 
-        {!isCanceledBooking && booking.status !== "COMPLETED" ? (
+        {canRequestChanges ? (
+          <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <h2 className="text-lg font-bold text-zinc-950">
+              Need to change the schedule?
+            </h2>
+
+            <p className="mt-2 text-sm text-zinc-600">
+              Submit a schedule change request so your sitter/operator can
+              review the new date and time.
+            </p>
+
+            <ScheduleChangeRequestForm
+              clientLinkToken={booking.clientLinkToken}
+              visits={booking.visits}
+              disabled={false}
+            />
+          </section>
+        ) : null}
+
+        {canRequestChanges ? (
           <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <h2 className="text-lg font-bold text-zinc-950">Need to cancel?</h2>
 

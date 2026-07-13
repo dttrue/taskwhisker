@@ -116,7 +116,9 @@ export default async function BookingMessagesPage({ params }) {
                       </p>
                     </div>
 
-                    <p className="mt-2 text-sm text-zinc-700">{message.body}</p>
+                    <p className="mt-2 whitespace-pre-line text-sm leading-6 text-zinc-700">
+                      {message.body}
+                    </p>
                   </div>
                 );
               })

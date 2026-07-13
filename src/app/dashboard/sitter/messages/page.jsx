@@ -30,24 +30,47 @@ function getMessagePreview(message) {
   if (!message) return "No messages yet.";
 
   const body = message.body?.trim() || "(empty message)";
+  const normalizedBody = body.replace(/\s+/g, " ");
+
+  if (normalizedBody.toLowerCase().startsWith("schedule change request:")) {
+    const currentVisitMatch = body.match(
+      /Current visit:\s*([\s\S]*?)\s*Requested change:/i
+    );
+    const requestedDateMatch = body.match(/Date:\s*([^\n]+)/i);
+    const requestedTimeMatch = body.match(/Time:\s*([^\n]+)/i);
+
+    const currentVisit = currentVisitMatch?.[1]?.trim();
+    const requestedDate = requestedDateMatch?.[1]?.trim();
+    const requestedTime = requestedTimeMatch?.[1]?.trim();
+
+    if (currentVisit && requestedDate && requestedTime) {
+      return `Schedule change requested: ${currentVisit} → ${requestedDate}, ${requestedTime}`;
+    }
+
+    return "Schedule change requested.";
+  }
+
+  if (normalizedBody.toLowerCase().startsWith("cancellation request:")) {
+    return "Cancellation requested.";
+  }
 
   if (message.senderType === "SYSTEM") {
-    return body;
+    return normalizedBody;
   }
 
   if (message.senderType === "CLIENT") {
-    return `Client: ${body}`;
+    return `Client: ${normalizedBody}`;
   }
 
   if (message.senderType === "SITTER") {
-    return `You: ${body}`;
+    return `You: ${normalizedBody}`;
   }
 
   if (message.senderType === "OPERATOR") {
-    return `Operator: ${body}`;
+    return `Operator: ${normalizedBody}`;
   }
 
-  return body;
+  return normalizedBody;
 }
 
 export default async function SitterMessagesInboxPage() {
@@ -159,7 +182,7 @@ export default async function SitterMessagesInboxPage() {
                   </div>
 
                   <p
-                    className={`mt-3 line-clamp-2 text-sm ${
+                    className={`mt-3 line-clamp-3 text-sm leading-5 ${
                       hasUnread
                         ? "font-semibold text-zinc-950"
                         : "text-zinc-700"

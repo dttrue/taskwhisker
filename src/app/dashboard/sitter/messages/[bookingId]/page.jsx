@@ -162,7 +162,7 @@ export default async function SitterBookingMessagesPage({ params }) {
               </p>
 
               {cancellationRequest?.body && (
-                <div className="mt-3 rounded-xl border border-red-100 bg-white p-3 text-sm text-zinc-700">
+                <div className="mt-3 whitespace-pre-line rounded-xl border border-red-100 bg-white p-3 text-sm leading-6 text-zinc-700">
                   {cancellationRequest.body}
                 </div>
               )}
@@ -211,7 +211,7 @@ export default async function SitterBookingMessagesPage({ params }) {
                       </p>
                     </div>
 
-                    <p className="mt-2 text-sm text-zinc-700">
+                    <p className="mt-2 whitespace-pre-line text-sm leading-6 text-zinc-700">
                       {message.body?.trim() || "(empty message)"}
                     </p>
                   </div>
