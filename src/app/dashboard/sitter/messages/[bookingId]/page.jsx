@@ -8,6 +8,7 @@ import { markConversationRead } from "@/lib/messaging/readState";
 import SitterMessageForm from "./SitterMessageForm";
 import ApproveCancellationRequestButton from "./ApproveCancellationRequestButton";
 import MessageAutoRefresh from "@/components/messaging/MessageAutoRefresh";
+import { createThreadPollingFingerprint } from "@/lib/messaging/pollingFingerprint";
 
 const CLOSED_MESSAGE_STATUSES = ["CANCELED", "COMPLETED"];
 
@@ -102,10 +103,18 @@ export default async function SitterBookingMessagesPage({ params }) {
 
   const hasOpenCancellationRequest =
     Boolean(cancellationRequest) && !messagingClosed;
+  const pollingFingerprint = createThreadPollingFingerprint({
+    status: booking.status,
+    messages,
+  });
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6">
-      <MessageAutoRefresh intervalMs={10000} />
+      <MessageAutoRefresh
+        scope="sitter-thread"
+        bookingId={booking.id}
+        initialFingerprint={pollingFingerprint}
+      />
 
       <div className="mx-auto max-w-xl space-y-4">
         <Link

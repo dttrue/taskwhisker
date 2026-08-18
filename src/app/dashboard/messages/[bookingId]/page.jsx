@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getBookingConversation } from "@/lib/messaging/getBookingConversation";
 import MessageForm from "./MessageForm";
+import MessageAutoRefresh from "@/components/messaging/MessageAutoRefresh";
+import { createThreadPollingFingerprint } from "@/lib/messaging/pollingFingerprint";
 function formatDateTime(value) {
   if (!value) return "—";
 
@@ -32,9 +34,18 @@ export default async function BookingMessagesPage({ params }) {
   }
 
   const { booking, messages } = conversation;
+  const pollingFingerprint = createThreadPollingFingerprint({
+    status: booking.status,
+    messages,
+  });
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6">
+      <MessageAutoRefresh
+        scope="operator-thread"
+        bookingId={booking.id}
+        initialFingerprint={pollingFingerprint}
+      />
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="flex items-center justify-between">
           <Link

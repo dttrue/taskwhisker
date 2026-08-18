@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getClientBookingConversation } from "@/lib/messaging/getClientBookingConversation";
 import ClientMessageForm from "./ClientMessageForm";
 import MessageAutoRefresh from "@/components/messaging/MessageAutoRefresh";
+import { createThreadPollingFingerprint } from "@/lib/messaging/pollingFingerprint";
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -53,10 +54,18 @@ export default async function ClientBookingMessagesPage({ params }) {
   const messages = booking.conversation?.messages || [];
   const closedMessagingCopy = getClosedMessagingCopy(booking.status);
   const messagingClosed = Boolean(closedMessagingCopy);
+  const pollingFingerprint = createThreadPollingFingerprint({
+    status: booking.status,
+    messages,
+  });
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6">
-      <MessageAutoRefresh intervalMs={10000} />
+      <MessageAutoRefresh
+        scope="client-thread"
+        clientLinkToken={clientLinkToken}
+        initialFingerprint={pollingFingerprint}
+      />
 
       <div className="mx-auto max-w-xl space-y-4">
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">

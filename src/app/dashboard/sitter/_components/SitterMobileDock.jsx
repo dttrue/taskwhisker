@@ -77,14 +77,37 @@ export default function SitterMobileDock() {
 
   useEffect(() => {
     let isMounted = true;
+    let timerId = null;
+    const intervalMs =
+      process.env.NODE_ENV === "development" ? 120000 : 30000;
+
+    function clearTimer() {
+      if (timerId) clearTimeout(timerId);
+      timerId = null;
+    }
+
+    function schedule() {
+      clearTimer();
+      if (!isMounted || document.visibilityState !== "visible") return;
+      timerId = setTimeout(loadUnreadCount, intervalMs);
+    }
 
     async function loadUnreadCount() {
-      if (inFlightRef.current) return;
+      clearTimer();
+
+      if (
+        !isMounted ||
+        document.visibilityState !== "visible" ||
+        inFlightRef.current
+      ) {
+        schedule();
+        return;
+      }
 
       inFlightRef.current = true;
 
       try {
-        const res = await fetch(`/api/sitter/unread-messages?t=${Date.now()}`, {
+        const res = await fetch("/api/sitter/unread-messages", {
           cache: "no-store",
         });
 
@@ -99,16 +122,29 @@ export default function SitterMobileDock() {
         // Keep dock quiet if unread count fails.
       } finally {
         inFlightRef.current = false;
+        schedule();
       }
     }
 
-    loadUnreadCount();
+    function refreshWhenActive() {
+      if (document.visibilityState !== "visible") {
+        clearTimer();
+        return;
+      }
 
-    const interval = setInterval(loadUnreadCount, 30000);
+      clearTimer();
+      void loadUnreadCount();
+    }
+
+    document.addEventListener("visibilitychange", refreshWhenActive);
+    window.addEventListener("focus", refreshWhenActive);
+    void loadUnreadCount();
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      clearTimer();
+      document.removeEventListener("visibilitychange", refreshWhenActive);
+      window.removeEventListener("focus", refreshWhenActive);
     };
   }, [pathname]);
 

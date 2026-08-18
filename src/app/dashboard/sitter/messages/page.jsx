@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { getSitterConversations } from "@/lib/messaging/getSitterConversations";
 import { countUnreadMessagesForParticipant } from "@/lib/messaging/readState";
 import MessageAutoRefresh from "@/components/messaging/MessageAutoRefresh";
+import { createInboxPollingFingerprint } from "@/lib/messaging/pollingFingerprint";
 function formatDateTime(value) {
   if (!value) return "—";
 
@@ -97,10 +98,26 @@ export default async function SitterMessagesInboxPage() {
   const conversations = await getSitterConversations({
     sitterId: sitter.id,
   });
+  const conversationsWithUnreadCounts = conversations.map((conversation) => {
+    const participant = conversation.participants?.[0] ?? null;
+    const unreadCount = countUnreadMessagesForParticipant({
+      messages: conversation.messages ?? [],
+      lastReadAt: participant?.lastReadAt ?? null,
+      unreadSenderTypes: ["CLIENT"],
+    });
+
+    return { ...conversation, unreadCount };
+  });
+  const pollingFingerprint = createInboxPollingFingerprint(
+    conversationsWithUnreadCounts
+  );
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6 pb-24">
-      <MessageAutoRefresh intervalMs={10000} />
+      <MessageAutoRefresh
+        scope="sitter-inbox"
+        initialFingerprint={pollingFingerprint}
+      />
 
       <div className="mx-auto max-w-xl space-y-4">
         <Link
@@ -129,16 +146,11 @@ export default async function SitterMessagesInboxPage() {
               No assigned booking conversations yet.
             </div>
           ) : (
-            conversations.map((conversation) => {
+            conversationsWithUnreadCounts.map((conversation) => {
               const booking = conversation.booking;
               const latestMessage = conversation.messages?.[0] ?? null;
-              const participant = conversation.participants?.[0] ?? null;
 
-              const unreadCount = countUnreadMessagesForParticipant({
-                messages: conversation.messages ?? [],
-                lastReadAt: participant?.lastReadAt ?? null,
-                unreadSenderTypes: ["CLIENT"],
-              });
+              const unreadCount = conversation.unreadCount;
 
               const hasUnread = unreadCount > 0;
 
