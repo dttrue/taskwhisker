@@ -109,37 +109,28 @@ export async function requestClientBookingCancellation(formData) {
       },
     });
 
-    const conversation = await tx.conversation.findFirst({
-      where: {
-        bookingId: booking.id,
-      },
-      select: {
-        id: true,
-      },
+    const conversation = await tx.conversation.upsert({
+      where: { bookingId: booking.id },
+      update: {},
+      create: { bookingId: booking.id },
     });
 
-    if (conversation) {
-      await tx.message.create({
-        data: {
-          conversationId: conversation.id,
-          senderType: "CLIENT",
-          messageType: "TEXT",
-          body: `Cancellation request:\n\n${reason}`,
-        },
-      });
-    } else {
-      await createSystemMessage({
-        tx,
-        bookingId: booking.id,
-        body: `Client requested cancellation.\n\nReason: ${reason}`,
-      });
-    }
+    await tx.message.create({
+      data: {
+        conversationId: conversation.id,
+        senderType: "CLIENT",
+        messageType: "TEXT",
+        body: `Cancellation request:\n\n${reason}`,
+      },
+    });
   });
 
   revalidatePath(`/client/bookings/${clientLinkToken}`);
   revalidatePath(`/client/bookings/${clientLinkToken}/messages`);
   revalidatePath(`/dashboard/sitter/messages/${booking.id}`);
   revalidatePath("/dashboard/sitter/messages");
+  revalidatePath("/dashboard/sitter");
+  revalidatePath("/dashboard/operator");
 
   return {
     ok: true,

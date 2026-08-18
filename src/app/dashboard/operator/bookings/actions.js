@@ -5,7 +5,11 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createSystemMessage } from "@/lib/messaging/createSystemMessage";
+import {
+  CLIENT_CANCELLATION_FEE_RATE_BPS,
+  calculateCancellationFeeCents,
+  cancelBookingTransaction,
+} from "@/lib/bookings/cancelBookingTransaction";
 async function getActorId(session) {
   if (session?.user?.id) {
     const byId = await prisma.user.findUnique({
@@ -135,6 +139,35 @@ async function resolveAssignableSitterIdForOperator(session) {
 function revalidateOperator(bookingId) {
   revalidatePath("/dashboard/operator");
   revalidatePath(`/dashboard/operator/bookings/${bookingId}`);
+}
+
+function revalidateCancellationViews(bookingId, clientLinkToken) {
+  revalidatePath("/dashboard/operator");
+  revalidatePath(`/dashboard/operator/bookings/${bookingId}`);
+  revalidatePath("/dashboard/sitter");
+  revalidatePath("/dashboard/sitter/messages");
+  revalidatePath(`/dashboard/sitter/messages/${bookingId}`);
+
+  if (clientLinkToken) {
+    revalidatePath(`/client/bookings/${clientLinkToken}`);
+    revalidatePath(`/client/bookings/${clientLinkToken}/messages`);
+  }
+}
+
+async function hasClientCancellationRequest(bookingId) {
+  const message = await prisma.message.findFirst({
+    where: {
+      conversation: { bookingId },
+      senderType: "CLIENT",
+      body: {
+        startsWith: "Cancellation request:",
+        mode: "insensitive",
+      },
+    },
+    select: { id: true },
+  });
+
+  return Boolean(message);
 }
 
 // ✅ Supports (bookingId) OR (formData) OR (bookingId, formData)
@@ -278,19 +311,10 @@ export async function cancelBooking(arg1, arg2) {
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
-    select: { id: true, status: true },
+    select: { status: true },
   });
 
-  if (!booking) {
-    return { ok: false, error: "Booking not found." };
-  }
-
-  if (booking.status === "CANCELED" || booking.status === "COMPLETED") {
-    return {
-      ok: false,
-      error: `Booking is already ${booking.status.toLowerCase()}.`,
-    };
-  }
+  if (!booking) return { ok: false, error: "Booking not found." };
 
   if (booking.status === "CONFIRMED" && !reason) {
     return {
@@ -299,25 +323,35 @@ export async function cancelBooking(arg1, arg2) {
     };
   }
 
-  await prisma.$transaction([
-    prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: "CANCELED", canceledAt: new Date() },
-    }),
-    prisma.bookingHistory.create({
-      data: {
-        bookingId,
-        fromStatus: booking.status,
-        toStatus: "CANCELED",
-        note: reason
-          ? `Operator canceled booking · ${reason}`
-          : "Operator canceled booking",
-        changedByUserId: actorId,
-      },
-    }),
-  ]);
+  const historyNote = reason
+    ? `Operator canceled booking · ${reason}`
+    : "Operator canceled booking";
 
-  revalidateOperator(bookingId);
+  const result = await prisma.$transaction((tx) =>
+    cancelBookingTransaction({
+      tx,
+      bookingId,
+      actorId,
+      cancellationFeeCents: 0,
+      cancellationFeeWaived: true,
+      cancellationFeeRateBps: 0,
+      historyNote,
+      systemMessage:
+        "This booking was canceled by the operator. The cancellation fee was waived.",
+    })
+  );
+
+  if (!result.ok) {
+    const error =
+      result.reason === "NOT_FOUND"
+        ? "Booking not found."
+        : result.reason === "COMPLETED"
+        ? "Completed bookings cannot be canceled."
+        : "Booking is already canceled.";
+    return { ok: false, error };
+  }
+
+  revalidateCancellationViews(bookingId, result.clientLinkToken);
   return { ok: true };
 }
 
@@ -338,6 +372,7 @@ export async function approveClientCancellationRequest(arg1, arg2) {
       id: true,
       status: true,
       clientLinkToken: true,
+      clientTotalCents: true,
     },
   });
 
@@ -345,65 +380,41 @@ export async function approveClientCancellationRequest(arg1, arg2) {
     return { ok: false, error: "Booking not found." };
   }
 
-  if (booking.status === "CANCELED") {
-    return { ok: false, error: "Booking is already canceled." };
+  if (!(await hasClientCancellationRequest(bookingId))) {
+    return { ok: false, error: "No client cancellation request was found." };
   }
 
-  if (booking.status === "COMPLETED") {
-    return { ok: false, error: "Cannot cancel a completed booking." };
-  }
-
-  const now = new Date();
-
-  await prisma.$transaction(async (tx) => {
-    await tx.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: "CANCELED",
-        canceledAt: now,
-      },
-    });
-
-    await tx.visit.updateMany({
-      where: {
-        bookingId,
-        status: {
-          notIn: ["COMPLETED", "CANCELED"],
-        },
-      },
-      data: {
-        status: "CANCELED",
-      },
-    });
-
-    await tx.bookingHistory.create({
-      data: {
-        bookingId,
-        fromStatus: booking.status,
-        toStatus: "CANCELED",
-        note: "Operator approved client cancellation request.",
-        changedByUserId: actorId,
-      },
-    });
-
-    await createSystemMessage({
+  const cancellationFeeCents = calculateCancellationFeeCents(
+    booking.clientTotalCents
+  );
+  const result = await prisma.$transaction((tx) =>
+    cancelBookingTransaction({
       tx,
       bookingId,
-      body: "Cancellation approved. This booking has been canceled.",
-    });
-  });
+      actorId,
+      cancellationFeeCents,
+      cancellationFeeWaived: false,
+      cancellationFeeRateBps: CLIENT_CANCELLATION_FEE_RATE_BPS,
+      historyNote: `Operator approved client cancellation request with a $${(
+        cancellationFeeCents / 100
+      ).toFixed(2)} cancellation fee.`,
+      systemMessage: `Cancellation approved. This booking has been canceled. A $${(
+        cancellationFeeCents / 100
+      ).toFixed(2)} cancellation fee applies.`,
+    })
+  );
 
-  revalidatePath("/dashboard/operator");
-  revalidatePath(`/dashboard/operator/bookings/${bookingId}`);
-  revalidatePath("/dashboard/sitter");
-  revalidatePath("/dashboard/sitter/messages");
-  revalidatePath(`/dashboard/sitter/messages/${bookingId}`);
-
-  if (booking.clientLinkToken) {
-    revalidatePath(`/client/bookings/${booking.clientLinkToken}`);
-    revalidatePath(`/client/bookings/${booking.clientLinkToken}/messages`);
+  if (!result.ok) {
+    const error =
+      result.reason === "NOT_FOUND"
+        ? "Booking not found."
+        : result.reason === "COMPLETED"
+        ? "Cannot cancel a completed booking."
+        : "Booking is already canceled.";
+    return { ok: false, error };
   }
 
+  revalidateCancellationViews(bookingId, result.clientLinkToken);
   return { ok: true };
 }
 

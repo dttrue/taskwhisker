@@ -45,6 +45,7 @@ export async function sendSitterBookingMessage(formData) {
     select: {
       id: true,
       sitterId: true,
+      status: true,
     },
   });
 
@@ -54,6 +55,14 @@ export async function sendSitterBookingMessage(formData) {
 
   if (booking.sitterId !== sitter.id) {
     throw new Error("You do not have permission to message this client.");
+  }
+
+  if (booking.status === "CANCELED" || booking.status === "COMPLETED") {
+    throw new Error(
+      booking.status === "CANCELED"
+        ? "This booking has been canceled. Messaging is closed."
+        : "This booking is complete. Messaging is closed."
+    );
   }
 
   const conversation = await prisma.conversation.upsert({
