@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getPublicServices, getPublicExtras } from "../actions";
 import PublicBookingWizard from "./PublicBookingWizard";
+import { PageShell } from "@/components/ui/Foundation";
 
 function toPlain(value) {
   if (value == null) return value;
@@ -57,14 +58,12 @@ export default async function BookServicePage({ params }) {
   }
 
   return (
-    <main className="min-h-screen bg-base-100">
-      <div className="max-w-md mx-auto px-4 py-6">
-        <PublicBookingWizard
-          initialService={initialService}
-          serviceOptions={services}
-          extraOptions={extraOptions}
-        />
-      </div>
-    </main>
+    <PageShell containerClassName="max-w-3xl">
+      <PublicBookingWizard
+        initialService={initialService}
+        serviceOptions={services}
+        extraOptions={extraOptions}
+      />
+    </PageShell>
   );
 }

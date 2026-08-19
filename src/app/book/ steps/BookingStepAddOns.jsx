@@ -1,6 +1,8 @@
 // src/app/book/steps/BookingStepAddOns.jsx
 "use client";
 
+import { FieldGroup, FormField, Notice } from "@/components/ui/Foundation";
+
 function getAddonTitle(extra) {
   if (!extra) return "";
   return extra.label ?? extra.name ?? extra.code ?? "Add-on";
@@ -32,14 +34,14 @@ export default function BookingStepAddOns({
   return (
     <div className="space-y-4">
       {nailTrimExtra && (
-        <div className="rounded-xl border bg-white p-4">
+        <section className={`rounded-[var(--task-radius-control)] border p-4 transition-colors sm:p-5 ${addOns.nailTrim.enabled ? "border-[var(--task-primary)] bg-[var(--task-success-soft)]" : "border-[var(--task-border)] bg-white"}`}>
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-zinc-900">
+              <label htmlFor="nail-trim-addon" className="text-base font-semibold text-[var(--task-text)]">
                 {getAddonTitle(nailTrimExtra)}
-              </div>
+              </label>
 
-              <div className="mt-1 text-xs text-zinc-500">
+              <div className="mt-1 text-sm text-[var(--task-text-muted)]">
                 +${getAddonPrice(nailTrimExtra)}
                 {typeof nailTrimExtra.durationMinutes === "number"
                   ? ` · +${nailTrimExtra.durationMinutes} min`
@@ -48,8 +50,9 @@ export default function BookingStepAddOns({
             </div>
 
             <input
+              id="nail-trim-addon"
               type="checkbox"
-              className="toggle toggle-primary mt-0.5 shrink-0"
+              className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--task-primary)]"
               checked={addOns.nailTrim.enabled}
               onChange={() => toggleAddOn("nailTrim")}
             />
@@ -57,17 +60,15 @@ export default function BookingStepAddOns({
 
           {addOns.nailTrim.enabled && (
             <div className="mt-4">
-              <div className="mb-2 text-xs font-medium text-zinc-900">
-                Applies
-              </div>
-
-              <div className="join join-vertical sm:join-horizontal">
+              <FieldGroup legend="Applies">
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <button
                   type="button"
-                  className={`btn btn-sm join-item ${
+                  aria-pressed={addOns.nailTrim.appliesTo === "ONCE"}
+                  className={`min-h-11 rounded-[var(--task-radius-control)] border px-3 py-2 text-sm font-semibold ${
                     addOns.nailTrim.appliesTo === "ONCE"
-                      ? "btn-primary"
-                      : "btn-ghost"
+                      ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white"
+                      : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)]"
                   }`}
                   onClick={() => setNailTrimAppliesTo("ONCE")}
                 >
@@ -76,30 +77,32 @@ export default function BookingStepAddOns({
 
                 <button
                   type="button"
-                  className={`btn btn-sm join-item ${
+                  aria-pressed={addOns.nailTrim.appliesTo === "EACH_VISIT"}
+                  className={`min-h-11 rounded-[var(--task-radius-control)] border px-3 py-2 text-sm font-semibold ${
                     addOns.nailTrim.appliesTo === "EACH_VISIT"
-                      ? "btn-primary"
-                      : "btn-ghost"
+                      ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white"
+                      : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)]"
                   }`}
                   onClick={() => setNailTrimAppliesTo("EACH_VISIT")}
                 >
                   Each visit
                 </button>
               </div>
+              </FieldGroup>
             </div>
           )}
-        </div>
+        </section>
       )}
 
       {bathExtra && (
-        <div className="rounded-xl border bg-white p-4">
+        <section className={`rounded-[var(--task-radius-control)] border p-4 transition-colors sm:p-5 ${addOns.bath.enabled ? "border-[var(--task-primary)] bg-[var(--task-success-soft)]" : "border-[var(--task-border)] bg-white"}`}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-zinc-900">
+              <label htmlFor="bath-addon" className="text-base font-semibold text-[var(--task-text)]">
                 {getAddonTitle(bathExtra)}
-              </div>
+              </label>
 
-              <div className="mt-1 text-xs text-zinc-500">
+              <div className="mt-1 text-sm text-[var(--task-text-muted)]">
                 +${getAddonPrice(bathExtra)}
                 {typeof bathExtra.durationMinutes === "number"
                   ? ` · +${bathExtra.durationMinutes} min`
@@ -108,8 +111,9 @@ export default function BookingStepAddOns({
             </div>
 
             <input
+              id="bath-addon"
               type="checkbox"
-              className="toggle toggle-primary shrink-0"
+              className="h-5 w-5 shrink-0 accent-[var(--task-primary)]"
               checked={addOns.bath.enabled}
               onChange={() => toggleAddOn("bath")}
             />
@@ -118,17 +122,15 @@ export default function BookingStepAddOns({
           {addOns.bath.enabled && (
             <div className="mt-3 space-y-3">
               <div>
-                <div className="mb-1 text-xs font-medium text-zinc-900">
-                  Applies
-                </div>
-
-                <div className="join join-vertical sm:join-horizontal">
+                <FieldGroup legend="Applies">
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <button
                     type="button"
-                    className={`btn btn-sm join-item ${
+                    aria-pressed={addOns.bath.appliesTo === "ONCE"}
+                    className={`min-h-11 rounded-[var(--task-radius-control)] border px-3 py-2 text-sm font-semibold ${
                       addOns.bath.appliesTo === "ONCE"
-                        ? "btn-primary"
-                        : "btn-ghost"
+                        ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white"
+                        : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)]"
                     }`}
                     onClick={() => setBathAppliesTo("ONCE")}
                   >
@@ -137,61 +139,53 @@ export default function BookingStepAddOns({
 
                   <button
                     type="button"
-                    className={`btn btn-sm join-item ${
+                    aria-pressed={addOns.bath.appliesTo === "EACH_VISIT"}
+                    className={`min-h-11 rounded-[var(--task-radius-control)] border px-3 py-2 text-sm font-semibold ${
                       addOns.bath.appliesTo === "EACH_VISIT"
-                        ? "btn-primary"
-                        : "btn-ghost"
+                        ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white"
+                        : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)]"
                     }`}
                     onClick={() => setBathAppliesTo("EACH_VISIT")}
                   >
                     Each visit
                   </button>
                 </div>
+                </FieldGroup>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-900">
-                    Small dogs
-                  </label>
-                  <input
+              <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
+                  <FormField
+                    id="bath-small-dogs"
+                    label="Small dogs"
                     type="number"
                     min={0}
                     value={addOns.bath.smallDogs}
                     onChange={(e) => setBathCount("smallDogs", e.target.value)}
-                    className="mt-1 block w-full rounded border px-3 py-2"
                   />
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-zinc-900">
-                    Large dogs
-                  </label>
-                  <input
+                  <FormField
+                    id="bath-large-dogs"
+                    label="Large dogs"
                     type="number"
                     min={0}
                     value={addOns.bath.largeDogs}
                     onChange={(e) => setBathCount("largeDogs", e.target.value)}
-                    className="mt-1 block w-full rounded border px-3 py-2"
                   />
-                </div>
               </div>
 
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-[var(--task-text-muted)]">
                 Not sure? You can leave counts at 0 and clarify in notes.
               </p>
             </div>
           )}
-        </div>
+        </section>
       )}
 
       {!nailTrimExtra && !bathExtra && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-600">
-          No add-ons available for this service.
-        </div>
+        <Notice>No add-ons available for this service.</Notice>
       )}
 
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-[var(--task-text-muted)]">
         Add-ons affect pricing and visit duration.
       </p>
     </div>

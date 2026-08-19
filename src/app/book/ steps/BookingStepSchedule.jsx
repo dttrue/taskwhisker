@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdaptiveCalendar from "@/components/calendar/AdaptiveCalendar";
 import TimeSlotPicker from "@/components/calendar/TimeSlotPicker";
+import { FieldGroup, Notice } from "@/components/ui/Foundation";
 import { BOOKING_WINDOW_START, BOOKING_WINDOW_END } from "../bookingTimeUtils";
 
 function isoToTimeInputValue(value) {
@@ -179,16 +180,17 @@ export default function BookingStepSchedule({
   return (
     <div className="space-y-4">
       {!isRange && (
-        <div className="rounded-xl border bg-white p-4">
-          <div className="mb-2 text-sm font-medium text-zinc-900">
-            Time options
-          </div>
-
-          <div className="join w-full join-vertical sm:join-horizontal">
+        <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-[var(--task-surface-soft)] p-4 sm:p-5">
+          <FieldGroup
+            legend="Time options"
+            hint="Use different times per date when you need more than one visit in a day."
+          >
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <button
               type="button"
-              className={`btn btn-sm join-item ${
-                scheduleMode === "SAME" ? "btn-primary" : "btn-ghost"
+              aria-pressed={scheduleMode === "SAME"}
+              className={`min-h-11 rounded-[var(--task-radius-control)] border px-3 py-2.5 text-sm font-semibold transition-colors ${
+                scheduleMode === "SAME" ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white" : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)] hover:bg-[var(--task-surface-soft)]"
               }`}
               onClick={handleSameMode}
             >
@@ -197,23 +199,21 @@ export default function BookingStepSchedule({
 
             <button
               type="button"
-              className={`btn btn-sm join-item ${
-                scheduleMode === "CUSTOM" ? "btn-primary" : "btn-ghost"
+              aria-pressed={scheduleMode === "CUSTOM"}
+              className={`min-h-11 rounded-[var(--task-radius-control)] border px-3 py-2.5 text-sm font-semibold transition-colors ${
+                scheduleMode === "CUSTOM" ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white" : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)] hover:bg-[var(--task-surface-soft)]"
               }`}
               onClick={handleCustomMode}
             >
               Different times per date
             </button>
           </div>
-
-          <p className="mt-2 text-xs text-zinc-500">
-            Use “Different times per date” for two walks in one day.
-          </p>
-        </div>
+          </FieldGroup>
+        </section>
       )}
 
-      <div className="rounded-xl border bg-white p-4">
-        <p className="mb-3 text-sm font-medium text-zinc-900">Select dates</p>
+      <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
+        <h2 className="mb-3 text-sm font-semibold text-[var(--task-text)]">Select dates</h2>
 
         <div className="flex justify-center">
           <div className="w-full max-w-[320px]">
@@ -237,16 +237,17 @@ export default function BookingStepSchedule({
             />
           </div>
         </div>
-      </div>
+      </section>
 
       {isRange && (
-        <div className="rounded-xl border bg-white p-4">
-          <div className="grid grid-cols-2 gap-3">
+        <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-zinc-900">
+              <label htmlFor="overnight-start-time" className="block text-sm font-semibold text-[var(--task-text)]">
                 Start time
               </label>
               <input
+                id="overnight-start-time"
                 type="time"
                 min={BOOKING_WINDOW_START}
                 max={BOOKING_WINDOW_END}
@@ -258,15 +259,16 @@ export default function BookingStepSchedule({
                     startTime: e.target.value,
                   }));
                 }}
-                className="mt-1 block w-full rounded-lg border px-3 py-2"
+                className="mt-2 block min-h-11 w-full rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] bg-white px-3.5 py-2.5 text-sm shadow-sm"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-900">
+              <label htmlFor="overnight-end-time" className="block text-sm font-semibold text-[var(--task-text)]">
                 End time
               </label>
               <input
+                id="overnight-end-time"
                 type="time"
                 min={BOOKING_WINDOW_START}
                 max={BOOKING_WINDOW_END}
@@ -278,38 +280,32 @@ export default function BookingStepSchedule({
                     endTime: e.target.value,
                   }));
                 }}
-                className="mt-1 block w-full rounded-lg border px-3 py-2"
+                className="mt-2 block min-h-11 w-full rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] bg-white px-3.5 py-2.5 text-sm shadow-sm"
               />
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {!isRange && usesSlotPicker && (
-        <div className="rounded-xl border bg-white p-4">
+        <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
           <div className="mb-3">
-            <p className="text-sm font-medium text-zinc-900">Available Times</p>
-            <p className="text-xs text-zinc-500">
+            <h2 className="text-sm font-semibold text-[var(--task-text)]">Available times</h2>
+            <p className="mt-1 text-xs text-[var(--task-text-muted)]">
               Select a time slot for this visit.
             </p>
           </div>
 
           {!selectedDate ? (
-            <p className="text-sm text-zinc-600">
+            <p className="text-sm text-[var(--task-text-muted)]">
               Select a date to see available times.
             </p>
           ) : showLoading ? (
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-              Loading available times...
-            </div>
+            <Notice role="status">Loading available times...</Notice>
           ) : slotError ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {slotError}
-            </div>
+            <Notice tone="danger" role="alert">{slotError}</Notice>
           ) : availableSlots.length === 0 ? (
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-              No available times for this date.
-            </div>
+            <Notice>No available times for this date.</Notice>
           ) : (
             <TimeSlotPicker
               slots={availableSlots}
@@ -332,23 +328,21 @@ export default function BookingStepSchedule({
           )}
 
           {selectedDate && !showLoading && !slotError && (
-            <p className="mt-2 text-xs text-zinc-500">
+            <p className="mt-3 text-xs text-[var(--task-text-muted)]">
               Showing only available time slots.
             </p>
           )}
-        </div>
+        </section>
       )}
 
       {!isRange && scheduleMode === "CUSTOM" && (
-        <div className="rounded-xl border bg-white p-4">
-          <div className="mb-3 text-sm font-medium text-zinc-900">
+        <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
+          <h2 className="mb-3 text-sm font-semibold text-[var(--task-text)]">
             Time slots per date
-          </div>
+          </h2>
 
           {!selectedDateStrs.length ? (
-            <p className="text-xs text-zinc-500">
-              Select dates to add time slots.
-            </p>
+            <Notice>Select dates to add time slots.</Notice>
           ) : (
             <div className="space-y-3">
               {selectedDateStrs.map((dateStr) => {
@@ -360,22 +354,22 @@ export default function BookingStepSchedule({
                 return (
                   <div
                     key={dateStr}
-                    className="rounded-xl border bg-zinc-50 p-3"
+                    className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-[var(--task-surface-soft)] p-3 sm:p-4"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium text-zinc-900">
+                      <div className="text-sm font-semibold text-[var(--task-text)]">
                         {label}
                       </div>
 
                       <button
                         type="button"
-                        className="btn btn-xs btn-outline"
+                        className="min-h-10 rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] bg-white px-3 py-2 text-xs font-semibold text-[var(--task-primary)] hover:bg-[var(--task-surface-soft)]"
                         onClick={() => {
                           clearError?.();
                           addSlot(dateStr);
                         }}
                       >
-                        + Add time
+                        Add time
                       </button>
                     </div>
 
@@ -383,14 +377,15 @@ export default function BookingStepSchedule({
                       {dateSlots.map((slot, idx) => (
                         <div
                           key={idx}
-                          className="grid grid-cols-[1fr_1fr_auto] items-end gap-2"
+                          className="grid grid-cols-1 gap-3 rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
                         >
                           <div>
-                            <label className="block text-xs text-zinc-600">
+                            <label htmlFor={`${dateStr}-${idx}-start`} className="block text-xs font-medium text-[var(--task-text-muted)]">
                               Start
                             </label>
                             <input
                               type="time"
+                              id={`${dateStr}-${idx}-start`}
                               min={BOOKING_WINDOW_START}
                               max={BOOKING_WINDOW_END}
                               value={slot.startTime}
@@ -400,16 +395,17 @@ export default function BookingStepSchedule({
                                   startTime: e.target.value,
                                 });
                               }}
-                              className="mt-1 block w-full rounded-lg border px-3 py-2"
+                              className="mt-1 block min-h-11 w-full rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] px-3 py-2"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-xs text-zinc-600">
+                            <label htmlFor={`${dateStr}-${idx}-end`} className="block text-xs font-medium text-[var(--task-text-muted)]">
                               End
                             </label>
                             <input
                               type="time"
+                              id={`${dateStr}-${idx}-end`}
                               min={BOOKING_WINDOW_START}
                               max={BOOKING_WINDOW_END}
                               value={slot.endTime}
@@ -419,27 +415,26 @@ export default function BookingStepSchedule({
                                   endTime: e.target.value,
                                 });
                               }}
-                              className="mt-1 block w-full rounded-lg border px-3 py-2"
+                              className="mt-1 block min-h-11 w-full rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] px-3 py-2"
                             />
                           </div>
 
                           <button
                             type="button"
-                            className="btn btn-ghost btn-sm"
+                            className="min-h-11 rounded-[var(--task-radius-control)] px-3 py-2 text-sm font-semibold text-[var(--task-danger)] hover:bg-[var(--task-danger-soft)]"
                             onClick={() => {
                               clearError?.();
                               removeSlot(dateStr, idx);
                             }}
                             disabled={dateSlots.length <= 1}
-                            title="Remove"
                           >
-                            ×
+                            Remove time
                           </button>
                         </div>
                       ))}
                     </div>
 
-                    <p className="mt-2 text-xs text-zinc-500">
+                    <p className="mt-3 text-xs text-[var(--task-text-muted)]">
                       Booking window: 7:00 AM to 10:00 PM.
                     </p>
                   </div>
@@ -447,7 +442,7 @@ export default function BookingStepSchedule({
               })}
             </div>
           )}
-        </div>
+        </section>
       )}
     </div>
   );

@@ -1,9 +1,9 @@
 // src/app/book/steps/BookingStepReview.jsx
 "use client";
-import Link from "next/link";
 import { useMemo } from "react";
 import { formatTimeSlots, formatTime12h } from "../bookingFormUtils";
 import { formatServiceAddress } from "@/lib/formatAddress";
+import { Button, Notice } from "@/components/ui/Foundation";
 
 const DOG_SIZE_LABELS = {
   SMALL: "Small",
@@ -89,8 +89,8 @@ export default function BookingStepReview({
   const reviewSchedule = useMemo(() => {
     if (isRange || scheduleMode === "SAME") {
       return (
-        <div>
-          <span className="font-medium">Time:</span>{" "}
+        <div className="leading-6">
+          <span className="font-semibold text-[var(--task-text)]">Time:</span>{" "}
           {formatTime12h(times.startTime) || "—"} →{" "}
           {formatTime12h(times.endTime) || "—"}
         </div>
@@ -104,18 +104,18 @@ export default function BookingStepReview({
     if (!entries.length) {
       return (
         <div>
-          <span className="font-semibold text-zinc-800">Time slots</span>
+          <span className="font-semibold text-[var(--task-text)]">Time slots</span>
 
           <div className="mt-2 space-y-2">
-            <div className="text-sm text-zinc-600">
-              <span className="font-semibold text-zinc-800">
+            <div className="text-[15px] leading-6 text-[var(--task-text)]">
+              <span className="font-semibold text-[var(--task-text)]">
                 {Object.values(slotsByDate || {}).reduce(
                   (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
                   0
                 )}
               </span>{" "}
               visits across{" "}
-              <span className="font-semibold text-zinc-800">
+              <span className="font-semibold text-[var(--task-text)]">
                 {Object.keys(slotsByDate || {}).length}
               </span>{" "}
               day{Object.keys(slotsByDate || {}).length > 1 ? "s" : ""}
@@ -123,7 +123,7 @@ export default function BookingStepReview({
 
             {formatTimeSlots(slotsByDate).map((group) => (
               <div key={group.date}>
-                <div className="mt-4 text-sm font-semibold text-zinc-800">
+                <div className="mt-4 text-sm font-semibold text-[var(--task-text)]">
                   {new Date(group.date).toLocaleDateString(undefined, {
                     weekday: "short",
                     month: "short",
@@ -132,7 +132,7 @@ export default function BookingStepReview({
                   })}
                 </div>
 
-                <ul className="ml-5 list-disc space-y-1 text-sm text-zinc-600">
+                <ul className="ml-5 list-disc space-y-1 text-[15px] leading-6 text-[var(--task-text)]">
                   {group.slots.map((slot, i) => (
                     <li key={i}>
                       {formatTime12h(slot.startTime)} →{" "}
@@ -164,9 +164,9 @@ export default function BookingStepReview({
               .join(", ");
 
             return (
-              <div key={dateStr} className="text-sm">
-                <div className="text-zinc-600">{label}</div>
-                <div>{slotText || "—"}</div>
+              <div key={dateStr} className="text-[15px] leading-6">
+                <div className="font-medium text-[var(--task-text)]">{label}</div>
+                <div className="text-[var(--task-text)]">{slotText || "—"}</div>
               </div>
             );
           })}
@@ -177,51 +177,58 @@ export default function BookingStepReview({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border bg-white p-4">
-        <div className="mb-3 text-sm font-medium text-zinc-900">
+      <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-5 sm:p-7">
+        <h2 className="mb-6 text-2xl font-bold tracking-[-0.035em] text-[var(--task-text)] sm:text-[1.7rem]">
           Review your request
-        </div>
+        </h2>
 
-        <div className="space-y-4 text-sm">
-          <div>
-            <div className="font-medium text-zinc-900">Service</div>
-            <div className="text-zinc-600">
+        <dl className="divide-y divide-[var(--task-border)]">
+          <div className="py-5 first:pt-0 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
+            <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">Service</dt>
+            <dd className="mt-2 min-w-0 break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
               {payloadService?.label ?? payloadService?.name ?? "—"}
-            </div>
+            </dd>
           </div>
 
-          <div>
-            <div className="font-medium text-zinc-900">Schedule</div>
-            <div className="text-zinc-600">Dates: {reviewDates}</div>
+          <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
+            <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">Schedule</dt>
+            <dd className="mt-2 min-w-0 space-y-1 break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
+            <div>Dates: {reviewDates}</div>
             {isRange && nightCount !== null ? (
-              <div className="text-zinc-600">Nights: {nightCount}</div>
+              <div>Nights: {nightCount}</div>
             ) : null}
-            <div className="mt-1">{reviewSchedule}</div>
+            <div>{reviewSchedule}</div>
+            </dd>
           </div>
 
-          <div>
-            <div className="font-medium text-zinc-900">Client</div>
-            <div className="text-zinc-600">{client?.name || "—"}</div>
-            <div className="text-zinc-600">{client?.email || "—"}</div>
+          <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
+            <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">Client</dt>
+            <dd className="mt-2 min-w-0 break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
+            <div>{client?.name || "—"}</div>
+            <div>{client?.email || "—"}</div>
             {client?.phone ? (
-              <div className="text-zinc-600">{client.phone}</div>
+              <div>{client.phone}</div>
             ) : null}
+            </dd>
           </div>
 
-          <div>
-            <div className="font-medium text-zinc-900">Pet details</div>
-            <div className="text-zinc-600">
+          <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
+            <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">Pet details</dt>
+            <dd className="mt-2 min-w-0 break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
+            <div>
               Dog size: {formatDogSizes(dogSize)}
             </div>
-            <div className="text-zinc-600">
+            <div>
               Weight class: {formatWeightClass(weightClass)}
             </div>
+            </dd>
           </div>
 
           {hasAnyAddOns && (
-            <div>
-              <div className="font-medium text-zinc-900">Add-ons</div>
-              <ul className="ml-5 mt-1 list-disc space-y-1 text-zinc-600">
+            <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
+              <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">Add-ons</dt>
+              <dd className="min-w-0">
+              <ul className="ml-5 mt-2 list-disc space-y-1 break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
                 {addOns?.nailTrim?.enabled && nailTrimExtra && (
                   <li>
                     {getExtraDisplayName(nailTrimExtra, "Nail trim")} (
@@ -243,60 +250,59 @@ export default function BookingStepReview({
                   </li>
                 )}
               </ul>
+              </dd>
             </div>
           )}
 
-          <div>
-            <div className="font-medium text-zinc-900">Service address</div>
-            <div className="text-zinc-600">
+          <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
+            <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">Service address</dt>
+            <dd className="mt-2 min-w-0 break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
               {formatServiceAddress(serviceLocation) || "—"}
-            </div>
+            </dd>
           </div>
 
           {serviceLocation?.accessInstructions ? (
-            <div>
-              <div className="font-medium text-zinc-900">
+            <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
+              <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">
                 Access instructions
-              </div>
-              <div className="text-zinc-600">
+              </dt>
+              <dd className="mt-2 min-w-0 whitespace-pre-wrap break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
                 {serviceLocation.accessInstructions}
-              </div>
+              </dd>
             </div>
           ) : null}
 
           {serviceLocation?.locationNotes ? (
-            <div>
-              <div className="font-medium text-zinc-900">Location notes</div>
-              <div className="text-zinc-600">
+            <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
+              <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">Location notes</dt>
+              <dd className="mt-2 min-w-0 whitespace-pre-wrap break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
                 {serviceLocation.locationNotes}
-              </div>
+              </dd>
             </div>
           ) : null}
 
           {notes ? (
-            <div>
-              <div className="font-medium text-zinc-900">General notes</div>
-              <div className="text-zinc-600 whitespace-pre-wrap">{notes}</div>
+            <div className="py-5 last:pb-0 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
+              <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">General notes</dt>
+              <dd className="mt-2 min-w-0 whitespace-pre-wrap break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">{notes}</dd>
             </div>
           ) : null}
-        </div>
-      </div>
+        </dl>
+      </section>
 
       {booking && (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-          <p>
-            Booking created! ID: <span className="font-mono">{booking.id}</span>
-          </p>
+        <Notice tone="success" role="status" aria-live="polite" title="Booking request sent">
+          <p>Your request was created successfully. Reference: <span className="font-mono">{booking.id}</span></p>
 
           {booking.clientLinkToken ? (
-            <Link
+            <Button
               href={`/client/bookings/${booking.clientLinkToken}/messages`}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800"
+              className="mt-3 w-full"
             >
               Message sitter
-            </Link>
+            </Button>
           ) : null}
-        </div>
+        </Notice>
       )}
     </div>
   );

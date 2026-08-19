@@ -1,8 +1,16 @@
 // src/app/book/[serviceCode]/PublicBookingWizard.jsx
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPublicBooking } from "../actions";
+import {
+  Button,
+  Card,
+  Eyebrow,
+  FormFeedback,
+  Notice,
+  PageHeader,
+} from "@/components/ui/Foundation";
 
 import BookingStepSchedule from "../ steps/BookingStepSchedule";
 import BookingStepClientInfo from "../ steps/BookingStepClientInfo";
@@ -11,6 +19,7 @@ import BookingStepReview from "../ steps/BookingStepReview";
 import { validateScheduleAvailabilityStep } from "../validatePublicBookingStep";
 const BOOKING_START_MIN = 7 * 60; // 07:00
 const BOOKING_END_MIN = 22 * 60; // 22:00
+const BOOKING_STEPS = ["Schedule", "Your info", "Add-ons", "Review"];
 
 function prettyDate(d) {
   try {
@@ -60,6 +69,7 @@ export default function PublicBookingWizard({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState(null);
   const [booking, setBooking] = useState(null);
+  const errorRef = useRef(null);
 
   const serviceCode = initialService.code;
   const svc =
@@ -109,6 +119,12 @@ export default function PublicBookingWizard({
   const [petNotes, setPetNotes] = useState("");
 
   const isRange = serviceType === "OVERNIGHT";
+
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus();
+    }
+  }, [error]);
 
   const availableExtras = useMemo(() => {
     if (!svc) return [];
@@ -500,37 +516,83 @@ export default function PublicBookingWizard({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-zinc-200 bg-white p-4">
-        <div className="mb-2">
-          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Selected service
-          </div>
-          <div className="text-base font-semibold text-zinc-900">
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Request pet care"
+        title="Tell us what your pet needs"
+        description="Complete the four steps below. You can review everything before sending your request."
+      />
+
+      <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-[var(--task-surface-soft)] p-4 sm:flex sm:items-start sm:justify-between sm:gap-6">
+        <div>
+          <Eyebrow className="text-[var(--task-accent)]">Selected service</Eyebrow>
+          <div className="mt-1 text-lg font-semibold text-[var(--task-text)]">
             {svc.name ?? svc.label}
           </div>
           {svc.description ? (
-            <p className="mt-1 text-sm text-zinc-600">{svc.description}</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--task-text-muted)]">{svc.description}</p>
           ) : null}
         </div>
-      </div>
+        <Button href="/book" variant="quiet" className="mt-3 min-h-10 px-3 py-2 sm:mt-0">
+          Change service
+        </Button>
+      </section>
 
-      <ul className="steps mb-4 w-full text-xs">
-        <li className={`step ${step >= 1 ? "step-primary" : ""}`}>Schedule</li>
-        <li className={`step ${step >= 2 ? "step-primary" : ""}`}>Your Info</li>
-        <li className={`step ${step >= 3 ? "step-primary" : ""}`}>Add-ons</li>
-        <li className={`step ${step >= 4 ? "step-primary" : ""}`}>Review</li>
-      </ul>
+      <nav aria-label="Booking progress">
+        <div className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:hidden">
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <span className="font-semibold text-[var(--task-primary)]">Step {step} of {BOOKING_STEPS.length}</span>
+            <span className="text-[var(--task-text-muted)]">{BOOKING_STEPS[step - 1]}</span>
+          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--task-surface-soft)]">
+            <div
+              className="h-full rounded-full bg-[var(--task-primary)] transition-[width]"
+              style={{ width: `${(step / BOOKING_STEPS.length) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        <ol className="hidden grid-cols-4 gap-2 sm:grid" aria-label={`Step ${step} of ${BOOKING_STEPS.length}`}>
+          {BOOKING_STEPS.map((label, index) => {
+            const stepNumber = index + 1;
+            const isCurrent = stepNumber === step;
+            const isComplete = stepNumber < step;
+
+            return (
+              <li
+                key={label}
+                aria-current={isCurrent ? "step" : undefined}
+                className="relative flex flex-col items-center text-center"
+              >
+                {index > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className={`absolute right-1/2 top-4 h-px w-full ${stepNumber <= step ? "bg-[var(--task-primary)]" : "bg-[var(--task-border)]"}`}
+                  />
+                ) : null}
+                <span
+                  className={`relative flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold ${isCurrent || isComplete ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white" : "border-[var(--task-border-strong)] bg-white text-[var(--task-text-muted)]"}`}
+                >
+                  {stepNumber}
+                </span>
+                <span className={`mt-2 text-xs font-medium ${isCurrent ? "text-[var(--task-primary)]" : "text-[var(--task-text-muted)]"}`}>
+                  {label}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
       {step === 1 && !sitterId && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <Notice tone="danger" role="alert">
           Booking is not configured correctly. This service is missing a
           sitter/provider.
-        </div>
+        </Notice>
       )}
 
-      <div className="card bg-base-100 shadow-md">
-        <div className="card-body space-y-4">
+      <Card className="p-4 sm:p-6 lg:p-8">
+        <div className="space-y-5">
           {step === 1 && sitterId && (
             <BookingStepSchedule
               isRange={isRange}
@@ -604,48 +666,50 @@ export default function PublicBookingWizard({
           )}
 
           {error && (
-            <p className="text-error mt-1 whitespace-pre-line text-sm">
-              {error}
-            </p>
+            <div ref={errorRef} tabIndex={-1} className="focus:outline-none">
+              <FormFeedback className="whitespace-pre-line">{error}</FormFeedback>
+            </div>
           )}
 
-          <div className="card-actions mt-4 flex justify-between">
-            <button
+          <div className="mt-6 flex flex-col-reverse gap-3 border-t border-[var(--task-border)] pt-5 sm:flex-row sm:justify-between">
+            <Button
               type="button"
-              className="btn btn-ghost btn-sm"
+              variant="secondary"
+              className="w-full sm:w-auto"
               onClick={goBack}
               disabled={step === 1 || pending}
             >
               Back
-            </button>
+            </Button>
 
             {step < 4 && (
-              <button
+              <Button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="w-full sm:min-w-32 sm:w-auto"
                 onClick={handleNext}
               >
                 Next
-              </button>
+              </Button>
             )}
 
             {step === 4 && (
-              <button
+              <Button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="w-full sm:min-w-44 sm:w-auto"
                 onClick={handleSubmit}
                 disabled={pending || !!booking}
+                aria-busy={pending}
               >
                 {booking
                   ? "Submitted"
                   : pending
                   ? "Submitting..."
                   : "Request Booking"}
-              </button>
+              </Button>
             )}
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

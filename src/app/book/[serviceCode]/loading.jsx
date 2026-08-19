@@ -2,5 +2,5 @@
 import BookServiceChooserSkeleton from "../BookServiceChooserSkeleton";
 
 export default function Loading() {
-  return <BookServiceChooserSkeleton />;
+  return <BookServiceChooserSkeleton variant="wizard" />;
 }

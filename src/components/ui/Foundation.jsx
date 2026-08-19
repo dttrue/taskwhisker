@@ -125,6 +125,8 @@ export function FormField({
   error,
   className,
   inputClassName,
+  as = "input",
+  children,
   ...inputProps
 }) {
   const hintId = hint ? `${id}-hint` : undefined;
@@ -141,25 +143,71 @@ export function FormField({
           {hint}
         </p>
       ) : null}
-      <input
-        id={id}
-        aria-describedby={describedBy}
-        aria-invalid={Boolean(error)}
-        className={cx(
-          "min-h-11 w-full rounded-[var(--task-radius-control)] border bg-white px-3.5 py-2.5 text-sm text-[var(--task-text)] shadow-sm transition placeholder:text-[#858b84] disabled:bg-[var(--task-surface-soft)] disabled:text-[var(--task-text-muted)]",
-          error
-            ? "border-[var(--task-danger)]"
-            : "border-[var(--task-border-strong)] hover:border-[#a9a195]",
-          inputClassName
-        )}
-        {...inputProps}
-      />
+      {as === "textarea" ? (
+        <textarea
+          id={id}
+          aria-describedby={describedBy}
+          aria-invalid={Boolean(error)}
+          className={cx(
+            "min-h-24 w-full rounded-[var(--task-radius-control)] border bg-white px-3.5 py-2.5 text-sm text-[var(--task-text)] shadow-sm transition placeholder:text-[#858b84] disabled:bg-[var(--task-surface-soft)] disabled:text-[var(--task-text-muted)]",
+            error
+              ? "border-[var(--task-danger)]"
+              : "border-[var(--task-border-strong)] hover:border-[#a9a195]",
+            inputClassName
+          )}
+          {...inputProps}
+        />
+      ) : as === "select" ? (
+        <select
+          id={id}
+          aria-describedby={describedBy}
+          aria-invalid={Boolean(error)}
+          className={cx(
+            "min-h-11 w-full rounded-[var(--task-radius-control)] border bg-white px-3.5 py-2.5 text-sm text-[var(--task-text)] shadow-sm transition disabled:bg-[var(--task-surface-soft)] disabled:text-[var(--task-text-muted)]",
+            error
+              ? "border-[var(--task-danger)]"
+              : "border-[var(--task-border-strong)] hover:border-[#a9a195]",
+            inputClassName
+          )}
+          {...inputProps}
+        >
+          {children}
+        </select>
+      ) : (
+        <input
+          id={id}
+          aria-describedby={describedBy}
+          aria-invalid={Boolean(error)}
+          className={cx(
+            "min-h-11 w-full rounded-[var(--task-radius-control)] border bg-white px-3.5 py-2.5 text-sm text-[var(--task-text)] shadow-sm transition placeholder:text-[#858b84] disabled:bg-[var(--task-surface-soft)] disabled:text-[var(--task-text-muted)]",
+            error
+              ? "border-[var(--task-danger)]"
+              : "border-[var(--task-border-strong)] hover:border-[#a9a195]",
+            inputClassName
+          )}
+          {...inputProps}
+        />
+      )}
       {error ? (
         <p id={errorId} className="text-sm font-medium text-[var(--task-danger)]">
           {error}
         </p>
       ) : null}
     </div>
+  );
+}
+
+export function FieldGroup({ legend, hint, children, className }) {
+  return (
+    <fieldset className={cx("space-y-2", className)}>
+      <legend className="text-sm font-semibold text-[var(--task-text)]">
+        {legend}
+      </legend>
+      {hint ? (
+        <p className="text-xs leading-5 text-[var(--task-text-muted)]">{hint}</p>
+      ) : null}
+      {children}
+    </fieldset>
   );
 }
 

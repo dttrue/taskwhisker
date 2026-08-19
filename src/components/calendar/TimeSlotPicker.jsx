@@ -2,6 +2,7 @@
 "use client";
 
 import { formatTime12h } from "@/utils/formatTime";
+import { Notice } from "@/components/ui/Foundation";
 
 export default function TimeSlotPicker({
   slots = [],
@@ -13,25 +14,13 @@ export default function TimeSlotPicker({
 
   if (!availableSlots.length) {
     return (
-      <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600">
-        {emptyMessage}
-      </div>
+      <Notice>{emptyMessage}</Notice>
     );
   }
 
   return (
     <div className="space-y-3">
-      <div>
-        <h2 className="text-base font-semibold text-zinc-900">
-          Available Times
-        </h2>
-
-        <p className="mt-1 text-sm text-zinc-600">
-          Select a time slot for this visit.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:grid-cols-3">
         {availableSlots.map((slot) => {
           const isSelected =
             selectedSlot &&
@@ -44,11 +33,10 @@ export default function TimeSlotPicker({
               type="button"
               onClick={() => onSelectSlot?.(slot)}
               className={[
-                "rounded-xl border p-3 text-left transition",
-                "focus:outline-none focus:ring-2 focus:ring-black/20",
+                "min-h-14 rounded-[var(--task-radius-control)] border p-3 text-left transition-colors",
                 isSelected
-                  ? "border-black bg-black text-white"
-                  : "border-zinc-200 bg-white text-zinc-900 hover:border-zinc-400 hover:bg-zinc-50",
+                  ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white"
+                  : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)] hover:bg-[var(--task-surface-soft)]",
               ].join(" ")}
               aria-pressed={isSelected}
             >
@@ -63,10 +51,6 @@ export default function TimeSlotPicker({
           );
         })}
       </div>
-
-      <p className="text-xs text-zinc-500">
-        Showing only available time slots.
-      </p>
     </div>
   );
 }

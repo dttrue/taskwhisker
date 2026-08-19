@@ -2,7 +2,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import {
+  Button,
+  Card,
+  Eyebrow,
+  FormField,
+  Notice,
+  PageHeader,
+  PageShell,
+} from "@/components/ui/Foundation";
 
 function formatPrice(cents) {
   if (typeof cents !== "number") return "—";
@@ -35,94 +43,98 @@ export default function BookServiceChooser({ services = [] }) {
 
   if (!services.length) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-10">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-semibold text-zinc-900">
-            Book a service
-          </h1>
-          <p className="mt-2 text-sm text-zinc-600">
+      <PageShell containerClassName="max-w-xl">
+        <Card className="p-6 sm:p-8">
+          <PageHeader
+            eyebrow="Request pet care"
+            title="Book a service"
+            description="Choose the care your pet needs to begin a booking request."
+          />
+          <Notice className="mt-6">
             No services are available right now.
-          </p>
-        </div>
-      </div>
+          </Notice>
+          <Button href="/" variant="quiet" className="mt-5">
+            Return to TaskWhisker
+          </Button>
+        </Card>
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-10">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
-            Book a service
-          </h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            Choose the service you need to start your booking request.
-          </p>
-        </div>
+    <PageShell containerClassName="max-w-2xl">
+      <Card className="p-6 sm:p-8 lg:p-10">
+        <PageHeader
+          eyebrow="Request pet care"
+          title="Book a service"
+          description="Choose the service you need to start your booking request."
+        />
 
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-zinc-900">
-            Service
-          </label>
-          <select
+        <div className="mt-8">
+          <FormField
+            as="select"
+            id="booking-service"
+            label="Service"
             value={serviceCode}
             onChange={(e) => setServiceCode(e.target.value)}
-            className="mt-2 block w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-sm text-zinc-900"
           >
             {services.map((service) => (
               <option key={service.id} value={service.code}>
                 {service.name}
               </option>
             ))}
-          </select>
+          </FormField>
         </div>
 
         {selectedService && (
-          <div className="mt-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+          <section className="mt-6 rounded-[var(--task-radius-card)] border border-[var(--task-border)] bg-[var(--task-surface-soft)] p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  {selectedService.species}
-                </p>
-                <h2 className="mt-1 text-lg font-semibold text-zinc-900">
+                <Eyebrow className="text-[var(--task-accent)]">
+                  {selectedService.species} care
+                </Eyebrow>
+                <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[var(--task-text)]">
                   {selectedService.name}
                 </h2>
               </div>
 
-              <span className="rounded-full border border-zinc-200 bg-white px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-zinc-600">
+              <span className="rounded-full border border-[var(--task-border)] bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--task-text-muted)]">
                 {selectedService.category.replace("_", " ")}
               </span>
             </div>
 
-            <p className="mt-3 text-sm leading-6 text-zinc-600">
+            <p className="mt-4 text-sm leading-6 text-[var(--task-text-muted)]">
               {getServiceBlurb(selectedService)}
             </p>
 
-            <div className="mt-4 space-y-1 text-sm text-zinc-700">
-              <p>
-                <span className="font-medium text-zinc-900">Starting at:</span>{" "}
-                {formatPrice(selectedService.basePriceCents)}
-              </p>
+            <dl className="mt-5 grid gap-3 border-t border-[var(--task-border)] pt-4 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-medium text-[var(--task-text-muted)]">Starting at</dt>
+                <dd className="mt-1 font-semibold text-[var(--task-text)]">{formatPrice(selectedService.basePriceCents)}</dd>
+              </div>
 
               {typeof selectedService.durationMinutes === "number" && (
-                <p>
-                  <span className="font-medium text-zinc-900">Duration:</span>{" "}
-                  {selectedService.durationMinutes} min
-                </p>
+                <div>
+                  <dt className="text-xs font-medium text-[var(--task-text-muted)]">Duration</dt>
+                  <dd className="mt-1 font-semibold text-[var(--task-text)]">{selectedService.durationMinutes} min</dd>
+                </div>
               )}
-            </div>
-          </div>
+            </dl>
+          </section>
         )}
 
-        <div className="mt-6">
-          <Link
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+          <Button href="/" variant="quiet">
+            Back to home
+          </Button>
+          <Button
             href={`/book/${selectedService.code}`}
-            className="inline-flex w-full items-center justify-center rounded-xl bg-black px-4 py-3 text-sm font-medium text-white transition hover:opacity-90"
+            className="w-full sm:w-auto sm:min-w-48"
           >
             Continue to booking
-          </Link>
+          </Button>
         </div>
-      </div>
-    </div>
+      </Card>
+    </PageShell>
   );
 }

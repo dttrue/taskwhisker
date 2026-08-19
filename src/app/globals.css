@@ -109,8 +109,7 @@ button {
 .shimmer {
   position: relative;
   overflow: hidden;
-  background: #d4d4d8;
-  /* stronger than zinc-200 */
+  background: #ded9cf;
 }
 
 .shimmer::after {
@@ -127,16 +126,40 @@ button {
   animation: shimmer 1.4s linear infinite;
 }
 
+.rdp-root {
+  --rdp-accent-color: var(--task-primary);
+  --rdp-accent-background-color: color-mix(in srgb, var(--task-primary) 13%, white);
+  color: var(--task-text);
+}
+
+.rdp-root .rdp-chevron {
+  fill: var(--task-primary);
+}
+
+.rdp-root .rdp-dropdown,
+.rdp-root .rdp-month_caption,
+.rdp-root .rdp-caption_label {
+  color: var(--task-primary);
+}
+
 .rdp-root .rdp-range_start,
 .rdp-root .rdp-range_end,
 .rdp-root .rdp-range_middle {
-  background: rgba(0, 0, 0, 0.08);
+  background: color-mix(in srgb, var(--task-primary) 13%, white);
 }
 
 .rdp-root .rdp-range_start .rdp-day_button,
 .rdp-root .rdp-range_end .rdp-day_button {
-  background: #000;
+  background: var(--task-primary);
   color: #fff;
+}
+
+.rdp-root .rdp-day_button:focus-visible,
+.rdp-root .rdp-button_next:focus-visible,
+.rdp-root .rdp-button_previous:focus-visible,
+.rdp-root select:focus-visible {
+  outline: 2px solid var(--task-focus);
+  outline-offset: 2px;
 }
 
 .rdp-root .rdp-range_start {

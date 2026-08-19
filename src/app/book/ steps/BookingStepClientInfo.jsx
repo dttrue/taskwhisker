@@ -1,6 +1,8 @@
 // src/app/book/steps/BookingStepClientInfo.jsx
 "use client";
 
+import { FieldGroup, FormField } from "@/components/ui/Foundation";
+
 const DOG_SIZE_OPTIONS = [
   { value: "SMALL", label: "Small" },
   { value: "MEDIUM", label: "Medium" },
@@ -43,184 +45,157 @@ export default function BookingStepClientInfo({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border bg-white p-4">
+      <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
         <div className="mb-3">
-          <h2 className="text-sm font-medium text-zinc-900">Your info</h2>
-          <p className="text-xs text-zinc-500">
+          <h2 className="text-base font-semibold text-[var(--task-text)]">Your info</h2>
+          <p className="mt-1 text-sm text-[var(--task-text-muted)]">
             Enter your contact details for this booking request.
           </p>
         </div>
 
         <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-zinc-900">
-              Name
-            </label>
-            <input
+          <FormField
+              id="client-name"
+              label="Name"
               type="text"
               value={client.name}
               onChange={(e) => updateClientField("name", e.target.value)}
-              className="mt-1 block w-full rounded border px-3 py-2"
               placeholder="Your full name"
+              autoComplete="name"
+              aria-required="true"
             />
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-900">
-              Email
-            </label>
-            <input
+          <FormField
+              id="client-email"
+              label="Email"
               type="email"
               value={client.email}
               onChange={(e) => updateClientField("email", e.target.value)}
-              className="mt-1 block w-full rounded border px-3 py-2"
               placeholder="you@example.com"
+              autoComplete="email"
+              aria-required="true"
             />
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-900">
-              Phone
-            </label>
-            <input
+          <FormField
+              id="client-phone"
+              label="Phone"
               type="tel"
               value={client.phone}
               onChange={(e) => updateClientField("phone", e.target.value)}
-              className="mt-1 block w-full rounded border px-3 py-2"
               placeholder="Phone number"
+              autoComplete="tel"
             />
-          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="rounded-xl border bg-white p-4">
+      <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
         <div className="mb-3">
-          <h2 className="text-sm font-medium text-zinc-900">Service address</h2>
-          <p className="text-xs text-zinc-500">
+          <h2 className="text-base font-semibold text-[var(--task-text)]">Service address</h2>
+          <p className="mt-1 text-sm text-[var(--task-text-muted)]">
             This is where the visit will happen.
           </p>
         </div>
 
         <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-zinc-900">
-              Address line 1
-            </label>
-            <input
+          <FormField
+              id="service-address-line-1"
+              label="Address line 1"
               type="text"
               value={serviceLocation.addressLine1}
               onChange={(e) =>
                 updateLocationField("addressLine1", e.target.value)
               }
-              className="mt-1 block w-full rounded border px-3 py-2"
               placeholder="Street address"
+              autoComplete="address-line1"
+              aria-required="true"
             />
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-900">
-              Address line 2
-            </label>
-            <input
+          <FormField
+              id="service-address-line-2"
+              label="Address line 2"
               type="text"
               value={serviceLocation.addressLine2}
               onChange={(e) =>
                 updateLocationField("addressLine2", e.target.value)
               }
-              className="mt-1 block w-full rounded border px-3 py-2"
               placeholder="Apartment, unit, etc. (optional)"
+              autoComplete="address-line2"
             />
-          </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div>
-              <label className="block text-sm font-medium text-zinc-900">
-                City
-              </label>
-              <input
+            <FormField
+                id="service-city"
+                label="City"
                 type="text"
                 value={serviceLocation.city}
                 onChange={(e) => updateLocationField("city", e.target.value)}
-                className="mt-1 block w-full rounded border px-3 py-2"
                 placeholder="City"
+                autoComplete="address-level2"
+                aria-required="true"
               />
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-900">
-                State
-              </label>
-              <input
+            <FormField
+                id="service-state"
+                label="State"
                 type="text"
                 value={serviceLocation.state}
                 onChange={(e) => updateLocationField("state", e.target.value)}
-                className="mt-1 block w-full rounded border px-3 py-2"
                 placeholder="State"
+                autoComplete="address-level1"
+                aria-required="true"
               />
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-900">
-                Postal code
-              </label>
-              <input
+            <FormField
+                id="service-postal-code"
+                label="Postal code"
                 type="text"
                 value={serviceLocation.postalCode}
                 onChange={(e) =>
                   updateLocationField("postalCode", e.target.value)
                 }
-                className="mt-1 block w-full rounded border px-3 py-2"
                 placeholder="ZIP code"
+                autoComplete="postal-code"
+                inputMode="numeric"
+                aria-required="true"
               />
-            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-900">
-              Access instructions
-            </label>
-            <textarea
+          <FormField
+              as="textarea"
+              id="access-instructions"
+              label="Access instructions"
               rows={3}
               value={serviceLocation.accessInstructions}
               onChange={(e) =>
                 updateLocationField("accessInstructions", e.target.value)
               }
-              className="mt-1 block w-full rounded border px-3 py-2"
               placeholder="Gate code, entry instructions, where to park, etc."
             />
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-900">
-              Location notes
-            </label>
-            <textarea
+          <FormField
+              as="textarea"
+              id="location-notes"
+              label="Location notes"
               rows={3}
               value={serviceLocation.locationNotes}
               onChange={(e) =>
                 updateLocationField("locationNotes", e.target.value)
               }
-              className="mt-1 block w-full rounded border px-3 py-2"
               placeholder="Anything else about the property or service location."
             />
-          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="rounded-xl border bg-white p-4">
+      <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
         <div className="mb-3">
-          <h2 className="text-sm font-medium text-zinc-900">Pet details</h2>
-          <p className="text-xs text-zinc-500">
+          <h2 className="text-base font-semibold text-[var(--task-text)]">Pet details</h2>
+          <p className="mt-1 text-sm text-[var(--task-text-muted)]">
             Add pet size details to help with planning and service fit.
           </p>
         </div>
 
         <div className="space-y-4">
-          <div>
-            <div className="mb-2 text-sm font-medium text-zinc-900">
-              Dog size
-            </div>
-
+          <FieldGroup legend="Dog size">
             <div className="flex flex-wrap gap-2">
               {DOG_SIZE_OPTIONS.map((option) => {
                 const selected = dogSize.includes(option.value);
@@ -230,10 +205,10 @@ export default function BookingStepClientInfo({
                     key={option.value}
                     type="button"
                     onClick={() => toggleDogSize?.(option.value)}
-                    className={`rounded-full border px-3 py-2 text-sm transition ${
+                    className={`min-h-11 rounded-full border px-4 py-2 text-sm font-semibold transition ${
                       selected
-                        ? "border-primary bg-primary text-primary-content"
-                        : "border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400"
+                        ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white"
+                        : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)] hover:bg-[var(--task-surface-soft)]"
                     }`}
                     aria-pressed={selected}
                   >
@@ -243,7 +218,7 @@ export default function BookingStepClientInfo({
               })}
             </div>
 
-            <p className="mt-2 text-xs text-zinc-500">
+            <p className="mt-2 text-xs text-[var(--task-text-muted)]">
               Selected:{" "}
               {dogSize.length
                 ? DOG_SIZE_OPTIONS.filter((option) =>
@@ -253,17 +228,15 @@ export default function BookingStepClientInfo({
                     .join(", ")
                 : "None yet"}
             </p>
-          </div>
+          </FieldGroup>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-zinc-900">
-              Weight class
-            </label>
-
-            <select
+          <FormField
+              as="select"
+              id="weight-class"
+              label="Weight class"
+              hint="Choose the closest fit for your pet."
               value={weightClass}
               onChange={(e) => setWeightClass?.(e.target.value)}
-              className="block w-full rounded border px-3 py-2"
             >
               <option value="">Select weight class</option>
               {WEIGHT_CLASS_OPTIONS.map((option) => (
@@ -271,31 +244,28 @@ export default function BookingStepClientInfo({
                   {option.label}
                 </option>
               ))}
-            </select>
-
-            <p className="mt-2 text-xs text-zinc-500">
-              Choose the closest fit for your pet.
-            </p>
-          </div>
+          </FormField>
         </div>
-      </div>
+      </section>
 
-      <div className="rounded-xl border bg-white p-4">
+      <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
         <div className="mb-3">
-          <h2 className="text-sm font-medium text-zinc-900">General notes</h2>
-          <p className="text-xs text-zinc-500">
+          <h2 className="text-base font-semibold text-[var(--task-text)]">General notes</h2>
+          <p className="mt-1 text-sm text-[var(--task-text-muted)]">
             Add anything helpful about the pets or visit.
           </p>
         </div>
 
-        <textarea
+        <FormField
+          as="textarea"
+          id="general-notes"
+          label="Pet and visit notes"
           rows={4}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="block w-full rounded border px-3 py-2"
           placeholder="Pet routines, behavior notes, feeding details, medications, anything important..."
         />
-      </div>
+      </section>
     </div>
   );
 }
