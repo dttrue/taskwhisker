@@ -3,6 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import {
+  Button,
+  Card,
+  FormFeedback,
+  FormField,
+  PageHeader,
+  PageShell,
+} from "@/components/ui/Foundation";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,62 +42,57 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-base-200 px-4 py-8">
-      <div className="card w-full max-w-md bg-base-100 shadow-xl">
-        <div className="card-body">
-          <h2 className="card-title justify-center mb-2">TaskWhisker Login</h2>
+    <PageShell className="flex items-center" containerClassName="max-w-md">
+      <Card className="p-6 sm:p-8">
+        <PageHeader
+          eyebrow="TaskWhisker team"
+          title="Welcome back"
+          description="Sign in to manage bookings, schedules, visits, and client communication."
+        />
 
-          <p className="text-center text-sm text-base-content/70 mb-4">
-            Internal access only. Phase 1 operators & sitters.
-          </p>
+        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <FormField
+            id="email"
+            name="email"
+            type="email"
+            label="Email address"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="email"
+            required
+            disabled={loading}
+          />
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text">Email</span>
-              </label>
-              <input
-                type="email"
-                className="input input-bordered w-full"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                required
-              />
-            </div>
+          <FormField
+            id="password"
+            name="password"
+            type="password"
+            label="Password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+            required
+            disabled={loading}
+          />
 
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text">Password</span>
-              </label>
-              <input
-                type="password"
-                className="input input-bordered w-full"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
-            </div>
+          {error ? <FormFeedback>{error}</FormFeedback> : null}
 
-            {error && (
-              <p className="text-error text-sm mt-1" role="alert">
-                {error}
-              </p>
-            )}
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={loading}
+            aria-busy={loading}
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </Button>
+        </form>
 
-            <div className="form-control mt-4">
-              <button
-                type="submit"
-                className="btn btn-primary w-full"
-                disabled={loading}
-              >
-                {loading ? "Signing in..." : "Sign in"}
-              </button>
-            </div>
-          </form>
+        <div className="mt-6 border-t border-[var(--task-border)] pt-5 text-center">
+          <Button href="/" variant="quiet" className="min-h-10 px-3 py-2">
+            Return to TaskWhisker
+          </Button>
         </div>
-      </div>
-    </main>
+      </Card>
+    </PageShell>
   );
 }

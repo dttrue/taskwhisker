@@ -5,8 +5,6 @@ import BookServiceChooserSkeleton from "./BookServiceChooserSkeleton";
 import { prisma } from "@/lib/db";
 
 async function ServiceChooserLoader() {
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-
   const services = await prisma.service.findMany({
     where: {
       isActive: true,

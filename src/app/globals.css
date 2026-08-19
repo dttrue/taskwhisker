@@ -1,10 +1,67 @@
 @import "tailwindcss";
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: false;
+}
+@plugin "daisyui/theme" {
+  name: "taskwhisker";
+  default: true;
+  color-scheme: "light";
+  --color-base-100: #ffffff;
+  --color-base-200: #f2efe8;
+  --color-base-300: #e4dfd5;
+  --color-base-content: #222522;
+  --color-primary: #275a49;
+  --color-primary-content: #ffffff;
+  --color-secondary: #b76548;
+  --color-secondary-content: #ffffff;
+  --color-accent: #d6e4dc;
+  --color-accent-content: #244b3e;
+  --color-neutral: #343934;
+  --color-neutral-content: #ffffff;
+  --color-info: #4f6f7d;
+  --color-info-content: #ffffff;
+  --color-success: #39705b;
+  --color-success-content: #ffffff;
+  --color-warning: #9a6b20;
+  --color-warning-content: #ffffff;
+  --color-error: #a3473f;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.625rem;
+  --radius-field: 0.75rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
 @import "react-day-picker/dist/style.css";
-/* Phase 1: Force Light Mode */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --task-canvas: #f8f6f1;
+  --task-surface: #ffffff;
+  --task-surface-soft: #f2efe8;
+  --task-text: #222522;
+  --task-text-muted: #626861;
+  --task-border: #ded9cf;
+  --task-border-strong: #c7c0b4;
+  --task-primary: #275a49;
+  --task-primary-hover: #1f493b;
+  --task-accent: #b76548;
+  --task-focus: #3d7763;
+  --task-success: #39705b;
+  --task-success-soft: #edf6f1;
+  --task-info: #4f6f7d;
+  --task-info-soft: #eef4f6;
+  --task-warning: #8a611f;
+  --task-warning-soft: #fbf4e5;
+  --task-danger: #a3473f;
+  --task-danger-soft: #fbefed;
+  --task-radius-control: 0.75rem;
+  --task-radius-card: 1rem;
+  --task-shadow-card: 0 18px 45px -32px rgba(34, 37, 34, 0.45);
+  --background: var(--task-canvas);
+  --foreground: var(--task-text);
 }
 
 html {
@@ -12,23 +69,35 @@ html {
 }
 
 body {
-  background: #ffffff;
-  color: #171717;
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--task-canvas);
+  color: var(--task-text);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   -webkit-text-size-adjust: 100%;
 }
 
-/* Prevent mobile auto-dark inputs (don’t touch buttons) */
 input,
 textarea,
 select {
-  background-color: #ffffff;
-  color: #171717;
+  font: inherit;
 }
 
 button {
   -webkit-appearance: none;
   appearance: none;
+}
+
+:where(a, button, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--task-focus);
+  outline-offset: 3px;
+}
+
+:where(input, textarea, select):disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--task-primary) 22%, white);
+  color: var(--task-text);
 }
 
 @keyframes shimmer {
