@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 function HomeIcon() {
   return (
     <svg
-      className="h-4 w-4 shrink-0"
+      className="h-5 w-5 shrink-0"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
     >
@@ -30,7 +30,7 @@ function HomeIcon() {
 function InboxIcon() {
   return (
     <svg
-      className="h-4 w-4 shrink-0"
+      className="h-5 w-5 shrink-0"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
     >
@@ -51,7 +51,7 @@ function InboxIcon() {
 function SettingsIcon() {
   return (
     <svg
-      className="h-4 w-4 shrink-0"
+      className="h-5 w-5 shrink-0"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
     >
@@ -171,27 +171,10 @@ export default function SitterMobileDock() {
 
   return (
     <nav
-      style={{
-        position: "fixed",
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 999999,
-        height: 58,
-        background: "white",
-        borderTop: "1px solid #e4e4e7",
-        boxShadow: "0 -3px 10px rgba(0,0,0,0.08)",
-      }}
+      aria-label="Sitter navigation"
+      className="fixed inset-x-0 bottom-0 z-[999999] border-t border-[var(--task-border)] bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-18px_rgba(34,37,34,0.5)] backdrop-blur"
     >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          height: "100%",
-          maxWidth: 480,
-          margin: "0 auto",
-        }}
-      >
+      <div className="mx-auto grid h-16 max-w-lg grid-cols-3 px-2">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
@@ -206,51 +189,22 @@ export default function SitterMobileDock() {
             <Link
               key={item.href}
               href={item.href}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 2,
-                fontSize: 11,
-                fontWeight: 700,
-                background: isActive ? "#18181b" : "white",
-                color: isActive ? "white" : "#71717a",
-                textDecoration: "none",
-                position: "relative",
-              }}
+              aria-current={isActive ? "page" : undefined}
+              className={`relative m-1 flex min-h-11 flex-col items-center justify-center gap-1 rounded-[var(--task-radius-control)] text-xs font-bold transition-colors ${
+                isActive
+                  ? "bg-[var(--task-primary)] text-white"
+                  : "text-[var(--task-text-muted)] hover:bg-[var(--task-surface-soft)] hover:text-[var(--task-text)]"
+              }`}
             >
-              <span
-                style={{
-                  position: "relative",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+              <span className="relative inline-flex items-center justify-center">
                 {item.icon}
 
                 {showBadge && (
                   <span
-                    style={{
-                      position: "absolute",
-                      top: -9,
-                      right: -13,
-                      minWidth: 18,
-                      height: 18,
-                      padding: "0 5px",
-                      borderRadius: 999,
-                      background: "#dc2626",
-                      color: "white",
-                      fontSize: 11,
-                      fontWeight: 900,
-                      lineHeight: "18px",
-                      textAlign: "center",
-                      boxShadow: isActive
-                        ? "0 0 0 2px #18181b"
-                        : "0 0 0 2px white",
-                      zIndex: 20,
-                    }}
+                    aria-label={`${item.badgeCount} unread messages`}
+                    className={`absolute -right-4 -top-2.5 z-20 min-w-[1.25rem] rounded-full bg-[var(--task-danger)] px-1.5 text-center text-xs font-black leading-5 text-white ring-2 ${
+                      isActive ? "ring-[var(--task-primary)]" : "ring-white"
+                    }`}
                   >
                     {badgeLabel}
                   </span>

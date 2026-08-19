@@ -37,6 +37,46 @@ export function Card({ children, className, as: Component = "section" }) {
   );
 }
 
+const STATUS_BADGE_TONES = {
+  neutral: "border-[var(--task-border)] bg-[var(--task-surface-soft)] text-[var(--task-text-muted)]",
+  success: "border-[#c9dfd4] bg-[var(--task-success-soft)] text-[#285844]",
+  warning: "border-[#ead9ad] bg-[var(--task-warning-soft)] text-[#704c16]",
+  danger: "border-[#e8c8c3] bg-[var(--task-danger-soft)] text-[#86382f]",
+  info: "border-[#cbdbe0] bg-[var(--task-info-soft)] text-[#385866]",
+};
+
+export function StatusBadge({ children, tone = "neutral", className }) {
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold leading-4",
+        STATUS_BADGE_TONES[tone] || STATUS_BADGE_TONES.neutral,
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+export function SectionHeader({ title, description, meta, className }) {
+  return (
+    <div className={cx("flex items-start justify-between gap-4", className)}>
+      <div className="min-w-0">
+        <h2 className="text-xl font-bold tracking-[-0.025em] text-[var(--task-text)]">
+          {title}
+        </h2>
+        {description ? (
+          <p className="mt-1 text-sm leading-6 text-[var(--task-text-muted)]">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {meta ? <div className="shrink-0">{meta}</div> : null}
+    </div>
+  );
+}
+
 const BUTTON_VARIANTS = {
   primary:
     "border-transparent bg-[var(--task-primary)] text-white hover:bg-[var(--task-primary-hover)]",

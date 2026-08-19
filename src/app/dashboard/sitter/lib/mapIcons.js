@@ -8,28 +8,28 @@ export function makeNumberedIcon(index, isSelected = false, isInGrace = false) {
 
   if (isSelected) {
     stateStyles = `
-      background: #2563eb;
+      background: #275a49;
       color: white;
       border: 2px solid #ffffff;
       box-shadow:
-        0 0 0 4px rgba(191, 219, 254, 0.95),
-        0 10px 20px rgba(37, 99, 235, 0.28);
+        0 0 0 4px rgba(201, 223, 212, 0.95),
+        0 10px 20px rgba(39, 90, 73, 0.28);
       transform: scale(1.08);
     `;
   } else if (isInGrace) {
     stateStyles = `
-      background: #16a34a;
+      background: #39705b;
       color: white;
       border: 2px solid #ffffff;
       box-shadow:
-        0 0 0 3px rgba(187, 247, 208, 0.9),
-        0 8px 18px rgba(22, 163, 74, 0.22);
+        0 0 0 3px rgba(201, 223, 212, 0.9),
+        0 8px 18px rgba(57, 112, 91, 0.22);
     `;
   } else {
     stateStyles = `
       background: #ffffff;
-      color: #18181b;
-      border: 1px solid #d4d4d8;
+      color: #222522;
+      border: 1px solid #c7c0b4;
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
     `;
   }

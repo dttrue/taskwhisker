@@ -9,6 +9,7 @@ import UpcomingVisitsSection from "./UpcomingVisitsSection";
 import SitterRoutePanel from "./SitterRoutePanel";
 import TodayVisitsSection from "./TodayVisitsSection";
 import ShiftStatusCard from "./ShiftStatusCard";
+import { Notice, PageHeader, PageShell } from "@/components/ui/Foundation";
 import {
   formatMoney,
   formatDateTime,
@@ -18,6 +19,7 @@ import {
   getCompletedThisWeekCount,
   getSitterMapBookings,
   getRemainingMapStops,
+  getCurrentMapStop,
   getNextMapStop,
   getLastGraceStop,
   getRemainingTodayVisitEntries,
@@ -125,12 +127,14 @@ export default function SitterDashboardLive({ bookings = [] }) {
       sitterMapBookings,
       now
     );
-    const nextUp = getNextMapStop(remainingSitterMapBookings, now);
+    const currentStop = getCurrentMapStop(remainingSitterMapBookings, now);
+    const nextStop = getNextMapStop(remainingSitterMapBookings, now);
     const lastGraceStop = getLastGraceStop(remainingSitterMapBookings, now);
     const hasActiveRoute = remainingSitterMapBookings.length > 0;
 
     const defaultBooking =
-      remainingSitterMapBookings.find((b) => b.id === nextUp?.id) ??
+      remainingSitterMapBookings.find((b) => b.id === currentStop?.id) ??
+      remainingSitterMapBookings.find((b) => b.id === nextStop?.id) ??
       remainingSitterMapBookings[0] ??
       null;
 
@@ -193,7 +197,8 @@ export default function SitterDashboardLive({ bookings = [] }) {
       canceledVisitCount,
       sitterMapBookings,
       remainingSitterMapBookings,
-      nextUp,
+      currentStop,
+      nextStop,
       lastGraceStop,
       hasActiveRoute,
       defaultBooking,
@@ -226,40 +231,43 @@ export default function SitterDashboardLive({ bookings = [] }) {
 
     if (selectedStillExists) return;
 
-    const nextStop = getNextMapStop(stops, now) || stops[0];
-    setSelectedBookingId(nextStop?.id ?? null);
+    const defaultStop =
+      getCurrentMapStop(stops, now) || getNextMapStop(stops, now) || stops[0];
+    setSelectedBookingId(defaultStop?.id ?? null);
   }, [derived.remainingSitterMapBookings, selectedBookingId, now]);
 
   
 
   return (
-    <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
-      <div className="mx-auto max-w-5xl space-y-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Internal MVP
-          </p>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
-            Sitter Dashboard
-          </h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            Your live route, next visits, and shift progress.
-          </p>
-        </div>
+    <PageShell className="pb-8 sm:pb-10" containerClassName="max-w-6xl">
+      <div className="space-y-8">
+        <PageHeader
+          eyebrow="Sitter workspace"
+          title="Your day at a glance"
+          description="Track today’s route, upcoming visits, and completed care in one place."
+        />
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <StatCard
             title="Remaining stops today"
             value={derived.todayVisitCount}
             helper="Stops still active today"
           />
           <StatCard
-            title="Next stop"
-            value={derived.nextUp?.clientName || "None"}
+            title={derived.currentStop ? "Current stop" : "Next stop"}
+            value={
+              derived.currentStop?.clientName ||
+              derived.nextStop?.clientName ||
+              "None"
+            }
             helper={
-              derived.nextUp?.todayVisitStart
+              derived.currentStop?.todayVisitEnd
+                ? `In progress until ${formatDateTime(
+                    derived.currentStop.todayVisitEnd
+                  )}`
+                : derived.nextStop?.todayVisitStart
                 ? `Scheduled for ${formatDateTime(
-                    derived.nextUp.todayVisitStart
+                    derived.nextStop.todayVisitStart
                   )}`
                 : "No active stop right now"
             }
@@ -274,18 +282,20 @@ export default function SitterDashboardLive({ bookings = [] }) {
             value={formatMoney(derived.remainingTodayPayout)}
             helper="Estimated from remaining stops today"
           />
-          <ShiftStatusCard
-            overdueVisitCount={derived.overdueVisitCount}
-            todayVisitCount={derived.todayVisitCount}
-            nextUp={derived.nextUp}
-          />
+          <div className="col-span-2 lg:col-span-4">
+            <ShiftStatusCard
+              overdueVisitCount={derived.overdueVisitCount}
+              todayVisitCount={derived.todayVisitCount}
+              currentStop={derived.currentStop}
+              nextStop={derived.nextStop}
+            />
+          </div>
         </div>
 
         {derived.hasBlockingMissedVisits ? (
-          <div className="flex items-center gap-2 rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900">
-            <span className="h-2 w-2 rounded-full bg-amber-500 animate-subtle-pulse" />
-            Route locked — complete missed visits to continue.
-          </div>
+          <Notice tone="warning" role="status" title="Route paused">
+            Complete missed visits to continue through the rest of your route.
+          </Notice>
         ) : derived.hasActiveRoute ? (
           <div ref={routePanelRef}>
             <SitterRoutePanel
@@ -298,7 +308,6 @@ export default function SitterDashboardLive({ bookings = [] }) {
           </div>
         ) : null}
 
-        {/* 🔥 NEW: Missed Visits (HIGH PRIORITY) */}
         {derived.overdueVisitCount > 0 ? (
           <VisitHistorySection
             title="Missed Visits"
@@ -339,6 +348,6 @@ export default function SitterDashboardLive({ bookings = [] }) {
           />
         ) : null}
       </div>
-    </main>
+    </PageShell>
   );
 }

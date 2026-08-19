@@ -2,6 +2,7 @@
 "use client";
 
 import VisitCard from "./VisitCard";
+import { Notice, SectionHeader, StatusBadge } from "@/components/ui/Foundation";
 
 export default function VisitHistorySection({
   title,
@@ -12,15 +13,14 @@ export default function VisitHistorySection({
 }) {
   return (
     <section className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold text-zinc-900">{title}</h2>
-        <p className="mt-1 text-sm text-zinc-600">{description}</p>
-      </div>
+      <SectionHeader
+        title={title}
+        description={description}
+        meta={<StatusBadge tone={title === "Missed Visits" ? "warning" : "neutral"}>{visits.length}</StatusBadge>}
+      />
 
       {visits.length === 0 ? (
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 shadow-sm">
-          {emptyMessage}
-        </div>
+        <Notice>{emptyMessage}</Notice>
       ) : (
         <div className="grid gap-3">
           {visits.map((entry) => (

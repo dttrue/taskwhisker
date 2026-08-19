@@ -7,7 +7,7 @@ export default async function SitterLayout({ children }) {
 
   return (
     <>
-      <div className="pb-16">{children}</div>
+      <div className="pb-[calc(5rem+env(safe-area-inset-bottom))]">{children}</div>
       <SitterMobileDock />
     </>
   );

@@ -2,6 +2,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { FormFeedback, StatusBadge } from "@/components/ui/Foundation";
 
 import { completeVisitAsSitter } from "../actions";
 import {
@@ -29,8 +31,8 @@ function getVisitState(visit, now, isToday) {
   if (visit.status === "COMPLETED") {
     return {
       label: "Done",
-      badgeClass: "bg-blue-50 text-blue-700",
-      cardClass: "border-zinc-200 bg-white opacity-80",
+      badgeTone: "info",
+      cardClass: "border-[var(--task-border)] bg-white opacity-80",
       helperText: "This visit has already been completed.",
       actionLabel: "Visit completed",
     };
@@ -39,8 +41,8 @@ function getVisitState(visit, now, isToday) {
   if (visit.status === "CANCELED") {
     return {
       label: "Canceled",
-      badgeClass: "bg-rose-50 text-rose-700",
-      cardClass: "border-zinc-200 bg-white opacity-80",
+      badgeTone: "danger",
+      cardClass: "border-[var(--task-border)] bg-white opacity-80",
       helperText: "This visit was canceled.",
       actionLabel: "Visit canceled",
     };
@@ -49,8 +51,8 @@ function getVisitState(visit, now, isToday) {
   if (isVisitOverdue(visit, now)) {
     return {
       label: "Missed",
-      badgeClass: "bg-amber-100 text-amber-800",
-      cardClass: "border-amber-200 bg-amber-50/40",
+      badgeTone: "warning",
+      cardClass: "border-[#dfbd77] bg-white",
       helperText: "This visit ended before it was marked complete.",
       actionLabel: "Complete missed visit",
     };
@@ -59,8 +61,8 @@ function getVisitState(visit, now, isToday) {
   if (canCompleteVisit(visit, now)) {
     return {
       label: "Ready now",
-      badgeClass: "bg-emerald-100 text-emerald-800",
-      cardClass: "border-emerald-200 bg-emerald-50/40",
+      badgeTone: "success",
+      cardClass: "border-[#b8d3c7] bg-white",
       helperText: "You can complete this visit now.",
       actionLabel: "Mark visit complete",
     };
@@ -69,8 +71,8 @@ function getVisitState(visit, now, isToday) {
   if (start.getTime() > now.getTime()) {
     return {
       label: "Scheduled",
-      badgeClass: "bg-zinc-100 text-zinc-700",
-      cardClass: "border-zinc-200 bg-white",
+      badgeTone: "neutral",
+      cardClass: "border-[var(--task-border)] bg-white",
       helperText: isToday ? `Available at ${formatTime(start)}.` : "Scheduled.",
       actionLabel: isToday ? `Available at ${formatTime(start)}` : "Scheduled",
     };
@@ -78,14 +80,15 @@ function getVisitState(visit, now, isToday) {
 
   return {
     label: "Unavailable",
-    badgeClass: "bg-amber-50 text-amber-700",
-    cardClass: "border-zinc-200 bg-white",
+    badgeTone: "warning",
+    cardClass: "border-[var(--task-border)] bg-white",
     helperText: "This visit cannot be completed right now.",
     actionLabel: "Unavailable",
   };
 }
 
 export default function VisitCard({ entry, now = new Date(), onComplete }) {
+  const [actionError, setActionError] = useState("");
   const {
     visit,
     bookingId,
@@ -107,37 +110,35 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
 
   return (
     <article
-      className={`rounded-xl border p-4 shadow-sm transition ${state.cardClass}`}
+      className={`rounded-[var(--task-radius-card)] border p-4 shadow-[var(--task-shadow-card)] transition sm:p-5 ${state.cardClass}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-zinc-900">{clientName}</p>
+            <p className="break-words text-base font-bold text-[var(--task-text)]">{clientName}</p>
 
-            <span
-              className={`rounded-full px-2.5 py-1 text-xs font-medium ${state.badgeClass}`}
-            >
+            <StatusBadge tone={state.badgeTone}>
               {state.label}
-            </span>
+            </StatusBadge>
 
             {hasOpenCancellationRequest && visit.status !== "CANCELED" ? (
-              <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">
+              <StatusBadge tone="danger">
                 Cancellation requested
-              </span>
+              </StatusBadge>
             ) : null}
           </div>
 
-          <p className="mt-1 text-sm text-zinc-600">{serviceSummary}</p>
+          <p className="mt-1 break-words text-sm leading-5 text-[var(--task-text-muted)]">{serviceSummary}</p>
         </div>
 
-        <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+        <span className="shrink-0 rounded-full border border-[#c9dfd4] bg-[var(--task-success-soft)] px-2.5 py-1 text-sm font-semibold text-[#285844]">
           {formatMoney(payoutPerVisitCents)}
         </span>
       </div>
 
       {hasOpenCancellationRequest && visit.status !== "CANCELED" ? (
-        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          <p className="font-bold text-red-950">Cancellation requested</p>
+        <div className="mt-4 rounded-[var(--task-radius-control)] border border-[#e8c8c3] bg-[var(--task-danger-soft)] p-4 text-sm leading-6 text-[#86382f]">
+          <p className="font-bold">Cancellation requested</p>
           <p className="mt-1">
             The client requested to cancel this booking. Open messages to review
             and approve the cancellation.
@@ -145,43 +146,43 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
         </div>
       ) : null}
 
-      <div className="mt-3 space-y-1 text-sm text-zinc-600">
-        <p className="font-medium text-zinc-800">
+      <div className="mt-4 space-y-1.5 text-sm leading-6 text-[var(--task-text-muted)]">
+        <p className="font-semibold text-[var(--task-text)]">
           {dayLabel ? `${dayLabel} · ` : ""}
           {dateLabel}
         </p>
 
-        <p className="text-zinc-700">
+        <p className="font-medium text-[var(--task-text)]">
           {formatTime(start)} – {formatTime(end)}
         </p>
 
-        {address ? <p>{address}</p> : null}
+        {address ? <p className="break-words">{address}</p> : null}
       </div>
 
-      <p className="mt-3 text-xs text-zinc-500">{state.helperText}</p>
+      <p className="mt-3 text-sm leading-5 text-[var(--task-text-muted)]">{state.helperText}</p>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-5 grid gap-2 sm:flex sm:flex-wrap">
         <Link
           href={`/dashboard/sitter/bookings/${bookingId}`}
-          className="inline-flex items-center rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+          className="inline-flex min-h-11 items-center justify-center rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] bg-white px-3 py-2 text-sm font-semibold text-[var(--task-text)] transition hover:bg-[var(--task-surface-soft)]"
         >
           View booking
         </Link>
 
         <Link
           href={`/dashboard/sitter/messages/${bookingId}`}
-          className="inline-flex items-center rounded-lg px-3 py-2 text-sm font-bold transition"
+          className="inline-flex min-h-11 items-center justify-center rounded-[var(--task-radius-control)] px-3 py-2 text-sm font-bold transition"
           style={
             hasOpenCancellationRequest && visit.status !== "CANCELED"
               ? {
-                  backgroundColor: "#b91c1c",
+                  backgroundColor: "var(--task-danger)",
                   color: "white",
-                  border: "1px solid #991b1b",
+                  border: "1px solid var(--task-danger)",
                 }
               : {
                   backgroundColor: "white",
-                  color: "#3f3f46",
-                  border: "1px solid #e4e4e7",
+                  color: "var(--task-text)",
+                  border: "1px solid var(--task-border-strong)",
                 }
           }
         >
@@ -193,38 +194,48 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
         {isCompletable ? (
           <form
             action={async (formData) => {
+              setActionError("");
               const result = await completeVisitAsSitter(formData);
 
               if (result?.ok) {
                 onComplete?.(visit.id);
               } else if (result?.error) {
-                alert(result.error);
+                setActionError(result.error);
               }
             }}
-            className="flex flex-col gap-2"
+            className="flex min-w-0 flex-col gap-2 sm:min-w-64"
           >
             <input type="hidden" name="visitId" value={visit.id} />
 
             {isVisitOverdue(visit, now) ? (
-              <textarea
-                name="lateReason"
-                required
-                minLength={10}
-                placeholder="Explain why this visit is being completed late..."
-                className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-300"
-              />
+              <div>
+                <label htmlFor={`late-reason-${visit.id}`} className="block text-sm font-semibold text-[var(--task-text)]">
+                  Late completion reason
+                </label>
+                <textarea
+                  id={`late-reason-${visit.id}`}
+                  name="lateReason"
+                  required
+                  minLength={10}
+                  aria-describedby={`late-reason-${visit.id}-hint`}
+                  placeholder="Explain why this visit is being completed late..."
+                  className="mt-2 min-h-24 w-full rounded-[var(--task-radius-control)] border border-[#dfbd77] bg-white px-3 py-2.5 text-sm text-[var(--task-text)] placeholder:text-[#858b84]"
+                />
+              </div>
             ) : null}
 
             {isVisitOverdue(visit, now) ? (
-              <p className="text-xs text-amber-700">
+              <p id={`late-reason-${visit.id}-hint`} className="text-sm leading-5 text-[#704c16]">
                 Required for missed visits. This will be visible to the
                 operator.
               </p>
             ) : null}
 
+            {actionError ? <FormFeedback>{actionError}</FormFeedback> : null}
+
             <button
               type="submit"
-              className="inline-flex items-center justify-center rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800"
+              className="inline-flex min-h-11 items-center justify-center rounded-[var(--task-radius-control)] bg-[var(--task-primary)] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[var(--task-primary-hover)]"
             >
               {state.actionLabel}
             </button>
@@ -233,7 +244,7 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
           <button
             type="button"
             disabled
-            className="inline-flex items-center rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-400"
+            className="inline-flex min-h-11 items-center justify-center rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-[var(--task-surface-soft)] px-3 py-2 text-sm font-medium text-[var(--task-text-muted)]"
           >
             {state.actionLabel}
           </button>

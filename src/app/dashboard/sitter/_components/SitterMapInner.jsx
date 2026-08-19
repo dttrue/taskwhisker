@@ -16,7 +16,6 @@ import { useEffect, useMemo, useRef } from "react";
 import {
   formatDateTime,
   getActionableVisitTime,
-  getSortTime,
   isVisitInGraceWindow,
 } from "../lib/sitterMapUtils";
 
@@ -78,7 +77,7 @@ function RecenterControl({ bookings }) {
       <button
         type="button"
         onClick={() => fitRoute(map, bookings)}
-        className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium shadow-md transition hover:bg-zinc-50 active:scale-95"
+        className="min-h-11 rounded-[var(--task-radius-control)] border border-[var(--task-primary)] bg-white px-3 py-2 text-sm font-semibold text-[var(--task-primary)] shadow-md transition hover:bg-[var(--task-surface-soft)] active:scale-95"
       >
         Recenter
       </button>
@@ -98,8 +97,7 @@ export default function SitterMapInner({
 
     return bookings
       .filter((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng))
-      .filter((b) => getActionableVisitTime(b, now))
-      .sort((a, b) => getSortTime(a, now) - getSortTime(b, now));
+      .filter((b) => getActionableVisitTime(b, now));
   }, [bookings]);
 
   const center = validBookings.length
@@ -109,7 +107,7 @@ export default function SitterMapInner({
   const routePositions = validBookings.map((b) => [b.lat, b.lng]);
 
   return (
-    <div className="relative h-[400px] w-full overflow-hidden rounded-xl">
+    <div className="relative h-[320px] w-full overflow-hidden rounded-[var(--task-radius-card)] border border-[var(--task-border)] shadow-sm sm:h-[400px]">
       <style jsx global>{`
         @keyframes sitterPulse {
           0% {
@@ -156,7 +154,7 @@ export default function SitterMapInner({
           <Polyline
             positions={routePositions}
             pathOptions={{
-              color: "#3b82f6",
+              color: "#275a49",
               weight: 4,
               opacity: 0.75,
             }}
@@ -185,16 +183,16 @@ export default function SitterMapInner({
               }}
             >
               <Popup>
-                <div className="text-sm">
-                  <div className="font-semibold">
+                <div className="min-w-44 text-sm text-[var(--task-text)]">
+                  <div className="font-bold">
                     {`Stop ${index + 1} • ${booking.clientName}`}
                   </div>
 
-                  <div className="mt-1 text-zinc-700">
+                  <div className="mt-1 text-[var(--task-text)]">
                     {booking.serviceSummary}
                   </div>
 
-                  <div className="mt-1 text-zinc-600">
+                  <div className="mt-1 text-[var(--task-text-muted)]">
                     Visit: {formatDateTime(actionableVisitTime)}
                   </div>
 
@@ -205,7 +203,7 @@ export default function SitterMapInner({
                       )}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-2 block text-zinc-600 underline"
+                      className="mt-2 block break-words font-medium text-[var(--task-primary)] underline underline-offset-2"
                     >
                       {booking.address}
                     </a>

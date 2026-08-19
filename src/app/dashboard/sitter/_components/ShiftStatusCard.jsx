@@ -2,19 +2,22 @@
 "use client";
 
 import { formatDateTime } from "../lib/sitterDashboardUtils";
+import { StatusBadge } from "@/components/ui/Foundation";
 
 export default function ShiftStatusCard({
   overdueVisitCount = 0,
   todayVisitCount = 0,
-  nextUp = null,
+  currentStop = null,
+  nextStop = null,
 }) {
   const hasMissedVisits = overdueVisitCount > 0;
-  const hasNextStop = Boolean(nextUp);
+  const hasCurrentStop = Boolean(currentStop);
+  const hasNextStop = Boolean(nextStop);
 
   let title = "You’re caught up";
   let description = "No urgent visits need attention right now.";
-  let cardClass = "border-zinc-200 bg-white";
-  let badgeClass = "bg-emerald-50 text-emerald-700";
+  let cardClass = "border-[var(--task-border)]";
+  let badgeTone = "success";
   let badgeText = "On track";
 
   if (hasMissedVisits) {
@@ -23,16 +26,22 @@ export default function ShiftStatusCard({
     } need attention`;
     description =
       "Complete missed visits before continuing through the rest of your route.";
-    cardClass = "border-amber-200 bg-amber-50";
-    badgeClass = "bg-amber-100 text-amber-800";
+    cardClass = "border-[#dfbd77] border-l-4";
+    badgeTone = "warning";
     badgeText = "Action needed";
+  } else if (hasCurrentStop) {
+    title = `Current stop: ${currentStop.clientName || "Client"}`;
+    description = currentStop.todayVisitEnd
+      ? `In progress until ${formatDateTime(currentStop.todayVisitEnd)}.`
+      : "This visit is currently in progress.";
+    cardClass = "border-[#b8d3c7] border-l-4";
+    badgeText = "In progress";
   } else if (hasNextStop) {
-    title = `Next stop: ${nextUp.clientName || "Client"}`;
-    description = nextUp.todayVisitStart
-      ? `Scheduled for ${formatDateTime(nextUp.todayVisitStart)}.`
+    title = `Next stop: ${nextStop.clientName || "Client"}`;
+    description = nextStop.todayVisitStart
+      ? `Scheduled for ${formatDateTime(nextStop.todayVisitStart)}.`
       : "Your next stop is ready in the route panel.";
-    cardClass = "border-emerald-200 bg-emerald-50/50";
-    badgeClass = "bg-emerald-100 text-emerald-800";
+    cardClass = "border-[#b8d3c7] border-l-4";
     badgeText = "Next up";
   } else if (todayVisitCount === 0) {
     title = "No remaining stops today";
@@ -40,21 +49,19 @@ export default function ShiftStatusCard({
   }
 
   return (
-    <section className={`rounded-2xl border p-4 shadow-sm ${cardClass}`}>
+    <section className={`rounded-[var(--task-radius-card)] border bg-white p-4 shadow-[var(--task-shadow-card)] sm:p-5 ${cardClass}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--task-primary)]">
             Shift Status
           </p>
-          <h2 className="mt-1 text-lg font-semibold text-zinc-900">{title}</h2>
-          <p className="mt-1 text-sm text-zinc-600">{description}</p>
+          <h2 className="mt-2 text-lg font-bold tracking-[-0.02em] text-[var(--task-text)]">{title}</h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--task-text-muted)]">{description}</p>
         </div>
 
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${badgeClass}`}
-        >
+        <StatusBadge tone={badgeTone}>
           {badgeText}
-        </span>
+        </StatusBadge>
       </div>
     </section>
   );
