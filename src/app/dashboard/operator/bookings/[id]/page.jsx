@@ -25,6 +25,7 @@ import {
   STATUS_CARD_BORDER_CLASSES,
 } from "@/lib/statusStyles";
 import { getNextBookingNeedingReview } from "../../lib/getNextBookingNeedingReview";
+import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
 function formatMoney(cents = 0) {
   return `$${(cents / 100).toFixed(2)}`;
 }
@@ -175,6 +176,11 @@ export default async function OperatorBookingDetailPage({
     );
   }
 
+  const petDisplayName = formatBookingPetNames(
+    booking.petNames,
+    booking.serviceSummary || "Pet care booking"
+  );
+
   
 
   const sitters = await prisma.user.findMany({
@@ -264,8 +270,14 @@ export default async function OperatorBookingDetailPage({
 
               <div>
                 <h1 className="text-2xl font-semibold text-zinc-900">
-                  {booking.client?.name || "Client"}
+                  {petDisplayName}
                 </h1>
+                <div className="mt-1 text-sm font-medium text-zinc-700">
+                  {booking.serviceSummary || "Pet care booking"}
+                </div>
+                <div className="mt-1 text-sm text-zinc-500">
+                  Owner: {booking.client?.name || "Client"}
+                </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
                   <span>ID: {booking.id.slice(0, 8)}</span>
                   <span>•</span>
@@ -456,7 +468,17 @@ export default async function OperatorBookingDetailPage({
           </SummaryCard>
 
           <SummaryCard label="Assignment">
-            <div className="font-medium text-zinc-900">
+            <div className="break-words font-semibold text-zinc-900">
+              {petDisplayName}
+            </div>
+            <div className="mt-1 break-words text-zinc-600">
+              {booking.serviceSummary || "Pet care booking"}
+            </div>
+            <div className="mt-1 break-words text-zinc-500">
+              Owner: {booking.client?.name || "Client"}
+            </div>
+            <div className="mt-3 font-medium text-zinc-900">
+              Assigned sitter: {" "}
               {booking.sitter?.name || booking.sitter?.email || "Unassigned"}
             </div>
             <div className="mt-3">
@@ -532,13 +554,19 @@ export default async function OperatorBookingDetailPage({
                         key={visit.id}
                         className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
                       >
-                        <div>
-                          <div className="text-sm font-medium text-zinc-900">
-                            Visit {idx + 1}
+                        <div className="min-w-0">
+                          <div className="break-words text-sm font-semibold text-zinc-900">
+                            {petDisplayName}
                           </div>
                           <div className="text-sm text-zinc-600">
-                            {formatTimeOnly(visit.startTime)} →{" "}
+                            Visit {idx + 1} · {formatTimeOnly(visit.startTime)} →{" "}
                             {formatTimeOnly(visit.endTime)}
+                          </div>
+                          <div className="mt-1 break-words text-xs text-zinc-500">
+                            Owner: {booking.client?.name || "Client"} · Sitter:{" "}
+                            {booking.sitter?.name ||
+                              booking.sitter?.email ||
+                              "Unassigned"}
                           </div>
                         </div>
 

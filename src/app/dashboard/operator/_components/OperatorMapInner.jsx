@@ -125,9 +125,12 @@ export default function OperatorMapInner({ bookings = [] }) {
               <Popup>
                 <div className="text-sm">
                   <div className="font-semibold">
-                    {b.clientName || "Client"}
+                    {b.petDisplayName || b.serviceSummary || "Pet care booking"}
                   </div>
                   <div>{b.serviceSummary || "Booking"}</div>
+                  <div className="text-zinc-600">
+                    Owner: {b.clientName || "Client"}
+                  </div>
                   <div className="mt-1">
                     Status:{" "}
                     <span className="font-medium">{b.status || "UNKNOWN"}</span>

@@ -21,6 +21,7 @@ import {
   STATUS_CARD_BORDER_CLASSES,
 } from "@/lib/statusStyles";
 import RiskySitterSummary from "../booking-list/RiskySitterSummary";
+import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
 
 function BookingActions({
   booking,
@@ -193,6 +194,10 @@ export default function BookingsTable({
           const hasUnresolvedMissed = bookingNeedsReview(b, now);
           const isRisky = reliability.level === "risky";
           const isWatch = reliability.level === "watch";
+          const petDisplayName = formatBookingPetNames(
+            b.petNames,
+            b.serviceSummary || "Pet care booking"
+          );
 
           return (
             <div
@@ -210,9 +215,17 @@ export default function BookingsTable({
               }`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-zinc-900">
-                    {b.client?.name || "—"}
+                <div className="min-w-0">
+                  <div className="break-words text-sm font-semibold text-zinc-900">
+                    {petDisplayName}
+                  </div>
+
+                  <div className="mt-1 break-words text-xs text-zinc-600">
+                    {b.serviceSummary || "Pet care booking"}
+                  </div>
+
+                  <div className="mt-1 break-words text-xs text-zinc-500">
+                    Owner: {b.client?.name || "Client"}
                   </div>
 
                   {hasUnresolvedMissed && isRisky && (
@@ -273,7 +286,7 @@ export default function BookingsTable({
           <thead className="text-left text-zinc-500">
             <tr className="border-b border-zinc-200">
               <th className="p-3">Visits</th>
-              <th className="p-3">Client</th>
+              <th className="p-3">Booking</th>
               <th className="p-3">Sitter</th>
               <th className="p-3">Status</th>
               <th className="p-3">Total</th>
@@ -286,6 +299,10 @@ export default function BookingsTable({
               const overdueVisits = getOverdueVisits(b.visits || [], now);
               const reliability = getBookingReliability(b, now);
               const hasUnresolvedMissed = bookingNeedsReview(b, now);
+              const petDisplayName = formatBookingPetNames(
+                b.petNames,
+                b.serviceSummary || "Pet care booking"
+              );
 
               return (
                 <tr
@@ -315,7 +332,17 @@ export default function BookingsTable({
                     )}
                   </td>
 
-                  <td className="p-3">{b.client?.name || "—"}</td>
+                  <td className="p-3">
+                    <div className="max-w-56 break-words font-semibold text-zinc-900">
+                      {petDisplayName}
+                    </div>
+                    <div className="mt-1 break-words text-xs text-zinc-600">
+                      {b.serviceSummary || "Pet care booking"}
+                    </div>
+                    <div className="mt-1 break-words text-xs text-zinc-500">
+                      Owner: {b.client?.name || "Client"}
+                    </div>
+                  </td>
 
                   <td className="p-3">
                     <div>

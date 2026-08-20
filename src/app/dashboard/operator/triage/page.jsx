@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { bookingNeedsReview } from "../lib/bookingNeedsReview";
 import { getBookingReliability } from "../lib/getBookingReliability";
 import StatusBadge from "../booking-list/StatusBadge";
+import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
 
 function formatDateTime(value) {
   return new Date(value).toLocaleString();
@@ -81,6 +82,10 @@ export default async function OperatorTriagePage() {
                 const end = new Date(visit.endTime);
                 return !Number.isNaN(end.getTime()) && end < now;
               });
+              const petDisplayName = formatBookingPetNames(
+                booking.petNames,
+                booking.serviceSummary || "Pet care booking"
+              );
 
               return (
                 <article
@@ -88,13 +93,21 @@ export default async function OperatorTriagePage() {
                   className="rounded-2xl border border-red-200 bg-white p-4 shadow-sm"
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-semibold text-zinc-950">
-                          {booking.client?.name || "Unknown client"}
+                        <h2 className="break-words font-semibold text-zinc-950">
+                          {petDisplayName}
                         </h2>
                         <StatusBadge status={booking.status} />
                       </div>
+
+                      <p className="mt-1 break-words text-sm text-zinc-600">
+                        {booking.serviceSummary || "Pet care booking"}
+                      </p>
+
+                      <p className="mt-1 break-words text-sm text-zinc-500">
+                        Owner: {booking.client?.name || "Client"}
+                      </p>
 
                       <p className="mt-1 text-sm text-zinc-600">
                         Sitter:{" "}

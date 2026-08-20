@@ -23,6 +23,7 @@ import {
   getNeedsAttentionBooking,
 } from "./lib/dashboardUtils";
 import { bookingNeedsReview } from "./lib/bookingNeedsReview";
+import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
 
 
 
@@ -346,11 +347,18 @@ export default async function OperatorDashboard({ searchParams }) {
             <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-zinc-900">
-                  {needsAttention.booking.client?.name || "—"}
+                  {formatBookingPetNames(
+                    needsAttention.booking.petNames,
+                    needsAttention.booking.serviceSummary || "Pet care booking"
+                  )}
                 </h2>
 
                 <div className="mt-1 text-sm text-zinc-700">
                   {needsAttention.booking.serviceSummary || "Booking"}
+                </div>
+
+                <div className="mt-1 text-sm text-zinc-500">
+                  Owner: {needsAttention.booking.client?.name || "Client"}
                 </div>
 
                 <div className="mt-2 text-sm font-medium text-amber-700">

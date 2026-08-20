@@ -1,12 +1,17 @@
 // src/app/dashboard/operator/lib/dashboardData.js
 import { prisma } from "@/lib/db";
 import { buildDateWhere } from "./dashboardQuery";
+import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
 
 function serializeBookingForMap(booking) {
   return {
     id: booking.id,
     clientName: booking.client?.name ?? "—",
     serviceSummary: booking.serviceSummary ?? "—",
+    petDisplayName: formatBookingPetNames(
+      booking.petNames,
+      booking.serviceSummary || "Pet care booking"
+    ),
     status: booking.status,
     startTime:
       booking.startTime instanceof Date
