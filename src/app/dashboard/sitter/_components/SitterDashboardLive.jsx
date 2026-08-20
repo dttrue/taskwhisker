@@ -9,6 +9,7 @@ import UpcomingVisitsSection from "./UpcomingVisitsSection";
 import SitterRoutePanel from "./SitterRoutePanel";
 import TodayVisitsSection from "./TodayVisitsSection";
 import ShiftStatusCard from "./ShiftStatusCard";
+import CompletedVisitsSection from "./CompletedVisitsSection";
 import { Notice, PageHeader, PageShell } from "@/components/ui/Foundation";
 import {
   formatMoney,
@@ -16,29 +17,39 @@ import {
   groupBookings,
   getRemainingVisitCountForToday,
   getRemainingPayoutForToday,
-  getCompletedThisWeekCount,
   getSitterMapBookings,
   getRemainingMapStops,
   getCurrentMapStop,
   getNextMapStop,
   getLastGraceStop,
   getRemainingTodayVisitEntries,
-  getUpcomingVisitEntries,
   getCompletedVisitEntries,
   getCanceledVisitEntries,
   serializeVisitEntry,
   getOverdueVisitEntries,
 } from "../lib/sitterDashboardUtils";
 
-export default function SitterDashboardLive({ bookings = [] }) {
+export default function SitterDashboardLive({
+  bookings = [],
+  upcomingVisitEntries = [],
+  upcomingVisitTotal = 0,
+  upcomingPage = 1,
+  completedVisitEntries = [],
+  completedVisitTotal = 0,
+  completedPage = 1,
+  visitPageSize = 10,
+  completedThisWeek = 0,
+  earnedTodayCents = 0,
+  acknowledgedCompletedVisitIds = [],
+}) {
   const [now, setNow] = useState(() => new Date());
   const [localBookings, setLocalBookings] = useState(bookings);
+  const [optimisticCompletedVisitIds, setOptimisticCompletedVisitIds] =
+    useState([]);
   const [selectedBookingId, setSelectedBookingId] = useState(null);
   const routePanelRef = useRef(null);
-  
-  
-
   useEffect(() => {
+    // Keep optimistic dashboard state synchronized with refreshed server data.
     setLocalBookings(bookings);
   }, [bookings]);
 
@@ -63,6 +74,9 @@ export default function SitterDashboardLive({ bookings = [] }) {
 
   function handleVisitCompleted(visitId) {
     const timestamp = new Date().toISOString();
+    setOptimisticCompletedVisitIds((previous) =>
+      previous.includes(visitId) ? previous : [...previous, visitId]
+    );
 
     setLocalBookings((prev) =>
       prev.map((booking) => {
@@ -106,20 +120,34 @@ export default function SitterDashboardLive({ bookings = [] }) {
       now
     ).map((entry) => serializeVisitEntry(entry));
 
-    const upcomingVisitEntries = getUpcomingVisitEntries(
-      localBookings,
-      now
-    ).map((entry) => serializeVisitEntry(entry));
-
-    const completedVisitEntries = getCompletedVisitEntries(localBookings).map(
-      (entry) => serializeVisitEntry(entry)
+    const optimisticCompletedEntries = getCompletedVisitEntries(
+      localBookings
+    )
+      .filter((entry) => optimisticCompletedVisitIds.includes(entry.id))
+      .map((entry) => serializeVisitEntry(entry));
+    const acknowledgedCompletedIds = new Set(acknowledgedCompletedVisitIds);
+    const pendingOptimisticCompletedEntries = optimisticCompletedEntries.filter(
+      (entry) => !acknowledgedCompletedIds.has(entry.id)
     );
+    const pendingOptimisticCompletedIds = new Set(
+      pendingOptimisticCompletedEntries.map((entry) => entry.id)
+    );
+    const completedDisplayEntries =
+      completedPage === 1
+        ? [
+            ...pendingOptimisticCompletedEntries,
+            ...completedVisitEntries.filter(
+              (entry) => !pendingOptimisticCompletedIds.has(entry.id)
+            ),
+          ].slice(0, visitPageSize)
+        : completedVisitEntries;
 
     const canceledVisitEntries = getCanceledVisitEntries(localBookings).map(
       (entry) => serializeVisitEntry(entry)
     );
 
-    const completedVisitCount = completedVisitEntries.length;
+    const completedVisitCount =
+      completedVisitTotal + pendingOptimisticCompletedEntries.length;
     const canceledVisitCount = canceledVisitEntries.length;
 
     const sitterMapBookings = getSitterMapBookings(today, now);
@@ -144,13 +172,13 @@ export default function SitterDashboardLive({ bookings = [] }) {
 
     const todayVisitCount = getRemainingVisitCountForToday(localBookings, now);
     const remainingTodayPayout = getRemainingPayoutForToday(localBookings, now);
-    const completedThisWeek = getCompletedThisWeekCount(localBookings, now);
-    
-    const earnedToday = completedVisitEntries.reduce(
+    const optimisticEarnedToday = pendingOptimisticCompletedEntries.reduce(
       (sum, v) => sum + (v.sitterPayoutCents || 0),
       0
     );
-
+    const earnedToday = earnedTodayCents + optimisticEarnedToday;
+    const completedThisWeekCount =
+      completedThisWeek + pendingOptimisticCompletedEntries.length;
     const totalTodayPayout = remainingTodayPayout + earnedToday;
 
     const nextUpcomingVisit =
@@ -191,7 +219,8 @@ export default function SitterDashboardLive({ bookings = [] }) {
     return {
       todayVisitEntries,
       upcomingVisitEntries,
-      completedVisitEntries,
+      upcomingVisitCount: upcomingVisitTotal,
+      completedDisplayEntries,
       canceledVisitEntries,
       completedVisitCount,
       canceledVisitCount,
@@ -205,7 +234,7 @@ export default function SitterDashboardLive({ bookings = [] }) {
       safeLastGraceStop,
       todayVisitCount,
       remainingTodayPayout,
-      completedThisWeek,
+      completedThisWeek: completedThisWeekCount,
       nextUpcomingVisit,
       nextUpcomingBooking,
       tomorrowCount,
@@ -215,12 +244,26 @@ export default function SitterDashboardLive({ bookings = [] }) {
       overdueVisitCount,
       hasBlockingMissedVisits,
     };
-  }, [localBookings, now]);
+  }, [
+    localBookings,
+    now,
+    completedVisitEntries,
+    completedVisitTotal,
+    completedPage,
+    upcomingVisitEntries,
+    upcomingVisitTotal,
+    visitPageSize,
+    completedThisWeek,
+    earnedTodayCents,
+    acknowledgedCompletedVisitIds,
+    optimisticCompletedVisitIds,
+  ]);
 
   useEffect(() => {
     const stops = derived.remainingSitterMapBookings;
 
     if (!stops.length) {
+      // Clear route selection when no actionable stops remain.
       setSelectedBookingId(null);
       return;
     }
@@ -345,17 +388,19 @@ export default function SitterDashboardLive({ bookings = [] }) {
 
         <UpcomingVisitsSection
           visits={derived.upcomingVisitEntries}
+          totalCount={derived.upcomingVisitCount}
+          page={upcomingPage}
+          pageSize={visitPageSize}
           now={now}
         />
 
-        {derived.completedVisitCount > 0 ? (
-          <VisitHistorySection
-            title="Completed"
-            description={`Finished visits (${derived.completedVisitCount}).`}
-            visits={derived.completedVisitEntries}
-            now={now}
-          />
-        ) : null}
+        <CompletedVisitsSection
+          visits={derived.completedDisplayEntries}
+          totalCount={derived.completedVisitCount}
+          page={completedPage}
+          pageSize={visitPageSize}
+          now={now}
+        />
 
         {derived.canceledVisitCount > 0 ? (
           <VisitHistorySection

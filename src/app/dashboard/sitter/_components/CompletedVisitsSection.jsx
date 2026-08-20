@@ -4,30 +4,30 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-import VisitCard from "./VisitCard";
 import { Notice, SectionHeader, StatusBadge } from "@/components/ui/Foundation";
+import VisitCard from "./VisitCard";
 
 function pageHref(pathname, searchParams, page) {
   const params = new URLSearchParams(searchParams.toString());
 
   if (page <= 1) {
-    params.delete("upcomingPage");
+    params.delete("completedPage");
   } else {
-    params.set("upcomingPage", String(page));
+    params.set("completedPage", String(page));
   }
 
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
 }
 
-export default function UpcomingVisitsSection({
+export default function CompletedVisitsSection({
   visits = [],
   totalCount = 0,
   page = 1,
   pageSize = 10,
   now = new Date(),
 }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -36,31 +36,25 @@ export default function UpcomingVisitsSection({
   return (
     <section className="space-y-4">
       <SectionHeader
-        title="Upcoming"
-        meta={<StatusBadge>{totalCount} scheduled</StatusBadge>}
-        description={
-          totalCount === 0
-            ? "Nothing is scheduled after today."
-            : totalCount === 1
-            ? "1 upcoming visit scheduled."
-            : `${totalCount} upcoming visits scheduled.`
-        }
+        title="Completed"
+        description="Finished visits."
+        meta={<StatusBadge tone="neutral">{totalCount}</StatusBadge>}
       />
 
       <button
         type="button"
         aria-expanded={isOpen}
-        aria-controls="upcoming-visits-content"
+        aria-controls="completed-visits-content"
         onClick={() => setIsOpen((current) => !current)}
         className="inline-flex min-h-11 items-center justify-center rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--task-text)] transition hover:bg-[var(--task-surface-soft)] focus-visible:outline-2 focus-visible:outline-offset-3"
       >
-        {isOpen ? "Hide upcoming" : "Show upcoming"}
+        {isOpen ? "Hide completed" : "Show completed"}
       </button>
 
       {isOpen ? (
-        <div id="upcoming-visits-content" className="space-y-4">
+        <div id="completed-visits-content" className="space-y-4">
           {visits.length === 0 ? (
-            <Notice>No upcoming visits scheduled.</Notice>
+            <Notice>No completed visits found.</Notice>
           ) : (
             <div className="grid gap-3">
               {visits.map((entry) => (
@@ -71,7 +65,7 @@ export default function UpcomingVisitsSection({
 
           {showPagination ? (
             <nav
-              aria-label="Upcoming visits pagination"
+              aria-label="Completed visits pagination"
               className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-3"
             >
               {page <= 1 ? (
