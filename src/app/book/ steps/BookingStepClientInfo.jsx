@@ -1,7 +1,7 @@
 // src/app/book/steps/BookingStepClientInfo.jsx
 "use client";
 
-import { FieldGroup, FormField } from "@/components/ui/Foundation";
+import { Button, FieldGroup, FormField } from "@/components/ui/Foundation";
 
 const DOG_SIZE_OPTIONS = [
   { value: "SMALL", label: "Small" },
@@ -20,6 +20,10 @@ const WEIGHT_CLASS_OPTIONS = [
 export default function BookingStepClientInfo({
   client,
   setClient,
+  petNames = [""],
+  setPetNames,
+  petNameErrors = [],
+  setPetNameErrors,
   serviceLocation,
   setServiceLocation,
   notes,
@@ -41,6 +45,32 @@ export default function BookingStepClientInfo({
       ...prev,
       [field]: value,
     }));
+  }
+
+  function updatePetName(index, value) {
+    setPetNames((previous) =>
+      previous.map((name, nameIndex) => (nameIndex === index ? value : name))
+    );
+    setPetNameErrors?.((previous) =>
+      previous.map((error, errorIndex) => (errorIndex === index ? "" : error))
+    );
+  }
+
+  function addPetName() {
+    setPetNames((previous) =>
+      previous.length >= 10 ? previous : [...previous, ""]
+    );
+  }
+
+  function removePetName(index) {
+    setPetNames((previous) =>
+      previous.length === 1
+        ? previous
+        : previous.filter((_, nameIndex) => nameIndex !== index)
+    );
+    setPetNameErrors?.((previous) =>
+      previous.filter((_, errorIndex) => errorIndex !== index)
+    );
   }
 
   return (
@@ -190,11 +220,57 @@ export default function BookingStepClientInfo({
         <div className="mb-3">
           <h2 className="text-base font-semibold text-[var(--task-text)]">Pet details</h2>
           <p className="mt-1 text-sm text-[var(--task-text-muted)]">
-            Add pet size details to help with planning and service fit.
+            Add each pet included in this booking, then provide size details.
           </p>
         </div>
 
         <div className="space-y-4">
+          <FieldGroup legend="Pet names">
+            <div className="space-y-3">
+              {petNames.map((name, index) => (
+                <div
+                  key={index}
+                  className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+                >
+                  <FormField
+                    id={`pet-name-${index + 1}`}
+                    label={`Pet ${index + 1} name`}
+                    type="text"
+                    value={name}
+                    onChange={(event) => updatePetName(index, event.target.value)}
+                    error={petNameErrors[index]}
+                    maxLength={50}
+                    autoComplete="off"
+                    aria-required="true"
+                  />
+                  {index > 0 ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => removePetName(index)}
+                      aria-label={`Remove pet ${index + 1}`}
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              variant="quiet"
+              className="mt-3"
+              onClick={addPetName}
+              disabled={petNames.length >= 10}
+            >
+              Add another pet
+            </Button>
+            <p className="mt-2 text-xs leading-5 text-[var(--task-text-muted)]">
+              Up to 10 pets may be included in one booking.
+            </p>
+          </FieldGroup>
+
           <FieldGroup legend="Dog size">
             <div className="flex flex-wrap gap-2">
               {DOG_SIZE_OPTIONS.map((option) => {

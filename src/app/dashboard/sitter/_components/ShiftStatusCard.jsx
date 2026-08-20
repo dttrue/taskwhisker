@@ -30,16 +30,16 @@ export default function ShiftStatusCard({
     badgeTone = "warning";
     badgeText = "Action needed";
   } else if (hasCurrentStop) {
-    title = `Current stop: ${currentStop.clientName || "Client"}`;
+    title = `Current stop: ${currentStop.petDisplayName || "Pet care booking"}`;
     description = currentStop.todayVisitEnd
-      ? `In progress until ${formatDateTime(currentStop.todayVisitEnd)}.`
+      ? `${currentStop.serviceSummary} · In progress until ${formatDateTime(currentStop.todayVisitEnd)}.`
       : "This visit is currently in progress.";
     cardClass = "border-[#b8d3c7] border-l-4";
     badgeText = "In progress";
   } else if (hasNextStop) {
-    title = `Next stop: ${nextStop.clientName || "Client"}`;
+    title = `Next stop: ${nextStop.petDisplayName || "Pet care booking"}`;
     description = nextStop.todayVisitStart
-      ? `Scheduled for ${formatDateTime(nextStop.todayVisitStart)}.`
+      ? `${nextStop.serviceSummary} · Scheduled for ${formatDateTime(nextStop.todayVisitStart)}.`
       : "Your next stop is ready in the route panel.";
     cardClass = "border-[#b8d3c7] border-l-4";
     badgeText = "Next up";
@@ -57,6 +57,11 @@ export default function ShiftStatusCard({
           </p>
           <h2 className="mt-2 text-lg font-bold tracking-[-0.02em] text-[var(--task-text)]">{title}</h2>
           <p className="mt-1 text-sm leading-6 text-[var(--task-text-muted)]">{description}</p>
+          {(currentStop || nextStop)?.clientName ? (
+            <p className="mt-1 text-sm font-medium text-[var(--task-text-muted)]">
+              Owner: {(currentStop || nextStop).clientName}
+            </p>
+          ) : null}
         </div>
 
         <StatusBadge tone={badgeTone}>

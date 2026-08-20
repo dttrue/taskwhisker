@@ -183,7 +183,7 @@ export default function SitterRoutePanel({
             </span>
 
             <h2 className="break-words text-xl font-bold tracking-[-0.02em] text-[var(--task-text)]">
-              {selectedBooking.clientName || "—"}
+              {selectedBooking.petDisplayName || selectedBooking.serviceSummary || "Pet care booking"}
             </h2>
           </div>
 
@@ -200,6 +200,10 @@ export default function SitterRoutePanel({
               {selectedBooking.address}
             </div>
           )}
+
+          <div className="mt-2 text-sm font-medium text-[var(--task-text-muted)]">
+            Owner: {selectedBooking.clientName || "Client"}
+          </div>
         </div>
 
         <div className="text-left md:text-right">
@@ -307,11 +311,14 @@ export default function SitterRoutePanel({
 
                 <div className="flex-1 text-sm">
                   <div className="break-words font-semibold text-[var(--task-text)]">
-                    {booking.clientName}
+                    {booking.petDisplayName || booking.serviceSummary || "Pet care booking"}
                   </div>
 
                   <div className="mt-0.5 break-words text-sm text-[var(--task-text-muted)]">
                     {booking.serviceSummary}
+                  </div>
+                  <div className="mt-0.5 break-words text-sm text-[var(--task-text-muted)]">
+                    Owner: {booking.clientName || "Client"}
                   </div>
                 </div>
 

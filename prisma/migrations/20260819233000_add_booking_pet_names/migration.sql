@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Booking" ADD COLUMN "petNames" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

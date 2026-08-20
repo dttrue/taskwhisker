@@ -1,5 +1,9 @@
 // src/lib/email/sendSitterBookingNotificationEmail.js
 import { Resend } from "resend";
+import {
+  formatBookingPetNames,
+  getPetNameLabel,
+} from "@/lib/bookings/formatPetNames";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -28,6 +32,7 @@ export async function sendSitterBookingNotificationEmail({
   to,
   sitterName,
   clientName,
+  petNames = [],
   serviceSummary,
   startTime,
   endTime,
@@ -51,6 +56,10 @@ export async function sendSitterBookingNotificationEmail({
   const safeSitterName = escapeHtml(sitterName || "there");
   const safeClientName = escapeHtml(clientName || "Client");
   const safeServiceSummary = escapeHtml(serviceSummary || "Pet care service");
+  const safePetNames = escapeHtml(
+    formatBookingPetNames(petNames, serviceSummary || "Pet care booking")
+  );
+  const petLabel = getPetNameLabel(petNames);
 
   
 
@@ -65,7 +74,8 @@ export async function sendSitterBookingNotificationEmail({
         <p>A new booking has been assigned to you.</p>
 
         <div style="padding: 12px; border: 1px solid #e4e4e7; border-radius: 10px; margin: 16px 0;">
-          <p><strong>Client:</strong> ${safeClientName}</p>
+          <p><strong>${petLabel}:</strong> ${safePetNames}</p>
+          <p><strong>Owner:</strong> ${safeClientName}</p>
           <p><strong>Service:</strong> ${safeServiceSummary}</p>
           <p><strong>Start:</strong> ${formatDateTime(startTime)}</p>
           <p><strong>End:</strong> ${formatDateTime(endTime)}</p>

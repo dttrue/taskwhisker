@@ -256,19 +256,37 @@ export default function SitterDashboardLive({ bookings = [] }) {
           <StatCard
             title={derived.currentStop ? "Current stop" : "Next stop"}
             value={
-              derived.currentStop?.clientName ||
-              derived.nextStop?.clientName ||
+              derived.currentStop?.petDisplayName ||
+              derived.nextStop?.petDisplayName ||
               "None"
             }
             helper={
               derived.currentStop?.todayVisitEnd
-                ? `In progress until ${formatDateTime(
-                    derived.currentStop.todayVisitEnd
-                  )}`
+                ? (
+                    <>
+                      <span className="block">
+                        {derived.currentStop.serviceSummary} · In progress until {formatDateTime(
+                          derived.currentStop.todayVisitEnd
+                        )}
+                      </span>
+                      <span className="mt-1 block font-medium">
+                        Owner: {derived.currentStop.clientName}
+                      </span>
+                    </>
+                  )
                 : derived.nextStop?.todayVisitStart
-                ? `Scheduled for ${formatDateTime(
-                    derived.nextStop.todayVisitStart
-                  )}`
+                ? (
+                    <>
+                      <span className="block">
+                        {derived.nextStop.serviceSummary} · Scheduled for {formatDateTime(
+                          derived.nextStop.todayVisitStart
+                        )}
+                      </span>
+                      <span className="mt-1 block font-medium">
+                        Owner: {derived.nextStop.clientName}
+                      </span>
+                    </>
+                  )
                 : "No active stop right now"
             }
           />

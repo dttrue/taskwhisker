@@ -185,7 +185,7 @@ export default function SitterMapInner({
               <Popup>
                 <div className="min-w-44 text-sm text-[var(--task-text)]">
                   <div className="font-bold">
-                    {`Stop ${index + 1} • ${booking.clientName}`}
+                    {`Stop ${index + 1} • ${booking.petDisplayName || booking.serviceSummary || "Pet care booking"}`}
                   </div>
 
                   <div className="mt-1 text-[var(--task-text)]">
@@ -194,6 +194,10 @@ export default function SitterMapInner({
 
                   <div className="mt-1 text-[var(--task-text-muted)]">
                     Visit: {formatDateTime(actionableVisitTime)}
+                  </div>
+
+                  <div className="mt-1 text-[var(--task-text-muted)]">
+                    Owner: {booking.clientName}
                   </div>
 
                   {booking.address ? (

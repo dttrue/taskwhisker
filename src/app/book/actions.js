@@ -100,6 +100,7 @@ export async function createPublicBooking(rawInput) {
     serviceSummary,
     basePriceCentsPerVisit,
     client,
+    petNames,
 
     serviceAddressLine1,
     serviceAddressLine2,
@@ -111,6 +112,8 @@ export async function createPublicBooking(rawInput) {
     serviceLng,
     accessInstructions,
     locationNotes,
+
+    petDetails,
 
     mode,
     startDate,
@@ -431,6 +434,8 @@ export async function createPublicBooking(rawInput) {
         locationNotes: bookingServiceAddress.locationNotes,
 
         notes: notes || null,
+        petNames,
+        petDetails: petDetails || undefined,
       },
     });
 
@@ -522,6 +527,7 @@ export async function createPublicBooking(rawInput) {
       to: process.env.TEST_CLIENT_EMAIL || fullBooking.client.email,
       clientName: fullBooking.client.name,
       serviceSummary: fullBooking.serviceSummary,
+      petNames: fullBooking.petNames,
       startTime: fullBooking.startTime,
       endTime: fullBooking.endTime,
       bookingUrl,
@@ -537,6 +543,7 @@ export async function createPublicBooking(rawInput) {
       sitterName: fullBooking.sitter?.name,
       clientName: fullBooking.client.name,
       serviceSummary: fullBooking.serviceSummary,
+      petNames: fullBooking.petNames,
       startTime: fullBooking.startTime,
       endTime: fullBooking.endTime,
       messageUrl: sitterMessageUrl,
@@ -555,6 +562,7 @@ export async function createPublicBooking(rawInput) {
       status: fullBooking.status,
       serviceSummary: fullBooking.serviceSummary,
       serviceType: fullBooking.serviceType,
+      petNames: fullBooking.petNames,
       client: {
         name: fullBooking.client.name,
         email: fullBooking.client.email,

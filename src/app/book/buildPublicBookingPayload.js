@@ -64,6 +64,7 @@ export function buildPublicBookingPayload({
   nailTrimExtra,
   bathExtra,
   client,
+  petNames = [],
   serviceLocation,
   notes,
   dogSize = [],
@@ -150,6 +151,8 @@ export function buildPublicBookingPayload({
       phone: client.phone || undefined,
     },
 
+    petNames,
+
     serviceAddressLine1: serviceLocation.addressLine1 || undefined,
     serviceAddressLine2: serviceLocation.addressLine2 || undefined,
     serviceCity: serviceLocation.city || undefined,
@@ -184,9 +187,16 @@ export function buildPublicBookingPayload({
   };
 }
 
-export function validateClientInfoStep({ client, serviceLocation }) {
+export function validateClientInfoStep({ client, petNames, serviceLocation }) {
   if (!client?.name?.trim()) return "Name is required.";
   if (!client?.email?.trim()) return "Email is required.";
+  if (!Array.isArray(petNames) || petNames.length === 0)
+    return "At least one pet name is required.";
+  if (petNames.length > 10) return "A booking can include up to 10 pets.";
+  if (petNames.some((name) => typeof name !== "string" || !name.trim()))
+    return "Pet name is required.";
+  if (petNames.some((name) => name.trim().length > 50))
+    return "Pet name must be 50 characters or fewer.";
   if (!serviceLocation?.addressLine1?.trim())
     return "Service address is required.";
   if (!serviceLocation?.city?.trim()) return "Service city is required.";

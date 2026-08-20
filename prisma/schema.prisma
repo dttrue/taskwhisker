@@ -39,6 +39,7 @@ model Booking {
   clientLinkToken   String        @unique @default(cuid())
   notes             String?
   petDetails        Json?
+  petNames          String[]      @default([])
   startTime         DateTime
   endTime           DateTime
   status            BookingStatus @default(REQUESTED)

@@ -116,6 +116,8 @@ export default function PublicBookingWizard({
 
   const [slotsByDate, setSlotsByDate] = useState({});
   const [dogSize, setDogSize] = useState([]);
+  const [petNames, setPetNames] = useState([""]);
+  const [petNameErrors, setPetNameErrors] = useState([]);
   const [petNotes, setPetNotes] = useState("");
 
   const isRange = serviceType === "OVERNIGHT";
@@ -340,6 +342,23 @@ export default function PublicBookingWizard({
         return false;
       }
 
+      const nextPetNameErrors = petNames.map((name) => {
+        const trimmed = name.trim();
+        if (!trimmed) return "Pet name is required.";
+        if (trimmed.length > 50) {
+          return "Pet name must be 50 characters or fewer.";
+        }
+        return "";
+      });
+
+      if (nextPetNameErrors.some(Boolean)) {
+        setPetNameErrors(nextPetNameErrors);
+        setError("Please review the highlighted pet names.");
+        return false;
+      }
+
+      setPetNameErrors([]);
+
       return true;
     }
 
@@ -443,6 +462,8 @@ export default function PublicBookingWizard({
         email: client.email,
         phone: client.phone || undefined,
       },
+
+      petNames,
 
       serviceAddressLine1: serviceLocation.addressLine1 || undefined,
       serviceAddressLine2: serviceLocation.addressLine2 || undefined,
@@ -622,6 +643,10 @@ export default function PublicBookingWizard({
             <BookingStepClientInfo
               client={client}
               setClient={setClient}
+              petNames={petNames}
+              setPetNames={setPetNames}
+              petNameErrors={petNameErrors}
+              setPetNameErrors={setPetNameErrors}
               serviceLocation={serviceLocation}
               setServiceLocation={setServiceLocation}
               notes={petNotes}
@@ -658,6 +683,7 @@ export default function PublicBookingWizard({
               bathExtra={bathExtra}
               hasAnyAddOns={hasAnyAddOns}
               client={client}
+              petNames={petNames}
               serviceLocation={serviceLocation}
               notes={petNotes}
               dogSize={dogSize}

@@ -1,5 +1,7 @@
 // src/app/dashboard/sitter/lib/sitterDashboardUtils.js
 
+import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
+
 export function formatMoney(cents = 0) {
   return `$${(cents / 100).toFixed(2)}`;
 }
@@ -473,6 +475,11 @@ export function getSitterMapBookings(bookings = [], now) {
         id: booking.id,
         clientName: booking.client?.name || "Client",
         serviceSummary: booking.serviceSummary || "Drop-in visit",
+        petNames: booking.petNames || [],
+        petDisplayName: formatBookingPetNames(
+          booking.petNames,
+          booking.serviceSummary || "Pet care booking"
+        ),
         status: booking.status,
         lat,
         lng,
@@ -626,6 +633,11 @@ export function getVisitEntries(bookings = []) {
         client: booking.client || null,
         clientName: booking.client?.name || "Client",
         serviceSummary: booking.serviceSummary || "Visit",
+        petNames: booking.petNames || [],
+        petDisplayName: formatBookingPetNames(
+          booking.petNames,
+          booking.serviceSummary || "Pet care booking"
+        ),
         payoutPerVisitCents: payoutPerVisit,
         address,
         lat: booking.serviceLat != null ? Number(booking.serviceLat) : null,
@@ -698,6 +710,8 @@ export function serializeVisitEntry(entry) {
     bookingStatus: entry.bookingStatus,
     clientName: entry.clientName,
     serviceSummary: entry.serviceSummary,
+    petNames: entry.petNames,
+    petDisplayName: entry.petDisplayName,
     payoutPerVisitCents: entry.payoutPerVisitCents,
     address: entry.address,
     lat: entry.lat,

@@ -53,6 +53,17 @@ export const optionalTrimmedString = z
         phone: z.string().optional(),
       }),
 
+      petNames: z
+        .array(
+          z
+            .string()
+            .trim()
+            .min(1, "Pet name is required")
+            .max(50, "Pet name must be 50 characters or fewer")
+        )
+        .min(1, "At least one pet name is required")
+        .max(10, "A booking can include up to 10 pets"),
+
       serviceAddressLine1: optionalTrimmedString,
       serviceAddressLine2: optionalTrimmedString,
       serviceCity: optionalTrimmedString,

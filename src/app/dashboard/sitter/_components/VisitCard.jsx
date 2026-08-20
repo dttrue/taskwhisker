@@ -94,6 +94,7 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
     bookingId,
     clientName,
     serviceSummary,
+    petDisplayName,
     payoutPerVisitCents,
     address,
     hasOpenCancellationRequest = false,
@@ -115,7 +116,9 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="break-words text-base font-bold text-[var(--task-text)]">{clientName}</p>
+            <p className="break-words text-base font-bold text-[var(--task-text)]">
+              {petDisplayName || serviceSummary || "Pet care booking"}
+            </p>
 
             <StatusBadge tone={state.badgeTone}>
               {state.label}
@@ -129,6 +132,9 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
           </div>
 
           <p className="mt-1 break-words text-sm leading-5 text-[var(--task-text-muted)]">{serviceSummary}</p>
+          <p className="mt-1 break-words text-sm font-medium leading-5 text-[var(--task-text-muted)]">
+            Owner: {clientName}
+          </p>
         </div>
 
         <span className="shrink-0 rounded-full border border-[#c9dfd4] bg-[var(--task-success-soft)] px-2.5 py-1 text-sm font-semibold text-[#285844]">

@@ -1,5 +1,9 @@
 // src/lib/email/sendClientBookingConfirmationEmail.js
 import { Resend } from "resend";
+import {
+  formatBookingPetNames,
+  getPetNameLabel,
+} from "@/lib/bookings/formatPetNames";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -27,6 +31,7 @@ function escapeHtml(value = "") {
 export async function sendClientBookingConfirmationEmail({
   to,
   clientName,
+  petNames = [],
   serviceSummary,
   startTime,
   endTime,
@@ -50,6 +55,10 @@ export async function sendClientBookingConfirmationEmail({
 
   const safeClientName = escapeHtml(clientName || "there");
   const safeServiceSummary = escapeHtml(serviceSummary || "Pet care service");
+  const safePetNames = escapeHtml(
+    formatBookingPetNames(petNames, serviceSummary || "Pet care booking")
+  );
+  const petLabel = getPetNameLabel(petNames);
 
   
 
@@ -64,6 +73,8 @@ export async function sendClientBookingConfirmationEmail({
         <p>Your booking request has been received.</p>
 
         <div style="padding: 12px; border: 1px solid #e4e4e7; border-radius: 10px; margin: 16px 0;">
+          <p><strong>${petLabel}:</strong> ${safePetNames}</p>
+          <p><strong>Owner:</strong> ${safeClientName}</p>
           <p><strong>Service:</strong> ${safeServiceSummary}</p>
           <p><strong>Start:</strong> ${formatDateTime(startTime)}</p>
           <p><strong>End:</strong> ${formatDateTime(endTime)}</p>
