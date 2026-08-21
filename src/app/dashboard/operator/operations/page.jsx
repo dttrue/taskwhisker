@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/Foundation";
 import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
 import { prisma } from "@/lib/db";
+import { buildInterventionIssues } from "@/lib/operations/interventionQueue";
 import {
   BUSINESS_TIME_ZONE,
   getBusinessDayRange,
@@ -24,6 +25,7 @@ import {
 } from "@/lib/visits/visitOperations";
 
 import DailyVisitCard from "./_components/DailyVisitCard";
+import InterventionQueue from "./_components/InterventionQueue";
 import OperatorSitterRoute from "./_components/OperatorSitterRoute";
 import SitterStatusCard from "./_components/SitterStatusCard";
 
@@ -75,6 +77,18 @@ function buildAddress(booking) {
   ]
     .filter(Boolean)
     .join(", ");
+}
+
+function getBookingIdentity(booking) {
+  const serviceSummary = booking.serviceSummary || "Pet care booking";
+
+  return {
+    petDisplayName: formatBookingPetNames(booking.petNames, serviceSummary),
+    serviceSummary,
+    ownerName: booking.client?.name || "Client",
+    sitterId: booking.sitterId || null,
+    sitterName: booking.sitter?.name || booking.sitter?.email || null,
+  };
 }
 
 function SummaryCard({ label, value, tone = "neutral" }) {
@@ -168,39 +182,156 @@ export default async function OperatorOperationsPage({ searchParams }) {
   const now = new Date();
   const { startsAt, endsAt } = getBusinessDayRange(now);
 
-  const visits = await prisma.visit.findMany({
-    where: {
-      operatorId: session.user.id,
-      startTime: { gte: startsAt, lt: endsAt },
-    },
-    select: {
-      id: true,
-      bookingId: true,
-      sitterId: true,
-      startTime: true,
-      endTime: true,
-      status: true,
-      sitter: { select: { id: true, name: true, email: true } },
-      booking: {
+  const [
+    visits,
+    requestedBookingsData,
+    liveMissedBookingsData,
+    missedReviewBookingsData,
+    cancellationData,
+  ] = await Promise.all([
+    prisma.visit.findMany({
+        where: {
+          operatorId: session.user.id,
+          startTime: { gte: startsAt, lt: endsAt },
+        },
         select: {
+          id: true,
+          bookingId: true,
+          sitterId: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+          sitter: { select: { id: true, name: true, email: true } },
+          booking: {
+            select: {
+              petNames: true,
+              serviceSummary: true,
+              sitterPayoutCents: true,
+              serviceAddressLine1: true,
+              serviceAddressLine2: true,
+              serviceCity: true,
+              serviceState: true,
+              servicePostalCode: true,
+              serviceLat: true,
+              serviceLng: true,
+              client: { select: { name: true } },
+              conversation: { select: { id: true } },
+              _count: { select: { visits: true } },
+            },
+          },
+        },
+        orderBy: [{ startTime: "asc" }, { id: "asc" }],
+    }),
+    prisma.booking.findMany({
+        where: { operatorId: session.user.id, status: "REQUESTED" },
+        select: {
+          id: true,
+          createdAt: true,
+          sitterId: true,
           petNames: true,
           serviceSummary: true,
-          sitterPayoutCents: true,
-          serviceAddressLine1: true,
-          serviceAddressLine2: true,
-          serviceCity: true,
-          serviceState: true,
-          servicePostalCode: true,
-          serviceLat: true,
-          serviceLng: true,
           client: { select: { name: true } },
-          conversation: { select: { id: true } },
-          _count: { select: { visits: true } },
+          sitter: { select: { name: true, email: true } },
         },
-      },
-    },
-    orderBy: [{ startTime: "asc" }, { id: "asc" }],
-  });
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    }),
+    prisma.booking.findMany({
+        where: {
+          operatorId: session.user.id,
+          status: "CONFIRMED",
+          visits: {
+            some: { status: "CONFIRMED", endTime: { lt: now } },
+          },
+        },
+        select: {
+          id: true,
+          sitterId: true,
+          petNames: true,
+          serviceSummary: true,
+          client: { select: { name: true } },
+          sitter: { select: { name: true, email: true } },
+          visits: {
+            where: { status: "CONFIRMED", endTime: { lt: now } },
+            select: {
+              id: true,
+              sitterId: true,
+              endTime: true,
+              sitter: { select: { name: true, email: true } },
+            },
+            orderBy: [{ endTime: "asc" }, { id: "asc" }],
+          },
+        },
+    }),
+    prisma.booking.findMany({
+        where: {
+          operatorId: session.user.id,
+          status: { in: ["CONFIRMED", "COMPLETED"] },
+          history: {
+            some: {
+              note: { contains: "missed visit", mode: "insensitive" },
+              missedVisitReviewStatus: null,
+            },
+          },
+        },
+        select: {
+          id: true,
+          sitterId: true,
+          petNames: true,
+          serviceSummary: true,
+          client: { select: { name: true } },
+          sitter: { select: { name: true, email: true } },
+          history: {
+            where: {
+              note: { contains: "missed visit", mode: "insensitive" },
+              missedVisitReviewStatus: null,
+            },
+            select: { id: true, createdAt: true },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          },
+        },
+    }),
+    prisma.conversation.findMany({
+        where: {
+          booking: {
+            operatorId: session.user.id,
+            status: { in: ["REQUESTED", "CONFIRMED"] },
+          },
+          messages: {
+            some: {
+              senderType: "CLIENT",
+              body: {
+                startsWith: "Cancellation request:",
+                mode: "insensitive",
+              },
+            },
+          },
+        },
+        select: {
+          booking: {
+            select: {
+              id: true,
+              sitterId: true,
+              petNames: true,
+              serviceSummary: true,
+              client: { select: { name: true } },
+              sitter: { select: { name: true, email: true } },
+            },
+          },
+          messages: {
+            where: {
+              senderType: "CLIENT",
+              body: {
+                startsWith: "Cancellation request:",
+                mode: "insensitive",
+              },
+            },
+            select: { id: true, createdAt: true },
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            take: 1,
+          },
+        },
+    }),
+  ]);
 
   const schedule = sortVisitsChronologically(visits).map((visit) => {
     const serviceSummary = visit.booking.serviceSummary || "Pet care booking";
@@ -236,6 +367,41 @@ export default async function OperatorOperationsPage({ searchParams }) {
       status: visit.status,
       operationalStatus: getVisitOperationalStatus(visit, now),
     };
+  });
+
+  const requestedBookings = requestedBookingsData.map((booking) => ({
+    ...booking,
+    ...getBookingIdentity(booking),
+  }));
+  const liveMissedBookings = liveMissedBookingsData.map((booking) => ({
+    ...booking,
+    ...getBookingIdentity(booking),
+    visits: booking.visits.map((visit) => ({
+      ...visit,
+      sitterName: visit.sitter?.name || visit.sitter?.email || null,
+    })),
+  }));
+  const missedReviewBookings = missedReviewBookingsData.map((booking) => ({
+    ...booking,
+    ...getBookingIdentity(booking),
+    unresolvedHistories: booking.history,
+  }));
+  const cancellationConversations = cancellationData.map((conversation) => ({
+    ...conversation,
+    booking: {
+      ...conversation.booking,
+      ...getBookingIdentity(conversation.booking),
+    },
+  }));
+  const interventionIssues = buildInterventionIssues({
+    liveMissedBookings,
+    missedReviewBookings,
+    requestedBookings,
+    cancellationConversations,
+    unassignedVisits: schedule.filter(
+      (visit) =>
+        !visit.sitterId && visitRequiresOperationalResolution(visit)
+    ),
   });
 
   const sitterOptions = Array.from(
@@ -330,6 +496,8 @@ export default async function OperatorOperationsPage({ searchParams }) {
           <SummaryCard label="Completed" value={counts.completed} tone="info" />
           <SummaryCard label="Unassigned" value={counts.unassigned} tone="warning" />
         </section>
+
+        <InterventionQueue issues={interventionIssues} />
 
         <section aria-label="Sitters Today" className="space-y-3">
           <SectionHeader
