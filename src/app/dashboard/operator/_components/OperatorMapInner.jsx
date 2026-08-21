@@ -127,7 +127,10 @@ export default function OperatorMapInner({ bookings = [] }) {
                   <div className="font-semibold">
                     {b.petDisplayName || b.serviceSummary || "Pet care booking"}
                   </div>
-                  <div>{b.serviceSummary || "Booking"}</div>
+                  {b.serviceSummary &&
+                  b.serviceSummary !== b.petDisplayName ? (
+                    <div>{b.serviceSummary}</div>
+                  ) : null}
                   <div className="text-zinc-600">
                     Owner: {b.clientName || "Client"}
                   </div>

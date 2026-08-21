@@ -244,6 +244,16 @@ export default async function OperatorDashboard({ searchParams }) {
   const confirmedRevenue = getConfirmedRevenue(bookings);
   const unassignedCount = bookings.filter((b) => !b.sitterId).length;
   const needsAttention = getNeedsAttentionBooking(bookings, now);
+  const needsAttentionPetDisplayName = needsAttention
+    ? formatBookingPetNames(
+        needsAttention.booking.petNames,
+        needsAttention.booking.serviceSummary || "Pet care booking"
+      )
+    : null;
+  const showNeedsAttentionService = Boolean(
+    needsAttention?.booking.serviceSummary &&
+      needsAttention.booking.serviceSummary !== needsAttentionPetDisplayName
+  );
   const showGroupedDashboard = status === "ALL";
 
   return (
@@ -347,15 +357,14 @@ export default async function OperatorDashboard({ searchParams }) {
             <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-zinc-900">
-                  {formatBookingPetNames(
-                    needsAttention.booking.petNames,
-                    needsAttention.booking.serviceSummary || "Pet care booking"
-                  )}
+                  {needsAttentionPetDisplayName}
                 </h2>
 
-                <div className="mt-1 text-sm text-zinc-700">
-                  {needsAttention.booking.serviceSummary || "Booking"}
-                </div>
+                {showNeedsAttentionService ? (
+                  <div className="mt-1 text-sm text-zinc-700">
+                    {needsAttention.booking.serviceSummary}
+                  </div>
+                ) : null}
 
                 <div className="mt-1 text-sm text-zinc-500">
                   Owner: {needsAttention.booking.client?.name || "Client"}

@@ -198,6 +198,8 @@ export default function BookingsTable({
             b.petNames,
             b.serviceSummary || "Pet care booking"
           );
+          const showServiceContext =
+            Boolean(b.serviceSummary) && b.serviceSummary !== petDisplayName;
 
           return (
             <div
@@ -220,9 +222,11 @@ export default function BookingsTable({
                     {petDisplayName}
                   </div>
 
-                  <div className="mt-1 break-words text-xs text-zinc-600">
-                    {b.serviceSummary || "Pet care booking"}
-                  </div>
+                  {showServiceContext ? (
+                    <div className="mt-1 break-words text-xs text-zinc-600">
+                      {b.serviceSummary}
+                    </div>
+                  ) : null}
 
                   <div className="mt-1 break-words text-xs text-zinc-500">
                     Owner: {b.client?.name || "Client"}
@@ -303,6 +307,8 @@ export default function BookingsTable({
                 b.petNames,
                 b.serviceSummary || "Pet care booking"
               );
+              const showServiceContext =
+                Boolean(b.serviceSummary) && b.serviceSummary !== petDisplayName;
 
               return (
                 <tr
@@ -336,9 +342,11 @@ export default function BookingsTable({
                     <div className="max-w-56 break-words font-semibold text-zinc-900">
                       {petDisplayName}
                     </div>
-                    <div className="mt-1 break-words text-xs text-zinc-600">
-                      {b.serviceSummary || "Pet care booking"}
-                    </div>
+                    {showServiceContext ? (
+                      <div className="mt-1 break-words text-xs text-zinc-600">
+                        {b.serviceSummary}
+                      </div>
+                    ) : null}
                     <div className="mt-1 break-words text-xs text-zinc-500">
                       Owner: {b.client?.name || "Client"}
                     </div>

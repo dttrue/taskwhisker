@@ -180,6 +180,9 @@ export default async function OperatorBookingDetailPage({
     booking.petNames,
     booking.serviceSummary || "Pet care booking"
   );
+  const showServiceContext =
+    Boolean(booking.serviceSummary) &&
+    booking.serviceSummary !== petDisplayName;
 
   
 
@@ -272,9 +275,11 @@ export default async function OperatorBookingDetailPage({
                 <h1 className="text-2xl font-semibold text-zinc-900">
                   {petDisplayName}
                 </h1>
-                <div className="mt-1 text-sm font-medium text-zinc-700">
-                  {booking.serviceSummary || "Pet care booking"}
-                </div>
+                {showServiceContext ? (
+                  <div className="mt-1 text-sm font-medium text-zinc-700">
+                    {booking.serviceSummary}
+                  </div>
+                ) : null}
                 <div className="mt-1 text-sm text-zinc-500">
                   Owner: {booking.client?.name || "Client"}
                 </div>
@@ -471,9 +476,11 @@ export default async function OperatorBookingDetailPage({
             <div className="break-words font-semibold text-zinc-900">
               {petDisplayName}
             </div>
-            <div className="mt-1 break-words text-zinc-600">
-              {booking.serviceSummary || "Pet care booking"}
-            </div>
+            {showServiceContext ? (
+              <div className="mt-1 break-words text-zinc-600">
+                {booking.serviceSummary}
+              </div>
+            ) : null}
             <div className="mt-1 break-words text-zinc-500">
               Owner: {booking.client?.name || "Client"}
             </div>

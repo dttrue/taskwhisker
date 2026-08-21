@@ -86,6 +86,9 @@ export default async function OperatorTriagePage() {
                 booking.petNames,
                 booking.serviceSummary || "Pet care booking"
               );
+              const showServiceContext =
+                Boolean(booking.serviceSummary) &&
+                booking.serviceSummary !== petDisplayName;
 
               return (
                 <article
@@ -101,9 +104,11 @@ export default async function OperatorTriagePage() {
                         <StatusBadge status={booking.status} />
                       </div>
 
-                      <p className="mt-1 break-words text-sm text-zinc-600">
-                        {booking.serviceSummary || "Pet care booking"}
-                      </p>
+                      {showServiceContext ? (
+                        <p className="mt-1 break-words text-sm text-zinc-600">
+                          {booking.serviceSummary}
+                        </p>
+                      ) : null}
 
                       <p className="mt-1 break-words text-sm text-zinc-500">
                         Owner: {booking.client?.name || "Client"}

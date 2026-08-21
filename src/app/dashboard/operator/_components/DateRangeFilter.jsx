@@ -2,39 +2,39 @@
 
 export default function DateRangeFilter({ from, to, review = "all" }) {
   return (
-    <form method="GET" className="flex flex-col sm:flex-row sm:items-end gap-3">
+    <form method="GET" className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end">
       {/* Date Inputs */}
-      <div className="flex gap-3 flex-1">
-        <div className="flex flex-col gap-1 flex-1">
+      <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-1">
           <label className="text-xs font-medium text-zinc-500">From</label>
           <input
             type="date"
             name="from"
             defaultValue={from || ""}
-            className="h-10 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
+            className="h-10 min-w-0 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
                        focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900"
           />
         </div>
 
-        <div className="flex flex-col gap-1 flex-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <label className="text-xs font-medium text-zinc-500">To</label>
           <input
             type="date"
             name="to"
             defaultValue={to || ""}
-            className="h-10 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
+            className="h-10 min-w-0 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
                        focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900"
           />
         </div>
       </div>
 
       {/* Review Filter */}
-      <div className="flex flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-1">
         <label className="text-xs font-medium text-zinc-500">Review</label>
         <select
           name="review"
           defaultValue={review || "all"}
-          className="h-10 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
+          className="h-10 w-full min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
                      focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900"
         >
           <option value="all">All</option>
