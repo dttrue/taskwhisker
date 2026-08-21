@@ -329,6 +329,23 @@ export default async function OperatorDashboard({ searchParams }) {
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Link
+            href="/dashboard/operator/operations"
+            className="block rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300 hover:shadow-md"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Operations
+            </p>
+
+            <h2 className="mt-2 text-lg font-bold text-zinc-950">
+              Today&apos;s schedule
+            </h2>
+
+            <p className="mt-1 text-sm text-zinc-600">
+              See today&apos;s visits, assignments, and operational status.
+            </p>
+          </Link>
+
+          <Link
             href="/dashboard/operator/blocked-clients"
             className="block rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300 hover:shadow-md"
           >

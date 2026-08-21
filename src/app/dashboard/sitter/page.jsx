@@ -7,9 +7,12 @@ import {
   serializeVisitEntry,
 } from "./lib/sitterDashboardUtils";
 import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
+import {
+  getBusinessDateParts,
+  getBusinessDayStart,
+} from "@/lib/visits/visitOperations";
 
 const VISIT_PAGE_SIZE = 10;
-const BUSINESS_TIME_ZONE = "America/New_York";
 
 function parsePage(value) {
   const normalized = String(value ?? "1");
@@ -19,63 +22,18 @@ function parsePage(value) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
 }
 
-function getBusinessDateParts(date) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-  }).formatToParts(date);
-
-  return Object.fromEntries(
-    parts
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, Number(part.value)])
-  );
-}
-
-function getTimeZoneOffsetMs(date) {
-  const timeZoneName = new Intl.DateTimeFormat("en-US", {
-    timeZone: BUSINESS_TIME_ZONE,
-    timeZoneName: "longOffset",
-  })
-    .formatToParts(date)
-    .find((part) => part.type === "timeZoneName")?.value;
-  const match = timeZoneName?.match(/GMT([+-])(\d{2}):(\d{2})/);
-
-  if (!match) return 0;
-
-  const direction = match[1] === "+" ? 1 : -1;
-  return direction * (Number(match[2]) * 60 + Number(match[3])) * 60 * 1000;
-}
-
-function getStartOfBusinessDay(now, dayOffset = 0) {
-  const { year, month, day } = getBusinessDateParts(now);
-  const targetDate = new Date(
-    Date.UTC(year, month - 1, day + dayOffset)
-  );
-  const targetWallTime = targetDate.getTime();
-  let instant = new Date(targetWallTime);
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    instant = new Date(targetWallTime - getTimeZoneOffsetMs(instant));
-  }
-
-  return instant;
-}
-
 export default async function SitterDashboardPage({ searchParams }) {
   const session = await requireRole(["SITTER"]);
   const userId = session.user?.id;
   const params = await Promise.resolve(searchParams);
   const now = new Date();
   const businessDate = getBusinessDateParts(now);
-  const todayStartsAt = getStartOfBusinessDay(now);
-  const upcomingStartsAt = getStartOfBusinessDay(now, 1);
+  const todayStartsAt = getBusinessDayStart(now);
+  const upcomingStartsAt = getBusinessDayStart(now, 1);
   const businessWeekday = new Date(
     Date.UTC(businessDate.year, businessDate.month - 1, businessDate.day)
   ).getUTCDay();
-  const weekStartsAt = getStartOfBusinessDay(now, -businessWeekday);
+  const weekStartsAt = getBusinessDayStart(now, -businessWeekday);
 
   if (!userId) {
     throw new Error("Missing user id in session for sitter.");
