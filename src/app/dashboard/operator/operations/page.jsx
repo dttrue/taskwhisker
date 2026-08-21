@@ -18,11 +18,13 @@ import {
   getCurrentVisit,
   getNextVisit,
   getVisitOperationalStatus,
+  normalizeCoordinates,
   sortVisitsChronologically,
   visitRequiresOperationalResolution,
 } from "@/lib/visits/visitOperations";
 
 import DailyVisitCard from "./_components/DailyVisitCard";
+import OperatorSitterRoute from "./_components/OperatorSitterRoute";
 import SitterStatusCard from "./_components/SitterStatusCard";
 
 const OPERATIONAL_STATUS_OPTIONS = [
@@ -189,6 +191,8 @@ export default async function OperatorOperationsPage({ searchParams }) {
           serviceCity: true,
           serviceState: true,
           servicePostalCode: true,
+          serviceLat: true,
+          serviceLng: true,
           client: { select: { name: true } },
           conversation: { select: { id: true } },
           _count: { select: { visits: true } },
@@ -205,6 +209,10 @@ export default async function OperatorOperationsPage({ searchParams }) {
       serviceSummary
     );
     const visitCount = visit.booking._count.visits || 1;
+    const coordinates = normalizeCoordinates(
+      visit.booking.serviceLat,
+      visit.booking.serviceLng
+    );
 
     return {
       id: visit.id,
@@ -220,6 +228,9 @@ export default async function OperatorOperationsPage({ searchParams }) {
         (visit.booking.sitterPayoutCents || 0) / visitCount
       ),
       address: buildAddress(visit.booking),
+      lat: coordinates?.lat ?? null,
+      lng: coordinates?.lng ?? null,
+      hasCoordinates: Boolean(coordinates),
       startTime: visit.startTime,
       endTime: visit.endTime,
       status: visit.status,
@@ -283,6 +294,19 @@ export default async function OperatorOperationsPage({ searchParams }) {
     (total, sitterSummary) => total + sitterSummary.total,
     0
   );
+  const selectedSitterSummary = sitterSummaries.find(
+    (sitterSummary) => sitterSummary.id === sitter
+  );
+  const selectedSitterRoute = selectedSitterSummary
+    ? schedule
+        .filter((visit) => visit.sitterId === selectedSitterSummary.id)
+        .map((visit, index) => ({
+          ...visit,
+          startTime: new Date(visit.startTime).toISOString(),
+          endTime: new Date(visit.endTime).toISOString(),
+          stopNumber: index + 1,
+        }))
+    : [];
 
   return (
     <PageShell className="py-6 sm:py-8">
@@ -339,6 +363,14 @@ export default async function OperatorOperationsPage({ searchParams }) {
             </div>
           )}
         </section>
+
+        {selectedSitterSummary ? (
+          <OperatorSitterRoute
+            key={selectedSitterSummary.id}
+            sitterName={selectedSitterSummary.name}
+            visits={selectedSitterRoute}
+          />
+        ) : null}
 
         <Card className="p-4 sm:p-5">
           <form method="get" className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
