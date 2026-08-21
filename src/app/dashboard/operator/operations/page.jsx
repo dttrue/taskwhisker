@@ -7,6 +7,7 @@ import {
   FormField,
   PageHeader,
   PageShell,
+  SectionHeader,
   StatusBadge,
 } from "@/components/ui/Foundation";
 import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
@@ -14,11 +15,15 @@ import { prisma } from "@/lib/db";
 import {
   BUSINESS_TIME_ZONE,
   getBusinessDayRange,
+  getCurrentVisit,
+  getNextVisit,
   getVisitOperationalStatus,
   sortVisitsChronologically,
+  visitRequiresOperationalResolution,
 } from "@/lib/visits/visitOperations";
 
 import DailyVisitCard from "./_components/DailyVisitCard";
+import SitterStatusCard from "./_components/SitterStatusCard";
 
 const OPERATIONAL_STATUS_OPTIONS = [
   "ALL",
@@ -84,6 +89,75 @@ function SummaryCard({ label, value, tone = "neutral" }) {
       ) : null}
     </Card>
   );
+}
+
+function getSitterSummaries(schedule, now) {
+  const visitsBySitter = new Map();
+
+  for (const visit of schedule) {
+    if (!visit.sitterId) continue;
+
+    const existing = visitsBySitter.get(visit.sitterId) || {
+      id: visit.sitterId,
+      name: visit.sitterName || "Sitter",
+      visits: [],
+    };
+
+    existing.visits.push(visit);
+    visitsBySitter.set(visit.sitterId, existing);
+  }
+
+  return Array.from(visitsBySitter.values())
+    .map((sitter) => {
+      const orderedVisits = sortVisitsChronologically(sitter.visits);
+      const currentVisit = getCurrentVisit(orderedVisits, now);
+      const nextVisit = getNextVisit(orderedVisits, now);
+      const completed = orderedVisits.filter(
+        (visit) => visit.status === "COMPLETED"
+      ).length;
+      const missedVisits = sortVisitsChronologically(
+        orderedVisits.filter((visit) => visit.operationalStatus === "MISSED")
+      );
+      const remaining = orderedVisits.filter((visit) =>
+        visitRequiresOperationalResolution(visit)
+      ).length;
+      const priority = currentVisit
+        ? 0
+        : missedVisits.length > 0
+          ? 1
+          : remaining > 0
+            ? 2
+            : 3;
+      const priorityVisit =
+        priority === 0
+          ? currentVisit
+          : priority === 1
+            ? missedVisits[0] || null
+            : priority === 2
+              ? nextVisit
+              : null;
+
+      return {
+        id: sitter.id,
+        name: sitter.name,
+        total: orderedVisits.length,
+        completed,
+        remaining,
+        missed: missedVisits.length,
+        currentVisit,
+        nextVisit,
+        priority,
+        priorityTime: priorityVisit
+          ? new Date(priorityVisit.startTime).getTime()
+          : Number.MAX_SAFE_INTEGER,
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.priority - b.priority ||
+        a.priorityTime - b.priorityTime ||
+        a.name.localeCompare(b.name)
+    );
 }
 
 export default async function OperatorOperationsPage({ searchParams }) {
@@ -204,6 +278,11 @@ export default async function OperatorOperationsPage({ searchParams }) {
   );
   const filtersAreActive =
     sitter !== "ALL" || operationalStatus !== "ALL" || assignment !== "ALL";
+  const sitterSummaries = getSitterSummaries(schedule, now);
+  const assignedVisitCount = sitterSummaries.reduce(
+    (total, sitterSummary) => total + sitterSummary.total,
+    0
+  );
 
   return (
     <PageShell className="py-6 sm:py-8">
@@ -226,6 +305,39 @@ export default async function OperatorOperationsPage({ searchParams }) {
           <SummaryCard label="Missed" value={counts.missed} tone="warning" />
           <SummaryCard label="Completed" value={counts.completed} tone="info" />
           <SummaryCard label="Unassigned" value={counts.unassigned} tone="warning" />
+        </section>
+
+        <section aria-label="Sitters Today" className="space-y-3">
+          <SectionHeader
+            title="Sitters Today"
+            description="Full-day assignment overview. Schedule filters below do not change these sitter totals."
+            meta={
+              <span className="text-sm font-semibold text-[var(--task-text-muted)]">
+                {sitterSummaries.length} sitter{sitterSummaries.length === 1 ? "" : "s"} · {assignedVisitCount} assigned
+              </span>
+            }
+          />
+          {sitterSummaries.length === 0 ? (
+            <Card className="p-5 text-sm text-[var(--task-text-muted)]">
+              No sitters have assigned visits today.
+              {counts.unassigned > 0
+                ? ` ${counts.unassigned} unassigned visit${
+                    counts.unassigned === 1 ? " remains" : "s remain"
+                  } in the daily schedule.`
+                : ""}
+            </Card>
+          ) : (
+            <div className="grid gap-3 xl:grid-cols-2">
+              {sitterSummaries.map((sitterSummary) => (
+                <SitterStatusCard
+                  key={sitterSummary.id}
+                  sitter={sitterSummary}
+                  formatTime={formatBusinessTime}
+                  isScheduleFiltered={sitter === sitterSummary.id}
+                />
+              ))}
+            </div>
+          )}
         </section>
 
         <Card className="p-4 sm:p-5">

@@ -101,3 +101,28 @@ export function sortVisitsChronologically(visits = []) {
     return timeDifference || String(a.id).localeCompare(String(b.id));
   });
 }
+
+export function getCurrentVisit(visits = [], now = new Date()) {
+  return (
+    sortVisitsChronologically(visits).find((visit) =>
+      isVisitCurrent(visit, now)
+    ) || null
+  );
+}
+
+export function getNextVisit(visits = [], now = new Date()) {
+  return (
+    sortVisitsChronologically(visits).find((visit) => {
+      if (visit.status === "COMPLETED" || visit.status === "CANCELED") {
+        return false;
+      }
+
+      const start = new Date(visit.startTime);
+      return !Number.isNaN(start.getTime()) && start.getTime() > now.getTime();
+    }) || null
+  );
+}
+
+export function visitRequiresOperationalResolution(visit) {
+  return visit?.status !== "COMPLETED" && visit?.status !== "CANCELED";
+}
