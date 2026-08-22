@@ -5,7 +5,6 @@ import {
   TileLayer,
   Marker,
   Popup,
-  Polyline,
   useMap,
 } from "react-leaflet";
 import { useEffect, useMemo } from "react";
@@ -85,15 +84,26 @@ export default function OperatorMapInner({ bookings = [] }) {
     ? [validBookings[0].lat, validBookings[0].lng]
     : [40.7128, -74.006];
 
-  const routePositions = validBookings.map((b) => [b.lat, b.lng]);
+  if (!validBookings.length) {
+    return (
+      <div className="overflow-hidden rounded-[var(--task-radius-card)] border border-[var(--task-border)] bg-white shadow-[var(--task-shadow-card)]">
+        <div className="border-b border-[var(--task-border)] p-4 text-sm font-bold text-[var(--task-text)]">
+          Service Locations
+        </div>
+        <div className="flex min-h-[220px] items-center justify-center bg-[var(--task-surface-soft)] p-6 text-center text-sm text-[var(--task-text-muted)] sm:min-h-[260px]">
+          No mapped service locations in the current booking range.
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white shadow-sm">
-      <div className="border-b border-zinc-200 p-4 text-sm font-medium text-zinc-900">
+    <div className="overflow-hidden rounded-[var(--task-radius-card)] border border-[var(--task-border)] bg-white shadow-[var(--task-shadow-card)]">
+      <div className="border-b border-[var(--task-border)] p-4 text-sm font-bold text-[var(--task-text)]">
         Service Locations
       </div>
 
-      <div className="h-[400px] w-full overflow-hidden rounded-xl">
+      <div className="h-[260px] w-full overflow-hidden sm:h-[300px]">
         <MapContainer
           center={center}
           zoom={11}
@@ -111,10 +121,6 @@ export default function OperatorMapInner({ bookings = [] }) {
           />
 
           <FitBounds bookings={validBookings} />
-
-          {routePositions.length > 1 ? (
-            <Polyline positions={routePositions} />
-          ) : null}
 
           {validBookings.map((b) => (
             <Marker
@@ -152,7 +158,7 @@ export default function OperatorMapInner({ bookings = [] }) {
         </MapContainer>
       </div>
 
-      <div className="flex flex-wrap gap-3 border-t border-zinc-200 px-4 py-3 text-xs text-zinc-600">
+      <div className="flex flex-wrap gap-3 border-t border-[var(--task-border)] px-4 py-3 text-xs text-[var(--task-text-muted)]">
         <div className="flex items-center gap-2">
           <span className="inline-block h-3 w-3 rounded-full bg-amber-500" />
           Requested

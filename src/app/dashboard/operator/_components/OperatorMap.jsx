@@ -10,7 +10,7 @@ const OperatorMapInner = dynamic(() => import("./OperatorMapInner"), {
       <div className="border-b border-zinc-200 p-4 text-sm font-medium text-zinc-900">
         Service Locations
       </div>
-      <div className="h-[400px] w-full rounded-b-xl bg-zinc-100" />
+      <div className="h-[260px] w-full rounded-b-[var(--task-radius-card)] bg-[var(--task-surface-soft)] sm:h-[300px]" />
     </div>
   ),
 });
