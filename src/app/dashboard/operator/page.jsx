@@ -10,7 +10,6 @@ import DateRangeFilter from "./_components/DateRangeFilter";
 import BookingsTable from "./_components/BookingsTable";
 import OperatorMap from "./_components/OperatorMap";
 
-import CollapsibleCard from "@/components/ui/CollapsibleCard";
 import { resolveStatus, resolveDateRange } from "./lib/dashboardQuery";
 import { getOperatorDashboardData } from "./lib/dashboardData";
 import {
@@ -18,7 +17,6 @@ import {
   formatMoney,
   getTodayVisitCount,
   getConfirmedRevenue,
-  groupBookings,
   getNeedsAttentionBooking,
 } from "./lib/dashboardUtils";
 import { bookingNeedsReview } from "./lib/bookingNeedsReview";
@@ -80,87 +78,6 @@ function toClientValue(value) {
   return value;
 }
 
-function Section({
-  title,
-  description,
-  bookings,
-  confirmBooking,
-  cancelBooking,
-  completeBooking,
-  listQs,
-  maxVisible = 2,
-  collapsedByDefault = false,
-  viewAllHref = "",
-}) {
-  if (!bookings?.length) return null;
-
-  const visibleBookings = collapsedByDefault
-    ? []
-    : bookings.slice(0, maxVisible);
-
-  const hiddenCount = Math.max(bookings.length - visibleBookings.length, 0);
-
-  return (
-    <CollapsibleCard
-      title={`${title} (${bookings.length})`}
-      defaultOpen={!collapsedByDefault}
-    >
-      <div className="space-y-3">
-        {description ? (
-          <p className="text-sm text-zinc-600">{description}</p>
-        ) : null}
-
-        {collapsedByDefault ? (
-          <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="text-sm text-zinc-600">
-              {bookings.length} booking{bookings.length === 1 ? "" : "s"} hidden
-              in this section.
-            </div>
-
-            {viewAllHref ? (
-              <a
-                href={viewAllHref}
-                className="mt-3 inline-flex text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
-              >
-                View all {title.toLowerCase()}
-              </a>
-            ) : null}
-          </div>
-        ) : (
-          <>
-            <div className="rounded-lg border border-zinc-200 bg-white">
-              <BookingsTable
-                bookings={visibleBookings}
-                confirmBooking={confirmBooking}
-                cancelBooking={cancelBooking}
-                completeBooking={completeBooking}
-                listQs={listQs}
-              />
-            </div>
-
-            {(hiddenCount > 0 || viewAllHref) && (
-              <div className="flex items-center justify-between px-1">
-                <div className="text-xs text-zinc-500">
-                  Showing {visibleBookings.length} of {bookings.length}
-                </div>
-
-                {viewAllHref ? (
-                  <a
-                    href={viewAllHref}
-                    className="text-sm font-medium text-zinc-700 underline hover:text-zinc-900"
-                  >
-                    View all
-                  </a>
-                ) : null}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </CollapsibleCard>
-  );
-}
-
 export default async function OperatorDashboard({ searchParams }) {
   const session = await requireRole(["OPERATOR"]);
   const operatorId = session.user.id;
@@ -216,40 +133,12 @@ export default async function OperatorDashboard({ searchParams }) {
     return qs ? `/dashboard/operator?${qs}` : "/dashboard/operator";
   };
 
-  const hrefForSectionStatus = (sectionStatus) => {
-    const u = new URLSearchParams();
-
-    if (sectionStatus && sectionStatus !== "ALL") {
-      u.set("status", sectionStatus);
-    }
-
-    addSharedParams(u);
-
-    const qs = u.toString();
-    return qs ? `/dashboard/operator?${qs}` : "/dashboard/operator";
-  };
-
   const u = new URLSearchParams();
 
   if (status !== "ALL") u.set("status", status);
   addSharedParams(u);
 
   const listQs = u.toString();
-
-  const overviewHref = listQs
-    ? `/dashboard/operator?${listQs}`
-    : "/dashboard/operator";
-
-  
-
-  const { requested, today, upcoming, completed, canceled } = groupBookings(
-    bookings,
-    now
-  );
-
-  const confirmed = bookings.filter(
-    (booking) => booking.status === "CONFIRMED"
-  );
 
   const todayVisitCount = getTodayVisitCount(bookings, now);
   const confirmedRevenue = getConfirmedRevenue(bookings);
@@ -265,7 +154,14 @@ export default async function OperatorDashboard({ searchParams }) {
     needsAttention?.booking.serviceSummary &&
       needsAttention.booking.serviceSummary !== needsAttentionPetDisplayName
   );
-  const showGroupedDashboard = status === "ALL";
+  const workspaceIsFiltered =
+    status !== "ALL" || hasRange || review !== "all";
+  const emptyMessage =
+    review === "needs-review"
+      ? "No bookings need review in the current range."
+      : status !== "ALL"
+        ? `No ${status.toLowerCase()} bookings in the current range.`
+        : "No bookings in the current range.";
 
   return (
     <PageShell
@@ -342,7 +238,7 @@ export default async function OperatorDashboard({ searchParams }) {
           </div>
         </Card>
 
-        {showGroupedDashboard && needsAttention ? (
+        {status === "ALL" && needsAttention ? (
           <Card className="border-[#ead9ad] bg-[var(--task-warning-soft)] p-5 sm:p-6">
             <div className="text-xs font-bold uppercase tracking-[0.12em] text-[#704c16]">
               Needs Attention
@@ -405,32 +301,35 @@ export default async function OperatorDashboard({ searchParams }) {
         ) : null}
 
         <Card className="overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-[var(--task-border)] p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-xl font-bold tracking-[-0.025em] text-[var(--task-text)]">
-                {hasRange || review !== "all"
-                  ? "Filtered bookings"
-                  : showGroupedDashboard
-                  ? "Bookings overview"
-                  : "Bookings"}
-              </h2>
-
-              <p className="mt-1 text-sm text-[var(--task-text-muted)]">
-                {filteredBookingCount} booking{filteredBookingCount === 1 ? "" : "s"} shown · {formatMoney(confirmedRevenue)} confirmed revenue
-              </p>
-
-              {review === "needs-review" ? (
-                <p className="mt-1 text-xs font-semibold text-[#704c16]">
-                  Showing bookings with missed visits that still need operator
-                  review.
+          <div className="border-b border-[var(--task-border)] p-4 sm:p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-xl font-bold tracking-[-0.025em] text-[var(--task-text)]">
+                    Bookings
+                  </h2>
+                  {workspaceIsFiltered ? (
+                    <span className="rounded-full border border-[#ead9ad] bg-[var(--task-warning-soft)] px-2.5 py-1 text-xs font-semibold text-[#704c16]">
+                      Filters active
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-sm text-[var(--task-text-muted)]">
+                  {filteredBookingCount} result{filteredBookingCount === 1 ? "" : "s"} · {formatMoney(confirmedRevenue)} confirmed revenue · {fromStr || "Any date"}–{toStr || "Any date"}
                 </p>
-              ) : null}
-            </div>
+                {review === "needs-review" ? (
+                  <p className="mt-1 text-xs font-semibold text-[#704c16]">
+                    Showing bookings with missed visits that still need operator
+                    review.
+                  </p>
+                ) : null}
+              </div>
 
-            <DateRangeFilter from={fromStr} to={toStr} review={review} />
+              <DateRangeFilter from={fromStr} to={toStr} review={review} />
+            </div>
           </div>
 
-          <div className="border-b border-[var(--task-border)] p-4 sm:px-5">
+          <div className="border-b border-[var(--task-border)] px-4 py-3 sm:px-5">
             <MetricsBar
               metrics={metrics}
               active={status}
@@ -438,91 +337,16 @@ export default async function OperatorDashboard({ searchParams }) {
             />
           </div>
 
-          {!showGroupedDashboard ? (
+          <div className="p-4 sm:p-5">
             <BookingsTable
               bookings={bookings}
               confirmBooking={confirmBooking}
               cancelBooking={cancelBooking}
               completeBooking={completeBooking}
               listQs={listQs}
+              emptyMessage={emptyMessage}
             />
-          ) : (
-            <div className="space-y-6 p-4 sm:p-5">
-              <Section
-                title="Requested"
-                description="New bookings waiting to be confirmed or reviewed."
-                bookings={requested}
-                confirmBooking={confirmBooking}
-                cancelBooking={cancelBooking}
-                completeBooking={completeBooking}
-                listQs={listQs}
-                maxVisible={2}
-                viewAllHref={hrefForSectionStatus("REQUESTED")}
-              />
-
-              <Section
-                title="Confirmed"
-                description="Confirmed bookings that are not scheduled for today."
-                bookings={confirmed}
-                confirmBooking={confirmBooking}
-                cancelBooking={cancelBooking}
-                completeBooking={completeBooking}
-                listQs={listQs}
-                maxVisible={2}
-                viewAllHref={hrefForSectionStatus("CONFIRMED")}
-              />
-
-              <Section
-                title="Today"
-                description="Bookings with visits scheduled today."
-                bookings={today}
-                confirmBooking={confirmBooking}
-                cancelBooking={cancelBooking}
-                completeBooking={completeBooking}
-                listQs={listQs}
-                maxVisible={2}
-                viewAllHref={overviewHref}
-              />
-
-              <Section
-                title="Upcoming"
-                description="Future confirmed and scheduled bookings."
-                bookings={upcoming}
-                confirmBooking={confirmBooking}
-                cancelBooking={cancelBooking}
-                completeBooking={completeBooking}
-                listQs={listQs}
-                maxVisible={2}
-                viewAllHref={overviewHref}
-              />
-
-              <Section
-                title="Completed"
-                description="Bookings that have already been finished."
-                bookings={completed}
-                confirmBooking={confirmBooking}
-                cancelBooking={cancelBooking}
-                completeBooking={completeBooking}
-                listQs={listQs}
-                maxVisible={1}
-                collapsedByDefault={true}
-                viewAllHref={hrefForSectionStatus("COMPLETED")}
-              />
-
-              <Section
-                title="Canceled"
-                description="Bookings that are no longer active."
-                bookings={canceled}
-                confirmBooking={confirmBooking}
-                cancelBooking={cancelBooking}
-                completeBooking={completeBooking}
-                listQs={listQs}
-                maxVisible={1}
-                collapsedByDefault={true}
-                viewAllHref={hrefForSectionStatus("CANCELED")}
-              />
-            </div>
-          )}
+          </div>
         </Card>
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,0.8fr)] lg:items-start">

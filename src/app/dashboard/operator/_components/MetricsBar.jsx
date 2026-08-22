@@ -1,6 +1,5 @@
 // src/app/dashboard/operator/_components/MetricsBar.jsx
 import Link from "next/link";
-import { formatMoney } from "../lib/format";
 
 const ITEMS = ["ALL", "REQUESTED", "CONFIRMED", "COMPLETED", "CANCELED"];
 
@@ -22,38 +21,43 @@ const STATUS_DOT_CLASSES = {
 
 export default function MetricsBar({ metrics, active, hrefForStatus }) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {ITEMS.map((s) => {
-        const isActive = active === s;
-        const m = metrics?.[s] || { count: 0, revenueCents: 0 };
+    <nav aria-label="Booking status" className="overflow-x-auto">
+      <div className="flex min-w-max gap-1 rounded-[var(--task-radius-control)] bg-[var(--task-surface-soft)] p-1">
+        {ITEMS.map((s) => {
+          const isActive = active === s;
+          const m = metrics?.[s] || { count: 0 };
 
-        return (
-          <Link
-            key={s}
-            href={hrefForStatus(s)}
-            className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-              isActive
-                ? "bg-zinc-900 text-white border-zinc-900"
-                : "bg-white text-zinc-700 border-zinc-200 hover:border-zinc-400"
-            }`}
-          >
-            <div className="flex items-center gap-1">
+          return (
+            <Link
+              key={s}
+              href={hrefForStatus(s)}
+              aria-current={isActive ? "page" : undefined}
+              className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-[calc(var(--task-radius-control)-0.2rem)] px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                isActive
+                  ? "bg-[var(--task-primary)] text-white shadow-sm"
+                  : "text-[var(--task-text-muted)] hover:bg-white hover:text-[var(--task-text)]"
+              }`}
+            >
               <span
-                className={`h-1.5 w-1.5 rounded-full ${
+                aria-hidden="true"
+                className={`h-2 w-2 rounded-full ${
                   STATUS_DOT_CLASSES[s] || "bg-zinc-400"
                 }`}
               />
-              <span className="uppercase tracking-wide">
-                {STATUS_LABELS[s] || s}
+              <span>{STATUS_LABELS[s] || s}</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${
+                  isActive
+                    ? "bg-white/20 text-white"
+                    : "bg-white text-[var(--task-text-muted)]"
+                }`}
+              >
+                {m.count}
               </span>
-            </div>
-
-            <div className={isActive ? "text-white/90" : "text-zinc-500"}>
-              {m.count} · {formatMoney(m.revenueCents)}
-            </div>
-          </Link>
-        );
-      })}
-    </div>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

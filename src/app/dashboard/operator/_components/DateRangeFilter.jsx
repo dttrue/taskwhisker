@@ -2,59 +2,62 @@
 
 export default function DateRangeFilter({ from, to, review = "all" }) {
   return (
-    <form method="GET" className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end">
-      {/* Date Inputs */}
-      <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="flex min-w-0 flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-500">From</label>
-          <input
-            type="date"
-            name="from"
-            defaultValue={from || ""}
-            className="h-10 min-w-0 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
-                       focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900"
-          />
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-500">To</label>
-          <input
-            type="date"
-            name="to"
-            defaultValue={to || ""}
-            className="h-10 min-w-0 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
-                       focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900"
-          />
-        </div>
+    <form
+      method="GET"
+      className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(2,minmax(145px,170px))_minmax(130px,150px)_auto] lg:items-end"
+    >
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label htmlFor="booking-filter-from" className="text-xs font-semibold text-[var(--task-text-muted)]">
+          From
+        </label>
+        <input
+          id="booking-filter-from"
+          type="date"
+          name="from"
+          defaultValue={from || ""}
+          className="min-h-11 min-w-0 w-full rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] bg-white px-3 text-sm text-[var(--task-text)] shadow-sm"
+        />
       </div>
 
-      {/* Review Filter */}
-      <div className="flex min-w-0 flex-col gap-1">
-        <label className="text-xs font-medium text-zinc-500">Review</label>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label htmlFor="booking-filter-to" className="text-xs font-semibold text-[var(--task-text-muted)]">
+          To
+        </label>
+        <input
+          id="booking-filter-to"
+          type="date"
+          name="to"
+          defaultValue={to || ""}
+          className="min-h-11 min-w-0 w-full rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] bg-white px-3 text-sm text-[var(--task-text)] shadow-sm"
+        />
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label htmlFor="booking-filter-review" className="text-xs font-semibold text-[var(--task-text-muted)]">
+          Review
+        </label>
         <select
+          id="booking-filter-review"
           name="review"
           defaultValue={review || "all"}
-          className="h-10 w-full min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm
-                     focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900"
+          className="min-h-11 w-full min-w-0 rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] bg-white px-3 text-sm text-[var(--task-text)] shadow-sm"
         >
           <option value="all">All</option>
           <option value="needs-review">Needs review</option>
         </select>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 sm:justify-end">
         <button
           type="submit"
-          className="h-10 rounded-md bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800"
+          className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[var(--task-radius-control)] bg-[var(--task-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--task-primary-hover)] sm:flex-none"
         >
           Apply
         </button>
 
         <a
           href="/dashboard/operator"
-          className="h-10 inline-flex items-center rounded-md border border-zinc-200 px-4
-                     text-sm font-medium text-zinc-700 hover:border-zinc-300"
+          className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] bg-white px-4 text-sm font-semibold text-[var(--task-text)] hover:bg-[var(--task-surface-soft)] sm:flex-none"
         >
           Reset
         </a>

@@ -138,7 +138,7 @@ function BookingActions({
       <div className="flex-1 sm:flex-none sm:self-center">
         <a
           href={viewHref}
-          className="block text-center text-xs underline text-zinc-600 hover:text-zinc-900 pt-1.5"
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-[var(--task-radius-control)] border border-[var(--task-border-strong)] bg-white px-3 py-1.5 text-center text-xs font-semibold text-[var(--task-primary)] hover:bg-[var(--task-surface-soft)]"
         >
           View
         </a>
@@ -153,9 +153,14 @@ export default function BookingsTable({
   cancelBooking,
   completeBooking,
   listQs = "",
+  emptyMessage = "No bookings found.",
 }) {
   if (!bookings?.length) {
-    return <div className="p-6 text-sm text-zinc-600">No bookings found.</div>;
+    return (
+      <div className="rounded-[var(--task-radius-control)] border border-dashed border-[var(--task-border-strong)] bg-[var(--task-surface-soft)] p-6 text-center text-sm text-[var(--task-text-muted)]">
+        {emptyMessage}
+      </div>
+    );
   }
 
   const now = new Date();
@@ -187,7 +192,7 @@ export default function BookingsTable({
     <div className="space-y-3">
       <RiskySitterSummary riskySitters={riskySitters} />
 
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {sortedBookings.map((b) => {
           const overdueVisits = getOverdueVisits(b.visits || [], now);
           const reliability = getBookingReliability(b, now);
@@ -285,16 +290,16 @@ export default function BookingsTable({
         })}
       </div>
 
-      <div className="hidden overflow-x-auto md:block">
-        <table className="min-w-full text-sm">
-          <thead className="text-left text-zinc-500">
-            <tr className="border-b border-zinc-200">
-              <th className="p-3">Visits</th>
-              <th className="p-3">Booking</th>
+      <div className="hidden overflow-x-auto rounded-[var(--task-radius-control)] border border-[var(--task-border)] lg:block">
+        <table className="min-w-[960px] w-full table-fixed text-sm">
+          <thead className="bg-[var(--task-surface-soft)] text-left text-[var(--task-text-muted)]">
+            <tr className="border-b border-[var(--task-border)]">
+              <th className="w-[20%] p-3">Pet / Owner</th>
+              <th className="w-[25%] p-3">Service / Schedule</th>
               <th className="p-3">Sitter</th>
-              <th className="p-3">Status</th>
-              <th className="p-3">Total</th>
-              <th className="p-3 text-right">Actions</th>
+              <th className="w-[11%] p-3">Status</th>
+              <th className="w-[9%] p-3 text-right">Total</th>
+              <th className="w-[22%] p-3 text-right">Action</th>
             </tr>
           </thead>
 
@@ -320,42 +325,45 @@ export default function BookingsTable({
                   }`}
                 >
                   <td className="p-3">
-                    <div className="text-sm text-zinc-900">
-                      {b.visits?.length || 0} visit
-                      {b.visits?.length === 1 ? "" : "s"}
+                    <div className="break-words font-semibold text-[var(--task-text)]">
+                      {petDisplayName}
                     </div>
+                    <div className="mt-1 break-words text-xs text-[var(--task-text-muted)]">
+                      Owner: {b.client?.name || "Client"}
+                    </div>
+                  </td>
 
-                    <div className="text-xs text-zinc-500">
+                  <td className="p-3 align-top">
+                    {showServiceContext ? (
+                      <div className="break-words font-medium text-[var(--task-text)]">
+                        {b.serviceSummary}
+                      </div>
+                    ) : null}
+                    <div className={`${showServiceContext ? "mt-1" : ""} text-xs leading-5 text-[var(--task-text-muted)]`}>
                       {b.visits?.length
                         ? formatVisitSummary(b.visits)
                         : new Date(b.startTime).toLocaleString()}
                     </div>
-
+                    <div className="mt-1 text-xs text-[var(--task-text-muted)]">
+                      {b.visits?.length || 0} visit
+                      {b.visits?.length === 1 ? "" : "s"}
+                    </div>
                     <MissedVisitBadge count={overdueVisits.length} />
-
                     {b.status === "COMPLETED" && (
                       <CompletedAtLabel value={b.completedAt} />
                     )}
                   </td>
 
                   <td className="p-3">
-                    <div className="max-w-56 break-words font-semibold text-zinc-900">
-                      {petDisplayName}
-                    </div>
-                    {showServiceContext ? (
-                      <div className="mt-1 break-words text-xs text-zinc-600">
-                        {b.serviceSummary}
+                    {b.sitter?.name || b.sitter?.email ? (
+                      <div className="font-medium text-[var(--task-text)]">
+                        {b.sitter?.name || b.sitter?.email}
                       </div>
-                    ) : null}
-                    <div className="mt-1 break-words text-xs text-zinc-500">
-                      Owner: {b.client?.name || "Client"}
-                    </div>
-                  </td>
-
-                  <td className="p-3">
-                    <div>
-                      {b.sitter?.name || b.sitter?.email || "Unassigned"}
-                    </div>
+                    ) : (
+                      <span className="inline-flex rounded-full border border-[#ead9ad] bg-[var(--task-warning-soft)] px-2 py-0.5 text-xs font-semibold text-[#704c16]">
+                        Unassigned
+                      </span>
+                    )}
 
                     <ReliabilityBadge reliability={reliability} />
 
@@ -370,7 +378,7 @@ export default function BookingsTable({
                     <StatusBadge status={b.status} />
                   </td>
 
-                  <td className="whitespace-nowrap p-3 font-medium text-zinc-900">
+                  <td className="whitespace-nowrap p-3 text-right font-semibold text-[var(--task-text)]">
                     {formatMoney(b.clientTotalCents)}
                   </td>
 
