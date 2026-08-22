@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/Foundation";
 import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
 import { prisma } from "@/lib/db";
-import { buildInterventionIssues } from "@/lib/operations/interventionQueue";
+import { loadOperatorInterventions } from "@/lib/operations/loadOperatorInterventions";
 import {
   BUSINESS_TIME_ZONE,
   getBusinessDayRange,
@@ -77,18 +77,6 @@ function buildAddress(booking) {
   ]
     .filter(Boolean)
     .join(", ");
-}
-
-function getBookingIdentity(booking) {
-  const serviceSummary = booking.serviceSummary || "Pet care booking";
-
-  return {
-    petDisplayName: formatBookingPetNames(booking.petNames, serviceSummary),
-    serviceSummary,
-    ownerName: booking.client?.name || "Client",
-    sitterId: booking.sitterId || null,
-    sitterName: booking.sitter?.name || booking.sitter?.email || null,
-  };
 }
 
 function SummaryCard({ label, value, tone = "neutral" }) {
@@ -182,14 +170,7 @@ export default async function OperatorOperationsPage({ searchParams }) {
   const now = new Date();
   const { startsAt, endsAt } = getBusinessDayRange(now);
 
-  const [
-    visits,
-    requestedBookingsData,
-    liveMissedBookingsData,
-    missedReviewBookingsData,
-    cancellationData,
-  ] = await Promise.all([
-    prisma.visit.findMany({
+  const schedulePromise = prisma.visit.findMany({
         where: {
           operatorId: session.user.id,
           startTime: { gte: startsAt, lt: endsAt },
@@ -221,119 +202,7 @@ export default async function OperatorOperationsPage({ searchParams }) {
           },
         },
         orderBy: [{ startTime: "asc" }, { id: "asc" }],
-    }),
-    prisma.booking.findMany({
-        where: { operatorId: session.user.id, status: "REQUESTED" },
-        select: {
-          id: true,
-          createdAt: true,
-          sitterId: true,
-          petNames: true,
-          serviceSummary: true,
-          client: { select: { name: true } },
-          sitter: { select: { name: true, email: true } },
-        },
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    }),
-    prisma.booking.findMany({
-        where: {
-          operatorId: session.user.id,
-          status: "CONFIRMED",
-          visits: {
-            some: { status: "CONFIRMED", endTime: { lt: now } },
-          },
-        },
-        select: {
-          id: true,
-          sitterId: true,
-          petNames: true,
-          serviceSummary: true,
-          client: { select: { name: true } },
-          sitter: { select: { name: true, email: true } },
-          visits: {
-            where: { status: "CONFIRMED", endTime: { lt: now } },
-            select: {
-              id: true,
-              sitterId: true,
-              endTime: true,
-              sitter: { select: { name: true, email: true } },
-            },
-            orderBy: [{ endTime: "asc" }, { id: "asc" }],
-          },
-        },
-    }),
-    prisma.booking.findMany({
-        where: {
-          operatorId: session.user.id,
-          status: { in: ["CONFIRMED", "COMPLETED"] },
-          history: {
-            some: {
-              note: { contains: "missed visit", mode: "insensitive" },
-              missedVisitReviewStatus: null,
-            },
-          },
-        },
-        select: {
-          id: true,
-          sitterId: true,
-          petNames: true,
-          serviceSummary: true,
-          client: { select: { name: true } },
-          sitter: { select: { name: true, email: true } },
-          history: {
-            where: {
-              note: { contains: "missed visit", mode: "insensitive" },
-              missedVisitReviewStatus: null,
-            },
-            select: { id: true, createdAt: true },
-            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          },
-        },
-    }),
-    prisma.conversation.findMany({
-        where: {
-          booking: {
-            operatorId: session.user.id,
-            status: { in: ["REQUESTED", "CONFIRMED"] },
-          },
-          messages: {
-            some: {
-              senderType: "CLIENT",
-              body: {
-                startsWith: "Cancellation request:",
-                mode: "insensitive",
-              },
-            },
-          },
-        },
-        select: {
-          booking: {
-            select: {
-              id: true,
-              sitterId: true,
-              petNames: true,
-              serviceSummary: true,
-              client: { select: { name: true } },
-              sitter: { select: { name: true, email: true } },
-            },
-          },
-          messages: {
-            where: {
-              senderType: "CLIENT",
-              body: {
-                startsWith: "Cancellation request:",
-                mode: "insensitive",
-              },
-            },
-            select: { id: true, createdAt: true },
-            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-            take: 1,
-          },
-        },
-    }),
-  ]);
-
-  const schedule = sortVisitsChronologically(visits).map((visit) => {
+    }).then((visits) => sortVisitsChronologically(visits).map((visit) => {
     const serviceSummary = visit.booking.serviceSummary || "Pet care booking";
     const petDisplayName = formatBookingPetNames(
       visit.booking.petNames,
@@ -367,42 +236,22 @@ export default async function OperatorOperationsPage({ searchParams }) {
       status: visit.status,
       operationalStatus: getVisitOperationalStatus(visit, now),
     };
-  });
+  }));
 
-  const requestedBookings = requestedBookingsData.map((booking) => ({
-    ...booking,
-    ...getBookingIdentity(booking),
-  }));
-  const liveMissedBookings = liveMissedBookingsData.map((booking) => ({
-    ...booking,
-    ...getBookingIdentity(booking),
-    visits: booking.visits.map((visit) => ({
-      ...visit,
-      sitterName: visit.sitter?.name || visit.sitter?.email || null,
-    })),
-  }));
-  const missedReviewBookings = missedReviewBookingsData.map((booking) => ({
-    ...booking,
-    ...getBookingIdentity(booking),
-    unresolvedHistories: booking.history,
-  }));
-  const cancellationConversations = cancellationData.map((conversation) => ({
-    ...conversation,
-    booking: {
-      ...conversation.booking,
-      ...getBookingIdentity(conversation.booking),
-    },
-  }));
-  const interventionIssues = buildInterventionIssues({
-    liveMissedBookings,
-    missedReviewBookings,
-    requestedBookings,
-    cancellationConversations,
-    unassignedVisits: schedule.filter(
-      (visit) =>
-        !visit.sitterId && visitRequiresOperationalResolution(visit)
+  const interventionIssuesPromise = loadOperatorInterventions({
+    operatorId: session.user.id,
+    now,
+    unassignedVisits: schedulePromise.then((schedule) =>
+      schedule.filter(
+        (visit) =>
+          !visit.sitterId && visitRequiresOperationalResolution(visit)
+      )
     ),
   });
+  const [schedule, interventionIssues] = await Promise.all([
+    schedulePromise,
+    interventionIssuesPromise,
+  ]);
 
   const sitterOptions = Array.from(
     new Map(
