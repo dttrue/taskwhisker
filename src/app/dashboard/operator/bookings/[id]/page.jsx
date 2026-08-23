@@ -22,10 +22,10 @@ import {
   STATUS_LABELS,
   STATUS_DOT_CLASSES,
   STATUS_PILL_CLASSES,
-  STATUS_CARD_BORDER_CLASSES,
 } from "@/lib/statusStyles";
 import { getNextBookingNeedingReview } from "../../lib/getNextBookingNeedingReview";
 import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
+import { Card, Eyebrow, Notice } from "@/components/ui/Foundation";
 function formatMoney(cents = 0) {
   return `$${(cents / 100).toFixed(2)}`;
 }
@@ -48,6 +48,36 @@ function formatTimeOnly(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatHistoryTimestamp(value) {
+  return new Date(value).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function getHistoryEventTitle(history) {
+  if (history.toStatus) {
+    const statusLabel = STATUS_LABELS[history.toStatus] || history.toStatus;
+    return `Booking ${statusLabel.toLowerCase()}`;
+  }
+
+  if (history.fromSitterId || history.toSitterId) {
+    return "Sitter assignment changed";
+  }
+
+  const normalizedNote = history.note?.toLowerCase() || "";
+  const isMissedVisit = normalizedNote.includes("missed visit");
+  const isLate = normalizedNote.includes("late");
+
+  if (isMissedVisit && isLate) return "Missed visit completed late";
+  if (isMissedVisit) return "Missed visit recorded";
+  if (isLate) return "Late completion recorded";
+
+  return "Booking updated";
 }
 
 function groupVisitsByDate(visits = []) {
@@ -124,12 +154,14 @@ const REVIEW_STATUS_LABELS = {
 
 function SummaryCard({ label, children }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+    <Card className="p-5 shadow-none">
+      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--task-primary)]">
         {label}
       </div>
-      <div className="mt-2 text-sm text-zinc-900">{children}</div>
-    </div>
+      <div className="mt-3 text-sm leading-6 text-[var(--task-text)]">
+        {children}
+      </div>
+    </Card>
   );
 }
 
@@ -198,9 +230,6 @@ export default async function OperatorBookingDetailPage({
   const allVisitsCompleted = booking.visits.every(
     (v) => v.status === "COMPLETED"
   );
-  const hasLateNotes = booking.history.some((h) =>
-    h.note?.toLowerCase().includes("late")
-  );
   const canComplete =
     booking.status === "CONFIRMED" && hasVisits && allVisitsCompleted;
   const lateNoteCount = booking.history.filter((h) =>
@@ -236,6 +265,9 @@ export default async function OperatorBookingDetailPage({
 
     return end < now;
   });
+  const hasUnresolvedMissedReview =
+    unresolvedMissedCount > 0 || unresolvedMissedVisits.length > 0;
+  const hasAvailableBookingAction = canConfirm || canComplete || canCancel;
 
   const shouldAutoAdvanceAfterThisVisit = unresolvedMissedVisits.length === 1;
 
@@ -257,38 +289,34 @@ export default async function OperatorBookingDetailPage({
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
-      <div className="mx-auto max-w-5xl space-y-6">
+    <main className="min-h-screen bg-[var(--task-canvas)] px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mx-auto max-w-6xl space-y-6">
         {/* Header / Hero */}
-        <header
-          className={`rounded-2xl border bg-white p-4 shadow-sm sm:p-5 ${
-            STATUS_CARD_BORDER_CLASSES[booking.status] || "border-zinc-200"
-          }`}
-        >
+        <header className="rounded-[var(--task-radius-card)] border border-[var(--task-border)] bg-white p-5 shadow-[var(--task-shadow-card)] sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-3">
-              <div className="text-xs uppercase tracking-wide text-zinc-500">
-                Operator · Booking
-              </div>
+              <Eyebrow>Booking detail</Eyebrow>
 
               <div>
-                <h1 className="text-2xl font-semibold text-zinc-900">
+                <h1 className="max-w-3xl break-words text-3xl font-bold tracking-[-0.035em] text-[var(--task-text)] sm:text-4xl">
                   {petDisplayName}
                 </h1>
                 {showServiceContext ? (
-                  <div className="mt-1 text-sm font-medium text-zinc-700">
+                  <div className="mt-2 break-words text-base font-semibold text-[var(--task-text-muted)]">
                     {booking.serviceSummary}
                   </div>
                 ) : null}
-                <div className="mt-1 text-sm text-zinc-500">
+                <div className="mt-1 text-sm text-[var(--task-text-muted)]">
                   Owner: {booking.client?.name || "Client"}
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[var(--task-text-muted)]">
                   <span>ID: {booking.id.slice(0, 8)}</span>
-                  <span>•</span>
+                  <span aria-hidden="true">·</span>
                   <span>{scheduleSummary}</span>
-                  <span>•</span>
-                  <span>Total: {formatMoney(booking.clientTotalCents)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="font-semibold text-[var(--task-text)]">
+                    Total: {formatMoney(booking.clientTotalCents)}
+                  </span>
                 </div>
               </div>
 
@@ -319,60 +347,58 @@ export default async function OperatorBookingDetailPage({
               </div>
             </div>
 
-            <div className="flex flex-col items-end gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-3 text-sm sm:flex-col sm:items-end">
               {isTriageMode && (
                 <Link
                   href="/dashboard/operator/triage"
-                  className="underline text-red-700 hover:text-red-900"
+                  className="font-semibold text-[var(--task-danger)] underline underline-offset-4 hover:brightness-75"
                 >
-                  ← Back to triage queue
+                  Back to triage queue
                 </Link>
               )}
 
               <Link
                 href={backHref}
-                className="underline text-zinc-600 hover:text-zinc-900"
+                className="font-semibold text-[var(--task-primary)] underline underline-offset-4 hover:text-[var(--task-primary-hover)]"
               >
-                Back to list
+                Back to bookings
               </Link>
             </div>
           </div>
         </header>
 
-        {lateNoteCount > 0 || unresolvedMissedCount > 0 ? (
-          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm space-y-1">
-            <p className="text-sm font-semibold text-amber-900">
-              ⚠️ Booking requires attention
-            </p>
+        {hasUnresolvedMissedReview ? (
+          <Notice title="Needs attention" tone="warning">
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {unresolvedMissedCount > 0 && (
+                <p className="text-sm font-medium text-[#704c16]">
+                  {unresolvedMissedCount} missed-visit review
+                  {unresolvedMissedCount === 1 ? "" : "s"} unresolved
+                </p>
+              )}
 
-            {totalMissedCount > 0 && (
-              <p className="text-sm text-amber-800">
-                • {totalMissedCount} missed visit
-                {totalMissedCount > 1 ? "s" : ""}
-              </p>
-            )}
-
-            {unresolvedMissedCount > 0 && (
-              <p className="text-sm text-red-700 font-medium">
-                • {unresolvedMissedCount} need
-                {unresolvedMissedCount === 1 ? "s" : ""} review
-              </p>
-            )}
-
-            {lateNoteCount > 0 && (
-              <p className="text-sm text-amber-800">
-                • {lateNoteCount} late completion
-                {lateNoteCount > 1 ? "s" : ""}
-              </p>
-            )}
-          </section>
+              {unresolvedMissedVisits.length > 0 && (
+                <p className="text-sm font-medium text-[#704c16]">
+                  {unresolvedMissedVisits.length} overdue visit
+                  {unresolvedMissedVisits.length === 1 ? "" : "s"} need
+                  {unresolvedMissedVisits.length === 1 ? "s" : ""} review
+                </p>
+              )}
+            </div>
+          </Notice>
         ) : null}
 
-        {/* 🔥 ADD IT HERE — NOT INSIDE */}
+        {lateNoteCount > 0 ? (
+          <Notice title="Operational history" tone="neutral">
+            {lateNoteCount} late completion{lateNoteCount === 1 ? "" : "s"}
+            {" "}recorded for context.
+          </Notice>
+        ) : null}
+
         {unresolvedMissedVisits.length > 0 && (
-          <section className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm space-y-3">
-            <p className="text-sm font-semibold text-red-900">
-              🚨 Missed visits need review
+          <section className="space-y-3 rounded-[var(--task-radius-card)] border border-[#e8c8c3] bg-[var(--task-danger-soft)] p-4">
+            <p className="text-sm font-semibold text-[#86382f]">
+              Missed visits need review
             </p>
 
             {unresolvedMissedVisits.map((visit) => (
@@ -407,14 +433,14 @@ export default async function OperatorBookingDetailPage({
           </div>
         )}
 
-        {!nextBooking && unresolvedMissedVisits.length === 0 && (
-          <div className="rounded-xl border border-green-200 bg-green-50 p-4 shadow-sm">
-            <p className="text-sm font-semibold text-green-900">
-              ✅ Triage complete
+        {!hasUnresolvedMissedReview && totalMissedCount > 0 && (
+          <div className="rounded-[var(--task-radius-control)] border border-[#c9dfd4] bg-[var(--task-success-soft)] px-4 py-3">
+            <p className="text-sm font-semibold text-[#285844]">
+              Review complete
             </p>
 
             <p className="mt-1 text-sm text-green-800">
-              All unresolved booking issues have been reviewed.
+              All missed-visit review work for this booking is resolved.
             </p>
 
             <Link
@@ -428,38 +454,42 @@ export default async function OperatorBookingDetailPage({
 
         {/* Next Action */}
         <section
-          className={`rounded-2xl border p-4 shadow-sm ${toneClasses(
+          className={`rounded-[var(--task-radius-card)] border p-5 ${toneClasses(
             nextAction.tone
           )}`}
         >
-          <div className="text-xs font-semibold uppercase tracking-wide">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em]">
             Next Action
           </div>
 
           <div className="mt-2">
-            <h2 className="text-lg font-semibold">{nextAction.title}</h2>
+            <h2 className="text-xl font-bold tracking-[-0.02em]">
+              {nextAction.title}
+            </h2>
             <p className="mt-1 text-sm opacity-90">{nextAction.description}</p>
           </div>
 
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <ConfirmBookingForm
-              bookingId={booking.id}
-              canConfirm={canConfirm}
-            />
-            <CompleteBookingForm
-              bookingId={booking.id}
-              canComplete={canComplete}
-            />
-            <CancelBookingDetailForm
-              bookingId={booking.id}
-              canCancel={canCancel}
-              cancelBooking={cancelBooking}
-            />
-          </div>
+          {hasAvailableBookingAction ? (
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <ConfirmBookingForm
+                bookingId={booking.id}
+                canConfirm={canConfirm}
+              />
+              <CompleteBookingForm
+                bookingId={booking.id}
+                canComplete={canComplete}
+              />
+              <CancelBookingDetailForm
+                bookingId={booking.id}
+                canCancel={canCancel}
+                cancelBooking={cancelBooking}
+              />
+            </div>
+          ) : null}
         </section>
 
         {/* Summary cards */}
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <SummaryCard label="Client">
             <div className="font-medium text-zinc-900">
               {booking.client?.name || "—"}
@@ -663,158 +693,171 @@ export default async function OperatorBookingDetailPage({
         </CollapsibleCard>
 
         <CollapsibleCard
-          title={`History (${booking.history.length})`}
+          title={
+            <>
+              <span>History</span>
+              <span className="text-xs font-normal text-[var(--task-text-muted)]">
+                {booking.history.length} event
+                {booking.history.length === 1 ? "" : "s"}
+              </span>
+            </>
+          }
           defaultOpen={false}
         >
-          <summary className="cursor-pointer list-none border-b border-zinc-200 p-4 font-semibold text-zinc-900">
-            <div className="flex items-center justify-between">
-              <span>History</span>
-              <span className="text-xs font-medium text-zinc-500">
-                {booking.history.length}
-              </span>
-            </div>
-          </summary>
-
           {booking.history.length === 0 ? (
-            <div className="p-4 text-sm text-zinc-600">No history yet.</div>
+            <div className="text-sm text-zinc-600">No history yet.</div>
           ) : (
-            <div className="space-y-3 p-4">
-              {booking.history.map((h) => {
+            <ol className="relative space-y-0">
+              {booking.history.map((h, index) => {
                 const isLateNote = h.note?.toLowerCase().includes("late");
                 const isMissedVisitNote = h.note
                   ?.toLowerCase()
                   .includes("missed visit");
                 const needsReview =
                   isMissedVisitNote && !h.missedVisitReviewStatus;
+                const eventTitle = getHistoryEventTitle(h);
+                const actorLabel = h.changedBy?.name || h.changedBy?.email;
+                const markerClasses = needsReview
+                  ? "border-[#d4a854] bg-[var(--task-warning-soft)]"
+                  : h.missedVisitReviewStatus
+                  ? "border-[#8bb6a4] bg-[var(--task-success-soft)]"
+                  : "border-[var(--task-border-strong)] bg-white";
 
                 return (
-                  <div key={h.id} className="text-sm">
-                    <div className="text-zinc-900">
-                      {h.toStatus ? (
-                        <>
-                          <span className="font-medium">
-                            {h.fromStatus || "—"}
-                          </span>{" "}
-                          → <span className="font-medium">{h.toStatus}</span>
-                        </>
-                      ) : h.fromSitterId || h.toSitterId ? (
-                        <>
-                          <span className="font-medium">
-                            {h.fromSitter?.name || h.fromSitter?.email || "—"}
-                          </span>{" "}
-                          →{" "}
-                          <span className="font-medium">
-                            {h.toSitter?.name ||
-                              h.toSitter?.email ||
-                              "Unassigned"}
-                          </span>
-                          <span className="text-zinc-500"> · sitter</span>
-                        </>
-                      ) : (
-                        <span className="text-zinc-500">Unknown change</span>
-                      )}
+                  <li
+                    key={h.id}
+                    className="relative grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] gap-3 pb-6 last:pb-0"
+                  >
+                    {index < booking.history.length - 1 ? (
+                      <span
+                        aria-hidden="true"
+                        className="absolute bottom-0 left-[0.6rem] top-5 w-px bg-[var(--task-border)]"
+                      />
+                    ) : null}
+                    <span
+                      aria-hidden="true"
+                      className={`relative z-10 mt-1 h-5 w-5 rounded-full border-2 ${markerClasses}`}
+                    />
 
-                      {h.changedBy?.email ? (
-                        <span className="text-zinc-500">
-                          {" "}
-                          · by {h.changedBy.email}
-                        </span>
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                        <h3 className="break-words text-sm font-semibold text-[var(--task-text)]">
+                          {eventTitle}
+                        </h3>
+                        <p className="shrink-0 break-all text-xs text-[var(--task-text-muted)] sm:text-right">
+                          {formatHistoryTimestamp(h.createdAt)}
+                          {actorLabel ? ` · by ${actorLabel}` : ""}
+                        </p>
+                      </div>
+
+                      {h.fromSitterId || h.toSitterId ? (
+                        <p className="mt-1 break-words text-xs text-[var(--task-text-muted)]">
+                          {h.fromSitter?.name || h.fromSitter?.email || "Unassigned"}
+                          {" → "}
+                          {h.toSitter?.name ||
+                            h.toSitter?.email ||
+                            "Unassigned"}
+                        </p>
+                      ) : null}
+
+                      {h.note ? (
+                        <p
+                          className={`mt-2 break-words text-sm leading-6 ${
+                            needsReview
+                              ? "font-medium text-[#704c16]"
+                              : isLateNote
+                              ? "text-[#705b39]"
+                              : "text-[var(--task-text-muted)]"
+                          }`}
+                        >
+                          {h.note}
+                        </p>
+                      ) : null}
+
+                      {needsReview ? (
+                        <div className="mt-3 rounded-[var(--task-radius-control)] border border-[#ead9ad] bg-[var(--task-warning-soft)] p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#704c16]">
+                            Review this incident
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <form
+                              action={reviewMissedVisitHistory.bind(null, {
+                                historyId: h.id,
+                                status: "EXCUSED",
+                                note: "Operator marked this missed visit as excused.",
+                              })}
+                            >
+                              <button
+                                type="submit"
+                                className="inline-flex min-h-10 items-center justify-center rounded-[var(--task-radius-control)] border border-[#8bb6a4] bg-white px-3 py-2 text-xs font-semibold text-[#285844] hover:bg-[var(--task-success-soft)]"
+                              >
+                                Excuse
+                              </button>
+                            </form>
+
+                            <form
+                              action={reviewMissedVisitHistory.bind(null, {
+                                historyId: h.id,
+                                status: "SITTER_FAULT",
+                                note: "Operator marked this missed visit as sitter fault.",
+                              })}
+                            >
+                              <button
+                                type="submit"
+                                className="inline-flex min-h-10 items-center justify-center rounded-[var(--task-radius-control)] border border-[#c98d84] bg-white px-3 py-2 text-xs font-semibold text-[#86382f] hover:bg-[var(--task-danger-soft)]"
+                              >
+                                Sitter fault
+                              </button>
+                            </form>
+
+                            <form
+                              action={reviewMissedVisitHistory.bind(null, {
+                                historyId: h.id,
+                                status: "NEEDS_FOLLOW_UP",
+                                note: "Operator marked this missed visit as needing follow-up.",
+                              })}
+                            >
+                              <button
+                                type="submit"
+                                className="inline-flex min-h-10 items-center justify-center rounded-[var(--task-radius-control)] border border-[#d4a854] bg-white px-3 py-2 text-xs font-semibold text-[#704c16] hover:bg-[#fbf3df]"
+                              >
+                                Follow up
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {h.missedVisitReviewStatus ? (
+                        <div className="mt-3 flex flex-wrap items-start gap-2">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                              h.missedVisitReviewStatus === "EXCUSED"
+                                ? "border-[#c9dfd4] bg-[var(--task-success-soft)] text-[#285844]"
+                                : h.missedVisitReviewStatus === "SITTER_FAULT"
+                                ? "border-[#e8c8c3] bg-[var(--task-danger-soft)] text-[#86382f]"
+                                : h.missedVisitReviewStatus ===
+                                  "NEEDS_FOLLOW_UP"
+                                ? "border-[#ead9ad] bg-[var(--task-warning-soft)] text-[#704c16]"
+                                : "border-[var(--task-border)] bg-[var(--task-surface-soft)] text-[var(--task-text-muted)]"
+                            }`}
+                          >
+                            {REVIEW_STATUS_LABELS[
+                              h.missedVisitReviewStatus
+                            ] ?? h.missedVisitReviewStatus}
+                          </span>
+                          {h.missedVisitReviewNote ? (
+                            <p className="min-w-0 flex-1 break-words text-xs leading-5 text-[var(--task-text-muted)]">
+                              {h.missedVisitReviewNote}
+                            </p>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
-
-                    <div className="text-xs text-zinc-500">
-                      {new Date(h.createdAt).toLocaleString()}
-                    </div>
-
-                    {h.note ? (
-                      <div
-                        className={`mt-1 rounded-md border px-2 py-1 text-xs ${
-                          isLateNote
-                            ? "border-amber-200 bg-amber-50 text-amber-900"
-                            : "border-zinc-200 bg-zinc-50 text-zinc-700"
-                        }`}
-                      >
-                        {isLateNote ? "⚠️ " : ""}
-                        {h.note}
-                      </div>
-                    ) : null}
-                    {needsReview ? (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <form
-                          action={reviewMissedVisitHistory.bind(null, {
-                            historyId: h.id,
-                            status: "EXCUSED",
-                            note: "Operator marked this missed visit as excused.",
-                          })}
-                        >
-                          <button
-                            type="submit"
-                            className="rounded-md border border-emerald-600 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white"
-                          >
-                            Excuse
-                          </button>
-                        </form>
-
-                        <form
-                          action={reviewMissedVisitHistory.bind(null, {
-                            historyId: h.id,
-                            status: "SITTER_FAULT",
-                            note: "Operator marked this missed visit as sitter fault.",
-                          })}
-                        >
-                          <button
-                            type="submit"
-                            className="rounded-md border border-red-600 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-600 hover:text-white"
-                          >
-                            Sitter fault
-                          </button>
-                        </form>
-
-                        <form
-                          action={reviewMissedVisitHistory.bind(null, {
-                            historyId: h.id,
-                            status: "NEEDS_FOLLOW_UP",
-                            note: "Operator marked this missed visit as needing follow-up.",
-                          })}
-                        >
-                          <button
-                            type="submit"
-                            className="rounded-md border border-amber-600 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-600 hover:text-white"
-                          >
-                            Follow up
-                          </button>
-                        </form>
-                      </div>
-                    ) : null}
-
-                    {h.missedVisitReviewStatus ? (
-                      <div
-                        className={`mt-2 rounded-md border px-2 py-1 text-xs ${
-                          h.missedVisitReviewStatus === "EXCUSED"
-                            ? "border-green-200 bg-green-50 text-green-900"
-                            : h.missedVisitReviewStatus === "SITTER_FAULT"
-                            ? "border-red-200 bg-red-50 text-red-900"
-                            : h.missedVisitReviewStatus === "NEEDS_FOLLOW_UP"
-                            ? "border-amber-200 bg-amber-50 text-amber-900"
-                            : "border-zinc-200 bg-zinc-50 text-zinc-700"
-                        }`}
-                      >
-                        Reviewed:{" "}
-                        <span className="font-semibold">
-                          {REVIEW_STATUS_LABELS[h.missedVisitReviewStatus] ??
-                            h.missedVisitReviewStatus}
-                        </span>
-                        {h.missedVisitReviewNote ? (
-                          <div className="mt-1 text-xs opacity-90">
-                            {h.missedVisitReviewNote}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ol>
           )}
         </CollapsibleCard>
       </div>

@@ -1,11 +1,17 @@
 // src/app/dashboard/operator/triage/page.jsx
-import Link from "next/link";
 import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
 import { bookingNeedsReview } from "../lib/bookingNeedsReview";
 import { getBookingReliability } from "../lib/getBookingReliability";
-import StatusBadge from "../booking-list/StatusBadge";
+import BookingStatusBadge from "../booking-list/StatusBadge";
 import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
+import {
+  Button,
+  Card,
+  Eyebrow,
+  Notice,
+  StatusBadge,
+} from "@/components/ui/Foundation";
 
 function formatDateTime(value) {
   return new Date(value).toLocaleString();
@@ -47,109 +53,127 @@ export default async function OperatorTriagePage() {
     });
 
   return (
-    <main className="min-h-screen bg-zinc-50 p-4 sm:p-6">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <p className="text-sm font-medium text-zinc-600">
-          {triageBookings.length === 0
-            ? "✅ All issues resolved"
-            : `${triageBookings.length} issue${
-                triageBookings.length > 1 ? "s" : ""
-              } remaining`}
-        </p>
-        <header className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-            Operator queue
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold text-red-950">
-            Triage Queue
+    <main className="min-h-screen bg-[var(--task-canvas)] px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <header>
+          <Eyebrow>Operator review</Eyebrow>
+          <h1 className="mt-2 text-3xl font-bold tracking-[-0.035em] text-[var(--task-text)] sm:text-4xl">
+            Triage
           </h1>
-          <p className="mt-2 text-sm text-red-800">
-            Bookings that need operator attention before normal workflow can
-            continue.
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--task-text-muted)] sm:text-base">
+            Review unresolved missed-visit incidents.
           </p>
         </header>
 
         {triageBookings.length === 0 ? (
-          <section className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 shadow-sm">
-            No urgent booking issues right now.
-          </section>
+          <Notice title="All caught up" tone="success" className="max-w-2xl">
+            There are no missed-visit reviews waiting for you.
+          </Notice>
         ) : (
-          <section className="space-y-3">
-            {triageBookings.map((booking) => {
-              const reliability = getBookingReliability(booking, now);
-              const overdueVisits = booking.visits.filter((visit) => {
-                if (visit.status !== "CONFIRMED") return false;
-                const end = new Date(visit.endTime);
-                return !Number.isNaN(end.getTime()) && end < now;
-              });
-              const petDisplayName = formatBookingPetNames(
-                booking.petNames,
-                booking.serviceSummary || "Pet care booking"
-              );
-              const showServiceContext =
-                Boolean(booking.serviceSummary) &&
-                booking.serviceSummary !== petDisplayName;
+          <section className="space-y-4" aria-labelledby="triage-queue-heading">
+            <Notice title="Needs review" tone="warning">
+              <span id="triage-queue-heading">
+                {triageBookings.length} booking
+                {triageBookings.length === 1 ? "" : "s"} with missed-visit
+                incidents require operator review.
+              </span>
+            </Notice>
 
-              return (
-                <article
-                  key={booking.id}
-                  className="rounded-2xl border border-red-200 bg-white p-4 shadow-sm"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="break-words font-semibold text-zinc-950">
-                          {petDisplayName}
-                        </h2>
-                        <StatusBadge status={booking.status} />
+            <div className="grid gap-3">
+              {triageBookings.map((booking) => {
+                const reliability = getBookingReliability(booking, now);
+                const overdueVisits = booking.visits.filter((visit) => {
+                  if (visit.status !== "CONFIRMED") return false;
+                  const end = new Date(visit.endTime);
+                  return !Number.isNaN(end.getTime()) && end < now;
+                });
+                const unresolvedHistoryCount = booking.history.filter(
+                  (entry) =>
+                    entry.note?.toLowerCase().includes("missed visit") &&
+                    !entry.missedVisitReviewStatus
+                ).length;
+                const petDisplayName = formatBookingPetNames(
+                  booking.petNames,
+                  booking.serviceSummary || "Pet care booking"
+                );
+                const showServiceContext =
+                  Boolean(booking.serviceSummary) &&
+                  booking.serviceSummary !== petDisplayName;
+
+                return (
+                  <Card
+                    key={booking.id}
+                    as="article"
+                    className="p-5 shadow-none"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="break-words text-lg font-bold tracking-[-0.02em] text-[var(--task-text)]">
+                            {petDisplayName}
+                          </h2>
+                          <BookingStatusBadge status={booking.status} />
+                        </div>
+
+                        {showServiceContext ? (
+                          <p className="mt-1 break-words text-sm text-zinc-600">
+                            {booking.serviceSummary}
+                          </p>
+                        ) : null}
+
+                        <p className="mt-1 break-words text-sm text-zinc-500">
+                          Owner: {booking.client?.name || "Client"}
+                        </p>
+
+                        <p className="mt-1 text-sm text-zinc-600">
+                          Sitter:{" "}
+                          {booking.sitter?.name ||
+                            booking.sitter?.email ||
+                            "Unassigned"}
+                        </p>
+
+                        <div className="mt-3 space-y-1 text-sm font-semibold text-[#704c16]">
+                          {unresolvedHistoryCount > 0 ? (
+                            <p>
+                              {unresolvedHistoryCount} missed-visit review
+                              {unresolvedHistoryCount === 1 ? "" : "s"}{" "}
+                              unresolved
+                            </p>
+                          ) : null}
+                          {overdueVisits.length > 0 ? (
+                            <p>
+                              {overdueVisits.length} overdue confirmed visit
+                              {overdueVisits.length === 1 ? "" : "s"} need
+                              {overdueVisits.length === 1 ? "s" : ""} review
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <p className="mt-2 text-xs text-zinc-500">
+                          Next/first visit:{" "}
+                          {booking.visits[0]?.startTime
+                            ? formatDateTime(booking.visits[0].startTime)
+                            : "No visits"}
+                        </p>
                       </div>
 
-                      {showServiceContext ? (
-                        <p className="mt-1 break-words text-sm text-zinc-600">
-                          {booking.serviceSummary}
-                        </p>
-                      ) : null}
+                      <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
+                        <StatusBadge tone="warning">
+                          {reliability.label} · Score {reliability.score}
+                        </StatusBadge>
 
-                      <p className="mt-1 break-words text-sm text-zinc-500">
-                        Owner: {booking.client?.name || "Client"}
-                      </p>
-
-                      <p className="mt-1 text-sm text-zinc-600">
-                        Sitter:{" "}
-                        {booking.sitter?.name ||
-                          booking.sitter?.email ||
-                          "Unassigned"}
-                      </p>
-
-                      <p className="mt-1 text-sm font-medium text-red-700">
-                        {overdueVisits.length} missed visit
-                        {overdueVisits.length === 1 ? "" : "s"} need review
-                      </p>
-
-                      <p className="mt-1 text-xs text-zinc-500">
-                        Next/first visit:{" "}
-                        {booking.visits[0]?.startTime
-                          ? formatDateTime(booking.visits[0].startTime)
-                          : "No visits"}
-                      </p>
+                        <Button
+                          href={`/dashboard/operator/bookings/${booking.id}?review=needs-review&mode=triage`}
+                          className="w-full sm:w-auto"
+                        >
+                          Review booking
+                        </Button>
+                      </div>
                     </div>
-
-                    <div className="flex flex-col items-start gap-2 sm:items-end">
-                      <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-900">
-                        {reliability.label} · Score {reliability.score}
-                      </span>
-
-                      <Link
-                        href={`/dashboard/operator/bookings/${booking.id}?review=needs-review&mode=triage`}
-                        className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
-                      >
-                        Review booking
-                      </Link>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
+                  </Card>
+                );
+              })}
+            </div>
           </section>
         )}
       </div>

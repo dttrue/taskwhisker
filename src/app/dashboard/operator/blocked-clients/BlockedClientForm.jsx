@@ -3,6 +3,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { createBlockedClient } from "./actions";
+import { Button, FormField, FormFeedback } from "@/components/ui/Foundation";
 
 export default function BlockedClientForm() {
   const formRef = useRef(null);
@@ -40,127 +41,71 @@ export default function BlockedClientForm() {
     <form
       ref={formRef}
       onSubmit={handleSubmit}
-      className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
+      className="rounded-[var(--task-radius-card)] border border-[var(--task-border)] bg-[var(--task-surface)] p-5 shadow-[var(--task-shadow-card)] sm:p-6"
     >
       <div>
-        <h2 className="text-lg font-bold text-zinc-950">Block a client</h2>
-        <p className="mt-1 text-sm text-zinc-600">
+        <h2 className="text-xl font-bold tracking-[-0.025em] text-[var(--task-text)]">
+          Block a client
+        </h2>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--task-text-muted)]">
           Add enough information to prevent this person from booking again.
           Email, phone, or address with ZIP code are the strongest matches.
         </p>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="space-y-1 text-sm">
-          <span className="font-medium text-zinc-700">Name</span>
-          <input
-            name="name"
-            type="text"
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-            placeholder="Client name"
-          />
-        </label>
+      <div className="mt-5 space-y-6">
+        <fieldset>
+          <legend className="text-sm font-semibold text-[var(--task-text)]">
+            Client identity
+          </legend>
+          <div className="mt-3 grid gap-4 md:grid-cols-3">
+            <FormField id="blocked-name" name="name" type="text" label="Name" placeholder="Client name" />
+            <FormField id="blocked-email" name="email" type="email" label="Email" placeholder="client@example.com" />
+            <FormField id="blocked-phone" name="phone" type="tel" label="Phone" placeholder="555-555-5555" />
+          </div>
+        </fieldset>
 
-        <label className="space-y-1 text-sm">
-          <span className="font-medium text-zinc-700">Email</span>
-          <input
-            name="email"
-            type="email"
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-            placeholder="client@example.com"
-          />
-        </label>
-
-        <label className="space-y-1 text-sm">
-          <span className="font-medium text-zinc-700">Phone</span>
-          <input
-            name="phone"
-            type="tel"
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-            placeholder="555-555-5555"
-          />
-        </label>
-
-        <label className="space-y-1 text-sm">
-          <span className="font-medium text-zinc-700">Address line 1</span>
-          <input
-            name="addressLine1"
-            type="text"
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-            placeholder="123 Main St"
-          />
-        </label>
-
-        <label className="space-y-1 text-sm">
-          <span className="font-medium text-zinc-700">Address line 2</span>
-          <input
-            name="addressLine2"
-            type="text"
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-            placeholder="Apt, unit, etc."
-          />
-        </label>
-
-        <label className="space-y-1 text-sm">
-          <span className="font-medium text-zinc-700">City</span>
-          <input
-            name="city"
-            type="text"
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-            placeholder="City"
-          />
-        </label>
-
-        <label className="space-y-1 text-sm">
-          <span className="font-medium text-zinc-700">State</span>
-          <input
-            name="state"
-            type="text"
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-            placeholder="NY"
-          />
-        </label>
-
-        <label className="space-y-1 text-sm">
-          <span className="font-medium text-zinc-700">ZIP code</span>
-          <input
-            name="postalCode"
-            type="text"
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-            placeholder="11215"
-          />
-        </label>
+        <fieldset>
+          <legend className="text-sm font-semibold text-[var(--task-text)]">
+            Service address
+          </legend>
+          <div className="mt-3 grid gap-4 md:grid-cols-6">
+            <FormField id="blocked-address-1" name="addressLine1" type="text" label="Address line 1" placeholder="123 Main St" className="md:col-span-3" />
+            <FormField id="blocked-address-2" name="addressLine2" type="text" label="Address line 2" placeholder="Apt, unit, etc." className="md:col-span-3" />
+            <FormField id="blocked-city" name="city" type="text" label="City" placeholder="City" className="md:col-span-3" />
+            <FormField id="blocked-state" name="state" type="text" label="State" placeholder="NJ" className="md:col-span-1" />
+            <FormField id="blocked-postal-code" name="postalCode" type="text" label="ZIP code" placeholder="08879" className="md:col-span-2" />
+          </div>
+        </fieldset>
       </div>
 
-      <label className="mt-3 block space-y-1 text-sm">
-        <span className="font-medium text-zinc-700">Reason</span>
-        <textarea
-          name="reason"
-          rows={3}
-          className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-          placeholder="Internal note only. Clients will not see this."
-        />
-      </label>
+      <FormField
+        id="blocked-reason"
+        name="reason"
+        as="textarea"
+        rows={3}
+        label="Internal reason"
+        hint="Clients will not see this note."
+        className="mt-5"
+        placeholder="Document why future bookings should be blocked."
+      />
 
       {message ? (
-        <p
-          className={`mt-3 rounded-xl px-3 py-2 text-sm ${
-            message.type === "error"
-              ? "bg-red-50 text-red-700"
-              : "bg-emerald-50 text-emerald-700"
-          }`}
+        <FormFeedback
+          tone={message.type === "error" ? "danger" : "success"}
+          className="mt-4"
         >
           {message.text}
-        </p>
+        </FormFeedback>
       ) : null}
 
-      <button
+      <Button
         type="submit"
         disabled={isPending}
-        className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-zinc-950 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        className="mt-5 w-full sm:w-auto"
       >
         {isPending ? "Adding..." : "Add to blocklist"}
-      </button>
+      </Button>
     </form>
   );
 }
