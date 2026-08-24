@@ -100,7 +100,7 @@ export async function createPublicBooking(rawInput) {
     serviceSummary,
     basePriceCentsPerVisit,
     client,
-    petNames,
+    pets,
 
     serviceAddressLine1,
     serviceAddressLine2,
@@ -126,6 +126,7 @@ export async function createPublicBooking(rawInput) {
     notes,
     addOns = [],
   } = input;
+  const petNames = pets.map((pet) => pet.name);
 
   let dayList = [];
 
@@ -436,6 +437,14 @@ export async function createPublicBooking(rawInput) {
         notes: notes || null,
         petNames,
         petDetails: petDetails || undefined,
+        bookingPets: {
+          create: pets.map((pet, position) => ({
+            position,
+            nameSnapshot: pet.name,
+            speciesSnapshot: pet.species,
+            petId: null,
+          })),
+        },
       },
     });
 

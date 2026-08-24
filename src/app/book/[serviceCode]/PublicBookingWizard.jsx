@@ -17,6 +17,11 @@ import BookingStepClientInfo from "../ steps/BookingStepClientInfo";
 import BookingStepAddOns from "../ steps/BookingStepAddOns";
 import BookingStepReview from "../ steps/BookingStepReview";
 import { validateScheduleAvailabilityStep } from "../validatePublicBookingStep";
+import {
+  buildCanonicalPets,
+  getPetRowErrors,
+  MAX_PUBLIC_BOOKING_PETS,
+} from "../structuredPets";
 const BOOKING_START_MIN = 7 * 60; // 07:00
 const BOOKING_END_MIN = 22 * 60; // 22:00
 const BOOKING_STEPS = ["Schedule", "Your info", "Add-ons", "Review"];
@@ -104,7 +109,6 @@ export default function PublicBookingWizard({
     },
   });
 
-  const [weightClass, setWeightClass] = useState("");
   const [range, setRange] = useState();
   const [dates, setDates] = useState([]);
   const [scheduleMode, setScheduleMode] = useState("SAME");
@@ -116,9 +120,14 @@ export default function PublicBookingWizard({
 
   const [slotsByDate, setSlotsByDate] = useState({});
   const [dogSize, setDogSize] = useState([]);
-  const [petNames, setPetNames] = useState([""]);
-  const [petNameErrors, setPetNameErrors] = useState([]);
+  const [pets, setPets] = useState([
+    { id: "pet-1", name: "", species: "", customSpecies: "" },
+  ]);
+  const [petErrors, setPetErrors] = useState([]);
   const [petNotes, setPetNotes] = useState("");
+  const canonicalPets = useMemo(() => buildCanonicalPets(pets), [pets]);
+  const hasDog = canonicalPets.some((pet) => pet.species === "Dog");
+  const applicableDogSizes = hasDog ? dogSize : [];
 
   const isRange = serviceType === "OVERNIGHT";
 
@@ -342,22 +351,19 @@ export default function PublicBookingWizard({
         return false;
       }
 
-      const nextPetNameErrors = petNames.map((name) => {
-        const trimmed = name.trim();
-        if (!trimmed) return "Pet name is required.";
-        if (trimmed.length > 50) {
-          return "Pet name must be 50 characters or fewer.";
-        }
-        return "";
-      });
+      const nextPetErrors = getPetRowErrors(pets);
 
-      if (nextPetNameErrors.some(Boolean)) {
-        setPetNameErrors(nextPetNameErrors);
-        setError("Please review the highlighted pet names.");
+      if (
+        pets.length < 1 ||
+        pets.length > MAX_PUBLIC_BOOKING_PETS ||
+        nextPetErrors.some((petError) => petError.name || petError.species)
+      ) {
+        setPetErrors(nextPetErrors);
+        setError("Please review the highlighted pet details.");
         return false;
       }
 
-      setPetNameErrors([]);
+      setPetErrors([]);
 
       return true;
     }
@@ -444,10 +450,12 @@ export default function PublicBookingWizard({
     if (step !== 4) return;
 
     const petMeta =
-      dogSize.length || weightClass || petNotes
+      applicableDogSizes.length || petNotes
         ? `\n\nPet details:\n- Dog size: ${
-            dogSize.length ? dogSize.join(", ") : "not specified"
-          }\n- Weight class: ${weightClass || "not specified"}\n- Notes: ${
+            applicableDogSizes.length
+              ? applicableDogSizes.join(", ")
+              : "not specified"
+          }\n- Notes: ${
             petNotes || "none"
           }`
         : "";
@@ -463,7 +471,7 @@ export default function PublicBookingWizard({
         phone: client.phone || undefined,
       },
 
-      petNames,
+      pets: canonicalPets,
 
       serviceAddressLine1: serviceLocation.addressLine1 || undefined,
       serviceAddressLine2: serviceLocation.addressLine2 || undefined,
@@ -475,10 +483,9 @@ export default function PublicBookingWizard({
       locationNotes: serviceLocation.locationNotes || undefined,
 
       petDetails:
-        dogSize.length || weightClass
+        applicableDogSizes.length
           ? {
-              dogSize,
-              weightClass: weightClass || undefined,
+              dogSize: applicableDogSizes,
             }
           : undefined,
 
@@ -643,18 +650,17 @@ export default function PublicBookingWizard({
             <BookingStepClientInfo
               client={client}
               setClient={setClient}
-              petNames={petNames}
-              setPetNames={setPetNames}
-              petNameErrors={petNameErrors}
-              setPetNameErrors={setPetNameErrors}
+              pets={pets}
+              setPets={setPets}
+              petErrors={petErrors}
+              setPetErrors={setPetErrors}
               serviceLocation={serviceLocation}
               setServiceLocation={setServiceLocation}
               notes={petNotes}
               setNotes={setPetNotes}
               dogSize={dogSize}
               toggleDogSize={toggleDogSize}
-              weightClass={weightClass}
-              setWeightClass={setWeightClass}
+              hasDog={hasDog}
             />
           )}
 
@@ -683,11 +689,10 @@ export default function PublicBookingWizard({
               bathExtra={bathExtra}
               hasAnyAddOns={hasAnyAddOns}
               client={client}
-              petNames={petNames}
+              pets={canonicalPets}
               serviceLocation={serviceLocation}
               notes={petNotes}
-              dogSize={dogSize}
-              weightClass={weightClass}
+              dogSize={applicableDogSizes}
             />
           )}
 

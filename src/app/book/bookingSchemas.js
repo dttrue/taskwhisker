@@ -1,5 +1,10 @@
 // app/book/bookingSchemas.js
 import { z } from "zod";
+import {
+  MAX_PET_FIELD_LENGTH,
+  MAX_PUBLIC_BOOKING_PETS,
+  OTHER_SPECIES_VALUE,
+} from "./structuredPets.js";
 
 export const timeStr = z
   .string()
@@ -35,6 +40,37 @@ export const optionalTrimmedString = z
     return trimmed.length ? trimmed : undefined;
   });
 
+export const publicPetSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Pet name is required")
+    .max(
+      MAX_PET_FIELD_LENGTH,
+      `Pet name must be ${MAX_PET_FIELD_LENGTH} characters or fewer`,
+    ),
+  species: z
+    .string()
+    .trim()
+    .min(1, "Pet type is required")
+    .max(
+      MAX_PET_FIELD_LENGTH,
+      `Pet type must be ${MAX_PET_FIELD_LENGTH} characters or fewer`,
+    )
+    .refine(
+      (species) => species !== OTHER_SPECIES_VALUE,
+      "Enter the specific pet type instead of Other",
+    ),
+});
+
+export const publicPetsSchema = z
+  .array(publicPetSchema)
+  .min(1, "At least one pet is required")
+  .max(
+    MAX_PUBLIC_BOOKING_PETS,
+    `A booking can include up to ${MAX_PUBLIC_BOOKING_PETS} pets`,
+  );
+
   export const publicBookingSchema = z
     .object({
       serviceType: z.string().optional(),
@@ -53,16 +89,7 @@ export const optionalTrimmedString = z
         phone: z.string().optional(),
       }),
 
-      petNames: z
-        .array(
-          z
-            .string()
-            .trim()
-            .min(1, "Pet name is required")
-            .max(50, "Pet name must be 50 characters or fewer")
-        )
-        .min(1, "At least one pet name is required")
-        .max(10, "A booking can include up to 10 pets"),
+      pets: publicPetsSchema,
 
       serviceAddressLine1: optionalTrimmedString,
       serviceAddressLine2: optionalTrimmedString,

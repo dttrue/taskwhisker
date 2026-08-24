@@ -1,4 +1,6 @@
 // src/app/book/buildPublicBookingPayload.js
+import { buildCanonicalPets, getPetRowErrors } from "./structuredPets.js";
+
 const WEIGHT_CLASS_LABELS = {
   TOY: "Toy · under 10 lbs",
   SMALL_10_25: "Small · 10–25 lbs",
@@ -64,7 +66,7 @@ export function buildPublicBookingPayload({
   nailTrimExtra,
   bathExtra,
   client,
-  petNames = [],
+  pets = [],
   serviceLocation,
   notes,
   dogSize = [],
@@ -151,7 +153,7 @@ export function buildPublicBookingPayload({
       phone: client.phone || undefined,
     },
 
-    petNames,
+    pets: buildCanonicalPets(pets),
 
     serviceAddressLine1: serviceLocation.addressLine1 || undefined,
     serviceAddressLine2: serviceLocation.addressLine2 || undefined,
@@ -187,16 +189,15 @@ export function buildPublicBookingPayload({
   };
 }
 
-export function validateClientInfoStep({ client, petNames, serviceLocation }) {
+export function validateClientInfoStep({ client, pets, serviceLocation }) {
   if (!client?.name?.trim()) return "Name is required.";
   if (!client?.email?.trim()) return "Email is required.";
-  if (!Array.isArray(petNames) || petNames.length === 0)
-    return "At least one pet name is required.";
-  if (petNames.length > 10) return "A booking can include up to 10 pets.";
-  if (petNames.some((name) => typeof name !== "string" || !name.trim()))
-    return "Pet name is required.";
-  if (petNames.some((name) => name.trim().length > 50))
-    return "Pet name must be 50 characters or fewer.";
+  if (!Array.isArray(pets) || pets.length === 0)
+    return "At least one pet is required.";
+  if (pets.length > 10) return "A booking can include up to 10 pets.";
+  const petErrors = getPetRowErrors(pets);
+  const firstPetError = petErrors.find((error) => error.name || error.species);
+  if (firstPetError) return firstPetError.name || firstPetError.species;
   if (!serviceLocation?.addressLine1?.trim())
     return "Service address is required.";
   if (!serviceLocation?.city?.trim()) return "Service city is required.";

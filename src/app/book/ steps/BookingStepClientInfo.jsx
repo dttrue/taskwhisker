@@ -2,6 +2,12 @@
 "use client";
 
 import { Button, FieldGroup, FormField } from "@/components/ui/Foundation";
+import {
+  COMMON_PET_SPECIES,
+  MAX_PET_FIELD_LENGTH,
+  MAX_PUBLIC_BOOKING_PETS,
+  OTHER_SPECIES_VALUE,
+} from "../structuredPets";
 
 const DOG_SIZE_OPTIONS = [
   { value: "SMALL", label: "Small" },
@@ -9,29 +15,105 @@ const DOG_SIZE_OPTIONS = [
   { value: "LARGE", label: "Large" },
 ];
 
-const WEIGHT_CLASS_OPTIONS = [
-  { value: "TOY", label: "Toy · under 10 lbs" },
-  { value: "SMALL_10_25", label: "Small · 10–25 lbs" },
-  { value: "MEDIUM_26_50", label: "Medium · 26–50 lbs" },
-  { value: "LARGE_51_80", label: "Large · 51–80 lbs" },
-  { value: "XL_81_PLUS", label: "XL · 81+ lbs" },
-];
+function PetTypeIcon({ type }) {
+  const sharedProps = {
+    "aria-hidden": true,
+    className: "h-5 w-5 shrink-0",
+    fill: "none",
+    viewBox: "0 0 24 24",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+  };
+
+  if (type === "Dog") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M8.4 10.2c-1.3-1.6-3.7-1.5-4.4.3-.7 1.9.8 3.5 2.7 3.3" />
+        <path d="M15.6 10.2c1.3-1.6 3.7-1.5 4.4.3.7 1.9-.8 3.5-2.7 3.3" />
+        <path d="M8 9.5c.2-3 1.8-4.5 4-4.5s3.8 1.5 4 4.5v4c0 3-1.7 5.5-4 5.5s-4-2.5-4-5.5z" />
+        <path d="M10 14h4l-2 2z" />
+      </svg>
+    );
+  }
+
+  if (type === "Cat") {
+    return (
+      <svg {...sharedProps}>
+        <path d="m7 8-2-4v10a7 7 0 0 0 14 0V4l-2 4" />
+        <path d="M7 8c3-2 7-2 10 0M9 13h.01M15 13h.01M10 16c1.3 1 2.7 1 4 0" />
+      </svg>
+    );
+  }
+
+  if (type === "Rabbit") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M9 9C6 6 6 2 8 2c2.5 0 3 4 3 7M15 9c3-3 3-7 1-7-2.5 0-3 4-3 7" />
+        <path d="M6 14a6 6 0 0 1 12 0v1a6 6 0 0 1-12 0zM9 14h.01M15 14h.01M11 17h2" />
+      </svg>
+    );
+  }
+
+  if (type === "Bird") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M19 8h3l-3 2M17 8a7 7 0 1 0 1 9" />
+        <path d="M8 13c3 0 5 1 7 4M17 6h.01" />
+      </svg>
+    );
+  }
+
+  if (type === "Small Animal") {
+    return (
+      <svg {...sharedProps}>
+        <circle cx="7" cy="8" r="3" />
+        <circle cx="17" cy="8" r="3" />
+        <path d="M6 13a6 6 0 0 1 12 0v2a6 6 0 0 1-12 0zM9 14h.01M15 14h.01M11 17h2" />
+      </svg>
+    );
+  }
+
+  if (type === "Reptile") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M4 15c3-7 9-9 15-6 2 1 2 4 0 5-3 1-5-2-8 0-2 1-2 4 1 5" />
+        <path d="m18 9 2-2M18 14l2 2M8 15l-2 2M10 11 8 9" />
+      </svg>
+    );
+  }
+
+  if (type === "Fish") {
+    return (
+      <svg {...sharedProps}>
+        <path d="M16 8c-4-3-9-2-12 4 3 6 8 7 12 4l4 3v-6l-4-5zM7 12h.01" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...sharedProps}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  );
+}
 
 export default function BookingStepClientInfo({
   client,
   setClient,
-  petNames = [""],
-  setPetNames,
-  petNameErrors = [],
-  setPetNameErrors,
+  pets = [],
+  setPets,
+  petErrors = [],
+  setPetErrors,
   serviceLocation,
   setServiceLocation,
   notes,
   setNotes,
   dogSize = [],
   toggleDogSize,
-  weightClass = "",
-  setWeightClass,
+  hasDog = false,
 }) {
   function updateClientField(field, value) {
     setClient((prev) => ({
@@ -47,29 +129,44 @@ export default function BookingStepClientInfo({
     }));
   }
 
-  function updatePetName(index, value) {
-    setPetNames((previous) =>
-      previous.map((name, nameIndex) => (nameIndex === index ? value : name))
-    );
-    setPetNameErrors?.((previous) =>
-      previous.map((error, errorIndex) => (errorIndex === index ? "" : error))
-    );
-  }
-
-  function addPetName() {
-    setPetNames((previous) =>
-      previous.length >= 10 ? previous : [...previous, ""]
+  function clearPetError(id, field) {
+    setPetErrors?.((previous) =>
+      previous.map((error) =>
+        error.id === id ? { ...error, [field]: "" } : error,
+      ),
     );
   }
 
-  function removePetName(index) {
-    setPetNames((previous) =>
+  function updatePet(id, patch) {
+    setPets((previous) =>
+      previous.map((pet) => (pet.id === id ? { ...pet, ...patch } : pet)),
+    );
+  }
+
+  function addPet() {
+    setPets((previous) =>
+      previous.length >= MAX_PUBLIC_BOOKING_PETS
+        ? previous
+        : [
+            ...previous,
+            {
+              id: globalThis.crypto.randomUUID(),
+              name: "",
+              species: "",
+              customSpecies: "",
+            },
+          ],
+    );
+  }
+
+  function removePet(id) {
+    setPets((previous) =>
       previous.length === 1
         ? previous
-        : previous.filter((_, nameIndex) => nameIndex !== index)
+        : previous.filter((pet) => pet.id !== id),
     );
-    setPetNameErrors?.((previous) =>
-      previous.filter((_, errorIndex) => errorIndex !== index)
+    setPetErrors?.((previous) =>
+      previous.filter((error) => error.id !== id),
     );
   }
 
@@ -225,102 +322,183 @@ export default function BookingStepClientInfo({
         </div>
 
         <div className="space-y-4">
-          <FieldGroup legend="Pet names">
+          <FieldGroup legend="Your pets">
             <div className="space-y-3">
-              {petNames.map((name, index) => (
-                <div
-                  key={index}
-                  className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
-                >
-                  <FormField
-                    id={`pet-name-${index + 1}`}
-                    label={`Pet ${index + 1} name`}
-                    type="text"
-                    value={name}
-                    onChange={(event) => updatePetName(index, event.target.value)}
-                    error={petNameErrors[index]}
-                    maxLength={50}
-                    autoComplete="off"
-                    aria-required="true"
-                  />
-                  {index > 0 ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => removePetName(index)}
-                      aria-label={`Remove pet ${index + 1}`}
-                    >
-                      Remove
-                    </Button>
-                  ) : null}
-                </div>
-              ))}
+              {pets.map((pet, index) => {
+                const rowError =
+                  petErrors.find((error) => error.id === pet.id) || {};
+
+                return (
+                  <div
+                    key={pet.id}
+                    className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-[var(--task-surface-soft)] p-4"
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-[var(--task-text)]">
+                        Pet {index + 1}
+                      </h3>
+                      {pets.length > 1 ? (
+                        <Button
+                          type="button"
+                          variant="quiet"
+                          className="min-h-9 px-2.5 py-1.5"
+                          onClick={() => removePet(pet.id)}
+                          aria-label={`Remove pet ${index + 1}`}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-3">
+                      <FormField
+                        id={`pet-name-${pet.id}`}
+                        label="Pet name"
+                        type="text"
+                        value={pet.name}
+                        onChange={(event) => {
+                          updatePet(pet.id, { name: event.target.value });
+                          clearPetError(pet.id, "name");
+                        }}
+                        error={rowError.name}
+                        maxLength={MAX_PET_FIELD_LENGTH}
+                        autoComplete="off"
+                        aria-required="true"
+                      />
+
+                      <fieldset
+                        className="min-w-0"
+                        aria-required="true"
+                        aria-describedby={
+                          pet.species !== OTHER_SPECIES_VALUE && rowError.species
+                            ? `pet-species-error-${pet.id}`
+                            : undefined
+                        }
+                      >
+                        <legend className="mb-2 text-sm font-semibold text-[var(--task-text)]">
+                          Type
+                        </legend>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          {[...COMMON_PET_SPECIES, OTHER_SPECIES_VALUE].map(
+                            (species) => {
+                              const selected = pet.species === species;
+
+                              return (
+                                <button
+                                  key={species}
+                                  type="button"
+                                  onClick={() => {
+                                    updatePet(pet.id, { species });
+                                    clearPetError(pet.id, "species");
+                                  }}
+                                  className={`flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-[var(--task-radius-control)] border px-2.5 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--task-focus)] ${
+                                    selected
+                                      ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white"
+                                      : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)] hover:bg-[var(--task-surface)]"
+                                  }`}
+                                  aria-pressed={selected}
+                                >
+                                  <PetTypeIcon type={species} />
+                                  <span className="min-w-0 leading-tight">
+                                    {species}
+                                  </span>
+                                </button>
+                              );
+                            },
+                          )}
+                        </div>
+                        {pet.species !== OTHER_SPECIES_VALUE &&
+                        rowError.species ? (
+                          <p
+                            id={`pet-species-error-${pet.id}`}
+                            className="mt-2 text-sm text-[var(--task-danger)]"
+                            role="alert"
+                          >
+                            {rowError.species}
+                          </p>
+                        ) : null}
+                      </fieldset>
+                    </div>
+
+                    {pet.species === OTHER_SPECIES_VALUE ? (
+                      <FormField
+                        id={`pet-custom-species-${pet.id}`}
+                        label="What kind of pet?"
+                        className="mt-3"
+                        type="text"
+                        value={pet.customSpecies}
+                        onChange={(event) => {
+                          updatePet(pet.id, {
+                            customSpecies: event.target.value,
+                          });
+                          clearPetError(pet.id, "species");
+                        }}
+                        error={rowError.species}
+                        maxLength={MAX_PET_FIELD_LENGTH}
+                        autoComplete="off"
+                        aria-required="true"
+                        placeholder="For example, Snail"
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
 
             <Button
               type="button"
               variant="quiet"
               className="mt-3"
-              onClick={addPetName}
-              disabled={petNames.length >= 10}
+              onClick={addPet}
+              disabled={pets.length >= MAX_PUBLIC_BOOKING_PETS}
             >
               Add another pet
             </Button>
             <p className="mt-2 text-xs leading-5 text-[var(--task-text-muted)]">
-              Up to 10 pets may be included in one booking.
+              Up to {MAX_PUBLIC_BOOKING_PETS} pets may be included in one
+              booking.
             </p>
           </FieldGroup>
 
-          <FieldGroup legend="Dog size">
-            <div className="flex flex-wrap gap-2">
-              {DOG_SIZE_OPTIONS.map((option) => {
-                const selected = dogSize.includes(option.value);
+          {hasDog ? (
+            <FieldGroup legend="Dog sizes in this booking">
+              <p className="mb-3 text-sm text-[var(--task-text-muted)]">
+                Select all sizes that apply to the dogs in this booking.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {DOG_SIZE_OPTIONS.map((option) => {
+                  const selected = dogSize.includes(option.value);
 
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => toggleDogSize?.(option.value)}
-                    className={`min-h-11 rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                      selected
-                        ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white"
-                        : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)] hover:bg-[var(--task-surface-soft)]"
-                    }`}
-                    aria-pressed={selected}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => toggleDogSize?.(option.value)}
+                      className={`min-h-11 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                        selected
+                          ? "border-[var(--task-primary)] bg-[var(--task-primary)] text-white"
+                          : "border-[var(--task-border-strong)] bg-white text-[var(--task-text)] hover:bg-[var(--task-surface-soft)]"
+                      }`}
+                      aria-pressed={selected}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
 
-            <p className="mt-2 text-xs text-[var(--task-text-muted)]">
-              Selected:{" "}
-              {dogSize.length
-                ? DOG_SIZE_OPTIONS.filter((option) =>
-                    dogSize.includes(option.value)
-                  )
-                    .map((option) => option.label)
-                    .join(", ")
-                : "None yet"}
-            </p>
-          </FieldGroup>
-
-          <FormField
-              as="select"
-              id="weight-class"
-              label="Weight class"
-              hint="Choose the closest fit for your pet."
-              value={weightClass}
-              onChange={(e) => setWeightClass?.(e.target.value)}
-            >
-              <option value="">Select weight class</option>
-              {WEIGHT_CLASS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-          </FormField>
+              <p className="mt-2 text-xs text-[var(--task-text-muted)]">
+                Selected:{" "}
+                {dogSize.length
+                  ? DOG_SIZE_OPTIONS.filter((option) =>
+                      dogSize.includes(option.value),
+                    )
+                      .map((option) => option.label)
+                      .join(", ")
+                  : "None yet"}
+              </p>
+            </FieldGroup>
+          ) : null}
         </div>
       </section>
 

@@ -4,9 +4,6 @@ import { useMemo } from "react";
 import { formatTimeSlots, formatTime12h } from "../bookingFormUtils";
 import { formatServiceAddress } from "@/lib/formatAddress";
 import { Button, Notice } from "@/components/ui/Foundation";
-import {
-  formatBookingPetNames,
-} from "@/lib/bookings/formatPetNames";
 
 const DOG_SIZE_LABELS = {
   SMALL: "Small",
@@ -65,7 +62,7 @@ export default function BookingStepReview({
   bathExtra,
   hasAnyAddOns,
   client,
-  petNames = [],
+  pets = [],
   serviceLocation,
   notes,
   dogSize = [],
@@ -208,7 +205,13 @@ export default function BookingStepReview({
           <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
             <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">Pets</dt>
             <dd className="mt-2 min-w-0 break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
-            <div>{formatBookingPetNames(petNames)}</div>
+              <ul className="space-y-1">
+                {pets.map((pet, index) => (
+                  <li key={`${pet.name}-${pet.species}-${index}`}>
+                    {pet.name || "—"} — {pet.species || "—"}
+                  </li>
+                ))}
+              </ul>
             </dd>
           </div>
 
@@ -223,17 +226,19 @@ export default function BookingStepReview({
             </dd>
           </div>
 
-          <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
-            <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">Pet details</dt>
-            <dd className="mt-2 min-w-0 break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
-            <div>
-              Dog size: {formatDogSizes(dogSize)}
+          {(dogSize.length || weightClass) && (
+            <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
+              <dt className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--task-primary)]">Pet details</dt>
+              <dd className="mt-2 min-w-0 break-words text-[15px] font-medium leading-6 text-[var(--task-text)] sm:mt-0">
+                {dogSize.length ? (
+                  <div>Dog size: {formatDogSizes(dogSize)}</div>
+                ) : null}
+                {weightClass ? (
+                  <div>Weight class: {formatWeightClass(weightClass)}</div>
+                ) : null}
+              </dd>
             </div>
-            <div>
-              Weight class: {formatWeightClass(weightClass)}
-            </div>
-            </dd>
-          </div>
+          )}
 
           {hasAnyAddOns && (
             <div className="py-5 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-7">
