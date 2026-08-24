@@ -288,6 +288,11 @@ model User {
   sentMessages Message[] @relation("MessageSender")
 
   conversationParticipants ConversationParticipant[]
+
+  clientCareRatesSet        ClientCareRate[]        @relation("ClientCareRateSetBy")
+  defaultSitterCareRatesSet DefaultSitterCareRate[] @relation("DefaultSitterCareRateSetBy")
+  sitterCareRates           SitterCareRate[]        @relation("SitterCareRates")
+  sitterCareRatesSet        SitterCareRate[]        @relation("SitterCareRateSetBy")
 }
 
 model Conversation {
@@ -388,8 +393,9 @@ model Service {
   notes           String?
   isActive        Boolean @default(true)
 
-  bookings Booking[]      @relation("BookingService")
-  addOns   ServiceAddOn[]
+  bookings      Booking[]             @relation("BookingService")
+  addOns        ServiceAddOn[]
+  legacyMapping LegacyServiceMapping?
 }
 
 model ServiceAddOn {
@@ -404,11 +410,193 @@ model ServiceAddOn {
   service   Service @relation(fields: [serviceId], references: [id])
 }
 
+model CareOffering {
+  id                    String           @id @default(cuid())
+  code                  String           @unique
+  name                  String
+  description           String?
+  billingUnit           CareBillingUnit
+  scheduleKind          CareScheduleKind
+  allowsMixedSpecies    Boolean          @default(false)
+  allowsUnlistedSpecies Boolean          @default(false)
+  minimumPetCount       Int              @default(1)
+  maximumPetCount       Int?
+  isActive              Boolean          @default(true)
+  sortOrder             Int              @default(0)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
+  options         CareOption[]
+  speciesPolicies CareSpeciesPolicy[]
+  legacyMappings  LegacyServiceMapping[]
+}
+
+model CareOption {
+  id              String   @id @default(cuid())
+  offeringId      String
+  code            String   @unique
+  label           String
+  durationMinutes Int?
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  offering CareOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+
+  clientRate        ClientCareRate?
+  defaultSitterRate DefaultSitterCareRate?
+  sitterRates       SitterCareRate[]
+  legacyMappings    LegacyServiceMapping[]
+
+  @@index([offeringId, isActive])
+}
+
+model CareSpeciesPolicy {
+  id           String  @id @default(cuid())
+  offeringId   String
+  species      String
+  isSupported  Boolean @default(true)
+  minimumCount Int     @default(0)
+  maximumCount Int?
+
+  offering CareOffering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+
+  @@unique([offeringId, species])
+  @@index([offeringId])
+}
+
+model ClientCareRate {
+  id                     String   @id @default(cuid())
+  careOptionId           String   @unique
+  currency               String   @default("USD")
+  baseRateCents          Int
+  includedPetCount       Int      @default(1)
+  defaultAdditionalCents Int?
+  version                Int      @default(1)
+  isActive               Boolean  @default(true)
+  setByUserId            String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  careOption CareOption                @relation(fields: [careOptionId], references: [id], onDelete: Cascade)
+  setByUser  User                      @relation("ClientCareRateSetBy", fields: [setByUserId], references: [id], onDelete: Restrict)
+  petCharges ClientCareRatePetCharge[]
+
+  @@index([setByUserId])
+}
+
+model ClientCareRatePetCharge {
+  id              String @id @default(cuid())
+  clientRateId    String
+  species         String
+  includedCount   Int    @default(0)
+  additionalCents Int
+
+  clientRate ClientCareRate @relation(fields: [clientRateId], references: [id], onDelete: Cascade)
+
+  @@unique([clientRateId, species])
+  @@index([clientRateId])
+}
+
+model DefaultSitterCareRate {
+  id                     String   @id @default(cuid())
+  careOptionId           String   @unique
+  currency               String   @default("USD")
+  baseCompensationCents  Int
+  includedPetCount       Int      @default(1)
+  defaultAdditionalCents Int?
+  version                Int      @default(1)
+  isActive               Boolean  @default(true)
+  setByUserId            String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  careOption CareOption                       @relation(fields: [careOptionId], references: [id], onDelete: Cascade)
+  setByUser  User                             @relation("DefaultSitterCareRateSetBy", fields: [setByUserId], references: [id], onDelete: Restrict)
+  petCharges DefaultSitterCareRatePetCharge[]
+
+  @@index([setByUserId])
+}
+
+model DefaultSitterCareRatePetCharge {
+  id              String @id @default(cuid())
+  defaultRateId   String
+  species         String
+  includedCount   Int    @default(0)
+  additionalCents Int
+
+  defaultRate DefaultSitterCareRate @relation(fields: [defaultRateId], references: [id], onDelete: Cascade)
+
+  @@unique([defaultRateId, species])
+  @@index([defaultRateId])
+}
+
+model SitterCareRate {
+  id                     String   @id @default(cuid())
+  careOptionId           String
+  sitterId               String
+  currency               String   @default("USD")
+  baseCompensationCents  Int
+  includedPetCount       Int      @default(1)
+  defaultAdditionalCents Int?
+  version                Int      @default(1)
+  isActive               Boolean  @default(true)
+  setByUserId            String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  careOption CareOption                @relation(fields: [careOptionId], references: [id], onDelete: Cascade)
+  sitter     User                      @relation("SitterCareRates", fields: [sitterId], references: [id], onDelete: Cascade)
+  setByUser  User                      @relation("SitterCareRateSetBy", fields: [setByUserId], references: [id], onDelete: Restrict)
+  petCharges SitterCareRatePetCharge[]
+
+  @@unique([careOptionId, sitterId])
+  @@index([sitterId, isActive])
+  @@index([setByUserId])
+}
+
+model SitterCareRatePetCharge {
+  id              String @id @default(cuid())
+  sitterRateId    String
+  species         String
+  includedCount   Int    @default(0)
+  additionalCents Int
+
+  sitterRate SitterCareRate @relation(fields: [sitterRateId], references: [id], onDelete: Cascade)
+
+  @@unique([sitterRateId, species])
+  @@index([sitterRateId])
+}
+
+model LegacyServiceMapping {
+  id              String  @id @default(cuid())
+  legacyServiceId String  @unique
+  offeringId      String
+  optionId        String?
+  notes           String?
+
+  legacyService Service      @relation(fields: [legacyServiceId], references: [id], onDelete: Restrict)
+  offering      CareOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  option        CareOption?  @relation(fields: [optionId], references: [id], onDelete: Restrict)
+
+  @@index([offeringId])
+  @@index([optionId])
+}
 
 enum Role {
   OPERATOR
   SITTER
+}
+
+enum CareBillingUnit {
+  VISIT
+  NIGHT
+}
+
+enum CareScheduleKind {
+  TIMED_VISIT
+  OVERNIGHT_STAY
 }
 
 enum BookingStatus {
