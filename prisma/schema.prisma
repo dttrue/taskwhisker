@@ -436,6 +436,7 @@ model CareOption {
   offeringId      String
   code            String   @unique
   label           String
+  primarySpecies  String?
   durationMinutes Int?
   isActive        Boolean  @default(true)
   sortOrder       Int      @default(0)
@@ -495,7 +496,7 @@ model ClientCareRatePetCharge {
 
   clientRate ClientCareRate @relation(fields: [clientRateId], references: [id], onDelete: Cascade)
 
-  @@unique([clientRateId, species])
+  @@unique([clientRateId, species, includedCount])
   @@index([clientRateId])
 }
 
@@ -528,7 +529,7 @@ model DefaultSitterCareRatePetCharge {
 
   defaultRate DefaultSitterCareRate @relation(fields: [defaultRateId], references: [id], onDelete: Cascade)
 
-  @@unique([defaultRateId, species])
+  @@unique([defaultRateId, species, includedCount])
   @@index([defaultRateId])
 }
 
@@ -565,7 +566,7 @@ model SitterCareRatePetCharge {
 
   sitterRate SitterCareRate @relation(fields: [sitterRateId], references: [id], onDelete: Cascade)
 
-  @@unique([sitterRateId, species])
+  @@unique([sitterRateId, species, includedCount])
   @@index([sitterRateId])
 }
 
