@@ -10,15 +10,16 @@ import {
 } from "./calculatePricing.js";
 
 export class CanonicalClientQuoteError extends Error {
-  constructor(code, message) {
+  constructor(code, message, details = null) {
     super(message);
     this.name = "CanonicalClientQuoteError";
     this.code = code;
+    this.details = details;
   }
 }
 
-function reject(code, message) {
-  throw new CanonicalClientQuoteError(code, message);
+function reject(code, message, details) {
+  throw new CanonicalClientQuoteError(code, message, details);
 }
 
 function requireNonNegativeInteger(value, label) {
@@ -27,7 +28,7 @@ function requireNonNegativeInteger(value, label) {
   }
 }
 
-function normalizePets(pets) {
+export function normalizeCanonicalQuotePets(pets) {
   if (!Array.isArray(pets)) {
     reject("INVALID_PETS", "pets must be an array.");
   }
@@ -206,7 +207,7 @@ function findCharge(petCharges, species, ordinal) {
 
 export function calculateCanonicalClientQuote({ careOption, pets }) {
   validateConfiguration(careOption);
-  const normalizedPets = normalizePets(pets);
+  const normalizedPets = normalizeCanonicalQuotePets(pets);
   const speciesCounts = countSpecies(normalizedPets);
   validateCompatibility(careOption, normalizedPets, speciesCounts);
 
@@ -237,6 +238,12 @@ export function calculateCanonicalClientQuote({ careOption, pets }) {
       reject(
         "MISSING_PET_PRICE",
         `No additional-pet price exists for ${pet.species} #${ordinal}.`,
+        {
+          species: pet.species,
+          speciesOrdinal: ordinal,
+          primarySpecies,
+          isPrimarySpecies: pet.species === primarySpecies,
+        },
       );
     }
 
