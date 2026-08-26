@@ -52,15 +52,15 @@ model Booking {
   completedAt       DateTime?
   confirmedAt       DateTime?
 
-     // -----------------------------
+  // -----------------------------
   // CANCELLATION FEE
   // -----------------------------
-  cancellationFeeCents        Int      @default(0)
-  cancellationFeeWaived       Boolean  @default(false)
-  cancellationFeeRateBps      Int      @default(0)
+  cancellationFeeCents        Int       @default(0)
+  cancellationFeeWaived       Boolean   @default(false)
+  cancellationFeeRateBps      Int       @default(0)
   cancellationFeeReviewedAt   DateTime?
   cancellationFeeReviewedById String?
-  cancellationFeeReviewedBy   User?    @relation("BookingCancellationFeeReviewedBy", fields: [cancellationFeeReviewedById], references: [id])
+  cancellationFeeReviewedBy   User?     @relation("BookingCancellationFeeReviewedBy", fields: [cancellationFeeReviewedById], references: [id])
 
   serviceSummary String?
 
@@ -102,9 +102,10 @@ model Booking {
   // 🔹 CHILD VISITS
   visits Visit[]
 
-  history   BookingHistory[]
-  lineItems BookingLineItem[]
-  bookingPets BookingPet[]
+  history         BookingHistory[]
+  lineItems       BookingLineItem[]
+  bookingPets     BookingPet[]
+  pricingSnapshot BookingPricingSnapshot?
 
   @@index([startTime])
   @@index([status, startTime])
@@ -149,6 +150,49 @@ model BookingPet {
   @@index([petId])
 }
 
+model BookingPricingSnapshot {
+  id        String   @id @default(cuid())
+  bookingId String   @unique
+  createdAt DateTime @default(now())
+
+  economicsVersion Int
+  currency         String
+
+  careOfferingId   String?
+  careOfferingCode String
+  careOfferingName String
+
+  careOptionId    String?
+  careOptionCode  String
+  careOptionLabel String
+  primarySpecies  String?
+
+  billingUnit     CareBillingUnit
+  scheduleKind    CareScheduleKind
+  durationMinutes Int?
+
+  quantity Int
+
+  clientRateId      String?
+  clientRateVersion Int
+
+  serviceSubtotalCents Int
+  clientFeeBasisPoints Int
+  clientFeeCents       Int
+  clientTotalCents     Int
+
+  breakdown Json
+
+  booking      Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  careOffering CareOffering?   @relation(fields: [careOfferingId], references: [id], onDelete: SetNull)
+  careOption   CareOption?     @relation(fields: [careOptionId], references: [id], onDelete: SetNull)
+  clientRate   ClientCareRate? @relation(fields: [clientRateId], references: [id], onDelete: SetNull)
+
+  @@index([careOfferingId])
+  @@index([careOptionId])
+  @@index([clientRateId])
+}
+
 model BookingLineItem {
   id              String   @id @default(cuid())
   createdAt       DateTime @default(now())
@@ -185,7 +229,6 @@ model Visit {
   @@index([operatorId, date])
   @@index([sitterId, date])
   @@index([startTime, endTime])
-  
 }
 
 model BookingHistory {
@@ -265,8 +308,7 @@ model User {
 
   // 🔹 Bookings where this user is the OPERATOR (Bridget)
   operatorBookings Booking[] @relation("BookingOperator")
-  
-   
+
   blockedClientsCreated BlockedClient[] @relation("BlockedClientCreatedBy")
 
   cancellationFeeReviews Booking[] @relation("BookingCancellationFeeReviewedBy")
@@ -283,7 +325,7 @@ model User {
   historyToSitter   BookingHistory[] @relation("HistoryToSitter")
 
   // Missed visit review relations
-    missedVisitReviews BookingHistory[] @relation("MissedVisitReviewedBy")
+  missedVisitReviews BookingHistory[] @relation("MissedVisitReviewedBy")
 
   sentMessages Message[] @relation("MessageSender")
 
@@ -339,8 +381,8 @@ model ConversationParticipant {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  conversation    Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user            User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([conversationId, participantKey])
   @@index([conversationId])
@@ -426,9 +468,10 @@ model CareOffering {
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
-  options         CareOption[]
-  speciesPolicies CareSpeciesPolicy[]
-  legacyMappings  LegacyServiceMapping[]
+  options          CareOption[]
+  speciesPolicies  CareSpeciesPolicy[]
+  legacyMappings   LegacyServiceMapping[]
+  pricingSnapshots BookingPricingSnapshot[]
 }
 
 model CareOption {
@@ -449,6 +492,7 @@ model CareOption {
   defaultSitterRate DefaultSitterCareRate?
   sitterRates       SitterCareRate[]
   legacyMappings    LegacyServiceMapping[]
+  pricingSnapshots  BookingPricingSnapshot[]
 
   @@index([offeringId, isActive])
 }
@@ -480,9 +524,10 @@ model ClientCareRate {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  careOption CareOption                @relation(fields: [careOptionId], references: [id], onDelete: Cascade)
-  setByUser  User                      @relation("ClientCareRateSetBy", fields: [setByUserId], references: [id], onDelete: Restrict)
-  petCharges ClientCareRatePetCharge[]
+  careOption       CareOption                @relation(fields: [careOptionId], references: [id], onDelete: Cascade)
+  setByUser        User                      @relation("ClientCareRateSetBy", fields: [setByUserId], references: [id], onDelete: Restrict)
+  petCharges       ClientCareRatePetCharge[]
+  pricingSnapshots BookingPricingSnapshot[]
 
   @@index([setByUserId])
 }
