@@ -1,9 +1,9 @@
 // src/app/book/[serviceCode]/page.jsx
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
 import { getPublicServices, getPublicExtras } from "../actions";
 import PublicBookingWizard from "./PublicBookingWizard";
 import { PageShell } from "@/components/ui/Foundation";
+import { resolveDefaultPublicBookingSitter } from "@/lib/bookings/resolveDefaultPublicBookingSitter";
 
 function toPlain(value) {
   if (value == null) return value;
@@ -33,15 +33,7 @@ export default async function BookServicePage({ params }) {
   const rawServices = await getPublicServices();
   const rawExtraOptions = await getPublicExtras();
 
-  const providerUser = await prisma.user.findFirst({
-    where: {
-      email: "lunajobs13@gmail.com",
-      role: "SITTER",
-    },
-    select: {
-      id: true,
-    },
-  });
+  const providerUser = await resolveDefaultPublicBookingSitter();
 
   const services = toPlain(rawServices).map((service) => ({
     ...service,

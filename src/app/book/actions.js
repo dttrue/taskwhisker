@@ -13,6 +13,7 @@ import { geocodeAddress } from "@/lib/geocodeAddress";
 import { sendClientBookingConfirmationEmail } from "@/lib/email/sendClientBookingConfirmationEmail";
 import { checkBlockedClient } from "@/lib/blocklist/checkBlockedClient";
 import { sendSitterBookingNotificationEmail } from "@/lib/email/sendSitterBookingNotificationEmail";
+import { resolveDefaultPublicBookingSitter } from "@/lib/bookings/resolveDefaultPublicBookingSitter";
 const BUFFER_MINUTES = 15;
 
 
@@ -78,12 +79,7 @@ export async function createPublicBooking(rawInput) {
     throw new Error("Operator user not found in DB. Check your seed data.");
   }
 
-  const defaultSitter = await prisma.user.findFirst({
-    where: {
-      email: "lunajobs13@gmail.com",
-      role: "SITTER",
-    },
-  });
+  const defaultSitter = await resolveDefaultPublicBookingSitter();
   if (!defaultSitter) {
     throw new Error(
       "Default sitter user not found in DB. Check your seed data."

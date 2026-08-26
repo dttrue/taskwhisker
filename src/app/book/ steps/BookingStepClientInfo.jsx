@@ -114,7 +114,10 @@ export default function BookingStepClientInfo({
   dogSize = [],
   toggleDogSize,
   hasDog = false,
+  view = "all",
 }) {
+  const showClientDetails = view === "all" || view === "details";
+  const showPets = view === "all" || view === "pets";
   function updateClientField(field, value) {
     setClient((prev) => ({
       ...prev,
@@ -172,6 +175,8 @@ export default function BookingStepClientInfo({
 
   return (
     <div className="space-y-4">
+      {showClientDetails ? (
+      <>
       <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
         <div className="mb-3">
           <h2 className="text-base font-semibold text-[var(--task-text)]">Your info</h2>
@@ -312,7 +317,10 @@ export default function BookingStepClientInfo({
             />
         </div>
       </section>
+      </>
+      ) : null}
 
+      {showPets ? (
       <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
         <div className="mb-3">
           <h2 className="text-base font-semibold text-[var(--task-text)]">Pet details</h2>
@@ -501,7 +509,9 @@ export default function BookingStepClientInfo({
           ) : null}
         </div>
       </section>
+      ) : null}
 
+      {showClientDetails ? (
       <section className="rounded-[var(--task-radius-control)] border border-[var(--task-border)] bg-white p-4 sm:p-5">
         <div className="mb-3">
           <h2 className="text-base font-semibold text-[var(--task-text)]">General notes</h2>
@@ -520,6 +530,7 @@ export default function BookingStepClientInfo({
           placeholder="Pet routines, behavior notes, feeding details, medications, anything important..."
         />
       </section>
+      ) : null}
     </div>
   );
 }
