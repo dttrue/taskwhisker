@@ -219,6 +219,9 @@ model Visit {
   sitterId String?
   sitter   User?   @relation("VisitSitter", fields: [sitterId], references: [id])
 
+  performedBySitterId String?
+  performedBySitter   User?   @relation("VisitPerformedBySitter", fields: [performedBySitterId], references: [id], onDelete: Restrict)
+
   date      DateTime
   startTime DateTime
   endTime   DateTime
@@ -228,6 +231,7 @@ model Visit {
   @@index([bookingId])
   @@index([operatorId, date])
   @@index([sitterId, date])
+  @@index([performedBySitterId])
   @@index([startTime, endTime])
 }
 
@@ -318,6 +322,9 @@ model User {
 
   // 🔹 Visits where this user is the SITTER
   visitsAsSitter Visit[] @relation("VisitSitter")
+
+  // Completed visits this sitter actually performed
+  performedVisits Visit[] @relation("VisitPerformedBySitter")
 
   // History relations unchanged
   historyEntries    BookingHistory[] @relation("HistoryChangedBy")

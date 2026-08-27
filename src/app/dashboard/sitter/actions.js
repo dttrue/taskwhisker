@@ -4,6 +4,25 @@
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/auth";
 import { revalidatePath } from "next/cache";
+import {
+  SITTER_COMPLETION_OUTCOME,
+  buildSitterCompletionData,
+  isBookingReadyForAutoCompletion,
+  resolveSitterCompletionOutcome,
+} from "@/lib/visits/visitPerformerAttribution";
+
+function sitterCompletionError(outcome) {
+  if (outcome === SITTER_COMPLETION_OUTCOME.NOT_AUTHORIZED) {
+    return "Not authorized for this visit.";
+  }
+  if (outcome === SITTER_COMPLETION_OUTCOME.PERFORMER_CONFLICT) {
+    return "This visit was already completed by another sitter.";
+  }
+  if (outcome === SITTER_COMPLETION_OUTCOME.CANCELED) {
+    return "Canceled visits cannot be marked complete.";
+  }
+  return "Only confirmed visits can be marked complete.";
+}
 
 export async function completeVisitAsSitter(formData) {
   const session = await requireRole(["SITTER"]);
@@ -21,6 +40,7 @@ export async function completeVisitAsSitter(formData) {
       id: true,
       status: true,
       sitterId: true,
+      performedBySitterId: true,
       bookingId: true,
       startTime: true,
       endTime: true,
@@ -31,23 +51,16 @@ export async function completeVisitAsSitter(formData) {
     return { ok: false, error: "Visit not found." };
   }
 
-  if (visit.sitterId !== session.user.id) {
-    return { ok: false, error: "Not authorized for this visit." };
-  }
+  const initialOutcome = resolveSitterCompletionOutcome(
+    visit,
+    session.user.id
+  );
 
-  if (visit.status === "COMPLETED") {
+  if (initialOutcome === SITTER_COMPLETION_OUTCOME.ALREADY_COMPLETED) {
     return { ok: true, alreadyCompleted: true };
   }
-
-  if (visit.status === "CANCELED") {
-    return { ok: false, error: "Canceled visits cannot be marked complete." };
-  }
-
-  if (visit.status !== "CONFIRMED") {
-    return {
-      ok: false,
-      error: "Only confirmed visits can be marked complete.",
-    };
+  if (initialOutcome !== SITTER_COMPLETION_OUTCOME.COMPLETE) {
+    return { ok: false, error: sitterCompletionError(initialOutcome) };
   }
 
   const now = new Date();
@@ -72,14 +85,36 @@ export async function completeVisitAsSitter(formData) {
     };
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.visit.update({
-      where: { id: visit.id },
-      data: {
-        status: "COMPLETED",
-        completedAt: now,
+  const completionResult = await prisma.$transaction(async (tx) => {
+    const transition = await tx.visit.updateMany({
+      where: {
+        id: visit.id,
+        sitterId: session.user.id,
+        status: "CONFIRMED",
+        performedBySitterId: null,
       },
+      data: buildSitterCompletionData(session.user.id, now),
     });
+
+    if (transition.count !== 1) {
+      const currentVisit = await tx.visit.findUnique({
+        where: { id: visit.id },
+        select: {
+          status: true,
+          sitterId: true,
+          performedBySitterId: true,
+        },
+      });
+      const outcome = currentVisit
+        ? resolveSitterCompletionOutcome(currentVisit, session.user.id)
+        : SITTER_COMPLETION_OUTCOME.INVALID_STATUS;
+
+      if (outcome === SITTER_COMPLETION_OUTCOME.ALREADY_COMPLETED) {
+        return { ok: true, alreadyCompleted: true };
+      }
+
+      return { ok: false, error: sitterCompletionError(outcome) };
+    }
 
     await tx.bookingHistory.create({
       data: {
@@ -105,7 +140,7 @@ export async function completeVisitAsSitter(formData) {
       select: { id: true },
     });
 
-    const allDone = remainingVisits.length === 0;
+    const allDone = isBookingReadyForAutoCompletion(remainingVisits.length);
 
     if (allDone) {
       const booking = await tx.booking.findUnique({
@@ -137,7 +172,13 @@ export async function completeVisitAsSitter(formData) {
         });
       }
     }
+
+    return { ok: true };
   });
+
+  if (!completionResult.ok || completionResult.alreadyCompleted) {
+    return completionResult;
+  }
 
   revalidatePath("/dashboard/sitter");
   revalidatePath("/dashboard/operator");

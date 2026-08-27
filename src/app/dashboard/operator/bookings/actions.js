@@ -10,6 +10,11 @@ import {
   calculateCancellationFeeCents,
   cancelBookingTransaction,
 } from "@/lib/bookings/cancelBookingTransaction";
+import {
+  REASSIGNABLE_VISIT_STATUSES,
+  buildOperatorCompletionData,
+  isBookingReadyForAutoCompletion,
+} from "@/lib/visits/visitPerformerAttribution";
 async function getActorId(session) {
   if (session?.user?.id) {
     const byId = await prisma.user.findUnique({
@@ -529,10 +534,7 @@ export async function completeVisitAsOperator(visitId) {
   await prisma.$transaction(async (tx) => {
     await tx.visit.update({
       where: { id: visit.id },
-      data: {
-        status: "COMPLETED",
-        completedAt: now,
-      },
+      data: buildOperatorCompletionData(now),
     });
 
     const remainingActiveVisits = await tx.visit.count({
@@ -544,7 +546,7 @@ export async function completeVisitAsOperator(visitId) {
       },
     });
 
-    if (remainingActiveVisits === 0) {
+    if (isBookingReadyForAutoCompletion(remainingActiveVisits)) {
       const booking = await tx.booking.findUnique({
         where: { id: visit.bookingId },
         select: { status: true },
@@ -694,7 +696,10 @@ export async function assignSitter(arg1, arg2) {
       data: { sitterId: toSitterId },
     }),
     prisma.visit.updateMany({
-      where: { bookingId },
+      where: {
+        bookingId,
+        status: { in: REASSIGNABLE_VISIT_STATUSES },
+      },
       data: { sitterId: toSitterId },
     }),
     prisma.bookingHistory.create({
