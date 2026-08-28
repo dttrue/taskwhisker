@@ -4,7 +4,6 @@ import "dotenv/config";
 
 import { PrismaClient } from "@prisma/client";
 
-const APPROVED_QA_BRANCH_ID = "br-steep-resonance-ajfgfbq3";
 const PROHIBITED_BRANCH_SUFFIX = "j4y";
 
 const OFFERINGS = [
@@ -220,6 +219,15 @@ async function getIdentity(url) {
 }
 
 async function assertSafeDatabase() {
+  const expectedQaBranchId = process.env.TASKWHISKER_QA_BRANCH_ID?.trim();
+  if (!expectedQaBranchId) {
+    throw new Error("TASKWHISKER_QA_BRANCH_ID is required.");
+  }
+  assert.equal(
+    expectedQaBranchId.endsWith(PROHIBITED_BRANCH_SUFFIX),
+    false,
+    "TASKWHISKER_QA_BRANCH_ID must not identify the shared Neon branch.",
+  );
   if (!process.env.DATABASE_URL || !process.env.DIRECT_URL) {
     throw new Error("DATABASE_URL and DIRECT_URL are required.");
   }
@@ -236,7 +244,7 @@ async function assertSafeDatabase() {
   );
   assert.equal(
     databaseIdentity.branchId,
-    APPROVED_QA_BRANCH_ID,
+    expectedQaBranchId,
     "Connected Neon branch is not the approved disposable QA branch.",
   );
   assert.equal(
