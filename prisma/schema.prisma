@@ -9,23 +9,70 @@ datasource db {
 }
 
 model Client {
-  id           String    @id @default(cuid())
+  id           String        @id @default(cuid())
   name         String
   phone        String?
-  email        String?   @unique
+  email        String?       @unique
   addressLine1 String?
   addressLine2 String?
   city         String?
   state        String?
   postalCode   String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   bookings     Booking[]
   pets         Pet[]
+  origin       ClientOrigin?
 
   @@index([name])
   @@index([email])
   @@index([phone])
+}
+
+model ClientOrigin {
+  id                String                  @id @default(cuid())
+  clientId          String                  @unique
+  kind              ClientOriginKind
+  source            ClientAttributionSource
+  referringSitterId String?
+  attributedAt      DateTime                @default(now())
+  setByUserId       String?
+  version           Int                     @default(1)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  client          Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  referringSitter User?               @relation("ClientOriginReferringSitter", fields: [referringSitterId], references: [id], onDelete: Restrict)
+  setByUser       User?               @relation("ClientOriginSetBy", fields: [setByUserId], references: [id], onDelete: SetNull)
+  events          ClientOriginEvent[]
+
+  @@index([kind])
+  @@index([referringSitterId])
+  @@index([setByUserId])
+}
+
+model ClientOriginEvent {
+  id              String                   @id @default(cuid())
+  clientOriginId  String
+  fromKind        ClientOriginKind?
+  toKind          ClientOriginKind
+  fromSource      ClientAttributionSource?
+  toSource        ClientAttributionSource
+  fromSitterId    String?
+  toSitterId      String?
+  reason          String
+  changedByUserId String
+  createdAt       DateTime                 @default(now())
+
+  clientOrigin ClientOrigin @relation(fields: [clientOriginId], references: [id], onDelete: Restrict)
+  fromSitter   User?        @relation("ClientOriginEventFromSitter", fields: [fromSitterId], references: [id], onDelete: Restrict)
+  toSitter     User?        @relation("ClientOriginEventToSitter", fields: [toSitterId], references: [id], onDelete: Restrict)
+  changedBy    User         @relation("ClientOriginEventChangedBy", fields: [changedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([clientOriginId, createdAt])
+  @@index([fromSitterId])
+  @@index([toSitterId])
+  @@index([changedByUserId])
 }
 
 model Booking {
@@ -102,10 +149,11 @@ model Booking {
   // 🔹 CHILD VISITS
   visits Visit[]
 
-  history         BookingHistory[]
-  lineItems       BookingLineItem[]
-  bookingPets     BookingPet[]
-  pricingSnapshot BookingPricingSnapshot?
+  history             BookingHistory[]
+  lineItems           BookingLineItem[]
+  bookingPets         BookingPet[]
+  pricingSnapshot     BookingPricingSnapshot?
+  attributionSnapshot BookingAttributionSnapshot?
 
   @@index([startTime])
   @@index([status, startTime])
@@ -114,6 +162,27 @@ model Booking {
   @@index([operatorId, startTime])
   @@index([serviceLat, serviceLng])
   @@index([cancellationFeeReviewedById])
+}
+
+model BookingAttributionSnapshot {
+  id                  String                  @id @default(cuid())
+  bookingId           String                  @unique
+  clientOriginKind    ClientOriginKind
+  referringSitterId   String?
+  referringSitterName String?
+  requestedSitterId   String?
+  requestedSitterName String?
+  compensationLane    BookingCompensationLane
+  attributionSource   ClientAttributionSource
+  createdAt           DateTime                @default(now())
+
+  booking         Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  referringSitter User?   @relation("BookingAttributionReferringSitter", fields: [referringSitterId], references: [id], onDelete: SetNull)
+  requestedSitter User?   @relation("BookingAttributionRequestedSitter", fields: [requestedSitterId], references: [id], onDelete: SetNull)
+
+  @@index([referringSitterId])
+  @@index([requestedSitterId])
+  @@index([compensationLane])
 }
 
 model Pet {
@@ -342,6 +411,14 @@ model User {
   defaultSitterCareRatesSet DefaultSitterCareRate[] @relation("DefaultSitterCareRateSetBy")
   sitterCareRates           SitterCareRate[]        @relation("SitterCareRates")
   sitterCareRatesSet        SitterCareRate[]        @relation("SitterCareRateSetBy")
+
+  clientOriginsReferred        ClientOrigin[]               @relation("ClientOriginReferringSitter")
+  clientOriginsSet             ClientOrigin[]               @relation("ClientOriginSetBy")
+  clientOriginEventsFromSitter ClientOriginEvent[]          @relation("ClientOriginEventFromSitter")
+  clientOriginEventsToSitter   ClientOriginEvent[]          @relation("ClientOriginEventToSitter")
+  clientOriginEventsChanged    ClientOriginEvent[]          @relation("ClientOriginEventChangedBy")
+  bookingAttributionsReferred  BookingAttributionSnapshot[] @relation("BookingAttributionReferringSitter")
+  bookingAttributionsRequested BookingAttributionSnapshot[] @relation("BookingAttributionRequestedSitter")
 }
 
 model Conversation {
@@ -650,6 +727,22 @@ enum CareBillingUnit {
 enum CareScheduleKind {
   TIMED_VISIT
   OVERNIGHT_STAY
+}
+
+enum ClientOriginKind {
+  BUSINESS
+  SITTER_REFERRAL
+}
+
+enum ClientAttributionSource {
+  BUSINESS_DEFAULT
+  REFERRAL_LINK
+  OPERATOR_VERIFIED
+}
+
+enum BookingCompensationLane {
+  BUSINESS_ASSIGNED
+  SITTER_ORIGINATED
 }
 
 enum BookingStatus {
