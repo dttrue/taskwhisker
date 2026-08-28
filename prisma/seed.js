@@ -469,7 +469,7 @@ async function main() {
       species: "DOG",
       category: "WALK",
       durationMinutes: 15,
-      basePriceCents: 1500,
+      basePriceCents: 2200,
     },
     {
       name: "Dog Walk (single dog, 30 min)",
@@ -517,7 +517,7 @@ async function main() {
       species: "CAT",
       category: "DROP_IN",
       durationMinutes: 15,
-      basePriceCents: 1000,
+      basePriceCents: 2000,
     },
     {
       name: "Cat Drop-In (one cat, 30 min)",
@@ -541,7 +541,7 @@ async function main() {
       species: "CAT",
       category: "DROP_IN",
       durationMinutes: 15,
-      basePriceCents: 2000,
+      basePriceCents: 2300,
       notes: "+$3 per visit per additional cat after two",
     },
     {

@@ -98,8 +98,8 @@ const OPTIONS = {
   CAT_15: makeOption({
     code: "DROP_IN_CAT_15",
     primarySpecies: "Cat",
-    baseRateCents: 1000,
-    petCharges: [["Cat", 1, 1000], ["Cat", 2, 300]],
+    baseRateCents: 2000,
+    petCharges: [["Cat", 1, 300]],
   }),
   CAT_30: makeOption({
     code: "DROP_IN_CAT_30",
@@ -116,7 +116,7 @@ const OPTIONS = {
   WALK_15: makeOption({
     code: "DOG_WALK_15",
     primarySpecies: "Dog",
-    baseRateCents: 1500,
+    baseRateCents: 2200,
     policies: [{ ...POLICY.Dog, minimumCount: 1, maximumCount: 1 }],
     maximumPetCount: 1,
   }),
@@ -159,17 +159,17 @@ const PARITY_CASES = [
   ["Dog Drop-In 30 · two", OPTIONS.DOG_30, pets("Dog", 2), 3000],
   ["Dog Drop-In 60 · one", OPTIONS.DOG_60, pets("Dog", 1), 3000],
   ["Dog Drop-In 60 · two", OPTIONS.DOG_60, pets("Dog", 2), 3500],
-  ["Cat Drop-In 15 · one", OPTIONS.CAT_15, pets("Cat", 1), 1000],
-  ["Cat Drop-In 15 · two", OPTIONS.CAT_15, pets("Cat", 2), 2000],
-  ["Cat Drop-In 15 · three", OPTIONS.CAT_15, pets("Cat", 3), 2300],
-  ["Cat Drop-In 15 · four", OPTIONS.CAT_15, pets("Cat", 4), 2600],
+  ["Cat Drop-In 15 · one", OPTIONS.CAT_15, pets("Cat", 1), 2000],
+  ["Cat Drop-In 15 · two", OPTIONS.CAT_15, pets("Cat", 2), 2300],
+  ["Cat Drop-In 15 · three", OPTIONS.CAT_15, pets("Cat", 3), 2600],
+  ["Cat Drop-In 15 · four", OPTIONS.CAT_15, pets("Cat", 4), 2900],
   ["Cat Drop-In 30 · one", OPTIONS.CAT_30, pets("Cat", 1), 2000],
   ["Cat Drop-In 30 · two", OPTIONS.CAT_30, pets("Cat", 2), 2200],
   ["Cat Drop-In 30 · three", OPTIONS.CAT_30, pets("Cat", 3), 2500],
   ["Cat Drop-In 60 · one", OPTIONS.CAT_60, pets("Cat", 1), 2500],
   ["Cat Drop-In 60 · two", OPTIONS.CAT_60, pets("Cat", 2), 2800],
   ["Cat Drop-In 60 · three", OPTIONS.CAT_60, pets("Cat", 3), 3100],
-  ["Dog Walk 15", OPTIONS.WALK_15, pets("Dog", 1), 1500],
+  ["Dog Walk 15", OPTIONS.WALK_15, pets("Dog", 1), 2200],
   ["Dog Walk 30", OPTIONS.WALK_30, pets("Dog", 1), 2200],
   ["Dog Walk 60", OPTIONS.WALK_60, pets("Dog", 1), 3000],
   ["Dog Overnight · one Dog", OPTIONS.DOG_OVERNIGHT, pets("Dog", 1), 6000],
@@ -221,6 +221,34 @@ test("applies the 10% client fee to representative subtotals", () => {
   assert.deepEqual(
     [overnight.clientFeeCents, overnight.clientTotalCents],
     [880, 9680],
+  );
+});
+
+test("applies the preview fee to updated 15-minute client prices", () => {
+  const oneCat = calculateCanonicalClientQuote({
+    careOption: OPTIONS.CAT_15,
+    pets: pets("Cat", 1),
+  });
+  const twoCats = calculateCanonicalClientQuote({
+    careOption: OPTIONS.CAT_15,
+    pets: pets("Cat", 2),
+  });
+  const dogWalk = calculateCanonicalClientQuote({
+    careOption: OPTIONS.WALK_15,
+    pets: pets("Dog", 1),
+  });
+
+  assert.deepEqual(
+    [oneCat.serviceSubtotalCents, oneCat.clientFeeCents, oneCat.clientTotalCents],
+    [2000, 200, 2200],
+  );
+  assert.deepEqual(
+    [twoCats.serviceSubtotalCents, twoCats.clientFeeCents, twoCats.clientTotalCents],
+    [2300, 230, 2530],
+  );
+  assert.deepEqual(
+    [dogWalk.serviceSubtotalCents, dogWalk.clientFeeCents, dogWalk.clientTotalCents],
+    [2200, 220, 2420],
   );
 });
 
