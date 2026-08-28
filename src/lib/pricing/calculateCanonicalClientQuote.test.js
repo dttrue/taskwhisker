@@ -104,13 +104,13 @@ const OPTIONS = {
   CAT_30: makeOption({
     code: "DROP_IN_CAT_30",
     primarySpecies: "Cat",
-    baseRateCents: 2000,
-    petCharges: [["Cat", 1, 200], ["Cat", 2, 300]],
+    baseRateCents: 2500,
+    petCharges: [["Cat", 1, 300]],
   }),
   CAT_60: makeOption({
     code: "DROP_IN_CAT_60",
     primarySpecies: "Cat",
-    baseRateCents: 2500,
+    baseRateCents: 3000,
     petCharges: [["Cat", 1, 300]],
   }),
   WALK_15: makeOption({
@@ -163,12 +163,14 @@ const PARITY_CASES = [
   ["Cat Drop-In 15 · two", OPTIONS.CAT_15, pets("Cat", 2), 2300],
   ["Cat Drop-In 15 · three", OPTIONS.CAT_15, pets("Cat", 3), 2600],
   ["Cat Drop-In 15 · four", OPTIONS.CAT_15, pets("Cat", 4), 2900],
-  ["Cat Drop-In 30 · one", OPTIONS.CAT_30, pets("Cat", 1), 2000],
-  ["Cat Drop-In 30 · two", OPTIONS.CAT_30, pets("Cat", 2), 2200],
-  ["Cat Drop-In 30 · three", OPTIONS.CAT_30, pets("Cat", 3), 2500],
-  ["Cat Drop-In 60 · one", OPTIONS.CAT_60, pets("Cat", 1), 2500],
-  ["Cat Drop-In 60 · two", OPTIONS.CAT_60, pets("Cat", 2), 2800],
-  ["Cat Drop-In 60 · three", OPTIONS.CAT_60, pets("Cat", 3), 3100],
+  ["Cat Drop-In 30 · one", OPTIONS.CAT_30, pets("Cat", 1), 2500],
+  ["Cat Drop-In 30 · two", OPTIONS.CAT_30, pets("Cat", 2), 2800],
+  ["Cat Drop-In 30 · three", OPTIONS.CAT_30, pets("Cat", 3), 3100],
+  ["Cat Drop-In 30 · four", OPTIONS.CAT_30, pets("Cat", 4), 3400],
+  ["Cat Drop-In 60 · one", OPTIONS.CAT_60, pets("Cat", 1), 3000],
+  ["Cat Drop-In 60 · two", OPTIONS.CAT_60, pets("Cat", 2), 3300],
+  ["Cat Drop-In 60 · three", OPTIONS.CAT_60, pets("Cat", 3), 3600],
+  ["Cat Drop-In 60 · four", OPTIONS.CAT_60, pets("Cat", 4), 3900],
   ["Dog Walk 15", OPTIONS.WALK_15, pets("Dog", 1), 2200],
   ["Dog Walk 30", OPTIONS.WALK_30, pets("Dog", 1), 2200],
   ["Dog Walk 60", OPTIONS.WALK_60, pets("Dog", 1), 3000],
@@ -250,6 +252,24 @@ test("applies the preview fee to updated 15-minute client prices", () => {
     [dogWalk.serviceSubtotalCents, dogWalk.clientFeeCents, dogWalk.clientTotalCents],
     [2200, 220, 2420],
   );
+});
+
+test("applies the preview fee to normalized Cat Drop-In prices", () => {
+  for (const [careOption, expected] of [
+    [OPTIONS.CAT_30, [[2500, 250, 2750], [2800, 280, 3080], [3100, 310, 3410], [3400, 340, 3740]]],
+    [OPTIONS.CAT_60, [[3000, 300, 3300], [3300, 330, 3630], [3600, 360, 3960], [3900, 390, 4290]]],
+  ]) {
+    for (const [index, expectedQuote] of expected.entries()) {
+      const quote = calculateCanonicalClientQuote({
+        careOption,
+        pets: pets("Cat", index + 1),
+      });
+      assert.deepEqual(
+        [quote.serviceSubtotalCents, quote.clientFeeCents, quote.clientTotalCents],
+        expectedQuote,
+      );
+    }
+  }
 });
 
 function assertQuoteError(run, code) {

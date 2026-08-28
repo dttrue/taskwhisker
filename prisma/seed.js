@@ -525,7 +525,7 @@ async function main() {
       species: "CAT",
       category: "DROP_IN",
       durationMinutes: 30,
-      basePriceCents: 2000,
+      basePriceCents: 2500,
     },
     {
       name: "Cat Drop-In (one cat, 60 min)",
@@ -533,7 +533,7 @@ async function main() {
       species: "CAT",
       category: "DROP_IN",
       durationMinutes: 60,
-      basePriceCents: 2500,
+      basePriceCents: 3000,
     },
     {
       name: "Cat Drop-In (two cats, 15 min)",
@@ -550,7 +550,7 @@ async function main() {
       species: "CAT",
       category: "DROP_IN",
       durationMinutes: 30,
-      basePriceCents: 2200,
+      basePriceCents: 2800,
       notes: "+$3 per visit per additional cat after two",
     },
     {
@@ -559,7 +559,7 @@ async function main() {
       species: "CAT",
       category: "DROP_IN",
       durationMinutes: 60,
-      basePriceCents: 2800,
+      basePriceCents: 3300,
       notes: "+$3 per visit per additional cat after two",
     },
   ];
