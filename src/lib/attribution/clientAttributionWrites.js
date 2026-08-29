@@ -20,6 +20,7 @@ import {
   normalizeEmail,
   normalizePhone,
 } from "../blocklist/normalizeBlockedClientInput.js";
+import { readVerifiedSitterReferralIntent } from "../referrals/sitterReferralCodeWrites.js";
 
 const authorizedWriteIntents = new WeakMap();
 
@@ -65,9 +66,12 @@ export async function resolveClientOriginWriteIntent({
   verifiedReferral = null,
 }) {
   const identityResolution = await findClientIdentity({ db, email, phone });
+  const trustedReferral = verifiedReferral
+    ? readVerifiedSitterReferralIntent({ db, verifiedReferral })
+    : null;
   const intent = resolveClientOriginIntent({
     identityResolution,
-    verifiedReferral,
+    verifiedReferral: trustedReferral,
   });
   authorizedWriteIntents.set(intent, {
     db,

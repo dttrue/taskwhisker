@@ -16,6 +16,8 @@ import {
   resolveClientOriginWriteIntent,
   resolveRequestedSitter,
 } from "./clientAttributionWrites.js";
+import { hashPublicReferralCode } from "../referrals/sitterReferralCodeContract.js";
+import { verifySitterReferralCode } from "../referrals/sitterReferralCodeWrites.js";
 
 function assertCode(run, code) {
   assert.throws(run, (error) => {
@@ -39,6 +41,7 @@ function makeDb({
   origins = [],
   bookings = [],
   snapshots = [],
+  referralCodes = [],
   raceOrigin = null,
 } = {}) {
   const state = {
@@ -48,6 +51,7 @@ function makeDb({
     events: [],
     bookings: new Map(bookings.map((row) => [row.id, { ...row }])),
     snapshots: new Map(snapshots.map((row) => [row.bookingId, { ...row }])),
+    referralCodes: new Map(referralCodes.map((row) => [row.id, { ...row }])),
     raceOrigin,
     nextId: 1,
   };
@@ -115,6 +119,22 @@ function makeDb({
         return updated;
       },
     },
+    sitterReferralCode: {
+      async findUnique({ where }) {
+        const row = [...state.referralCodes.values()].find(
+          (candidate) =>
+            (where.id && candidate.id === where.id) ||
+            (where.codeHash && candidate.codeHash === where.codeHash) ||
+            (where.activeSitterKey &&
+              candidate.activeSitterKey === where.activeSitterKey),
+        );
+        if (!row) return null;
+        return {
+          ...row,
+          sitter: state.users.get(row.sitterId) ?? null,
+        };
+      },
+    },
     clientOriginEvent: {
       async create({ data }) {
         const event = { id: `event-${state.nextId++}`, ...data };
@@ -159,6 +179,26 @@ const clientB = {
 const sitterA = { id: "sitter-a", name: "Sarah", role: "SITTER" };
 const sitterB = { id: "sitter-b", name: "Danny", role: "SITTER" };
 const operator = { id: "operator-1", name: "Bridget", role: "OPERATOR" };
+const referralCodeValues = new Map();
+
+async function prepareVerifiedReferral(db, sitter) {
+  let publicCode = referralCodeValues.get(sitter.id);
+  if (!publicCode) {
+    const fill = String.fromCharCode(65 + referralCodeValues.size);
+    publicCode = fill.repeat(43);
+    referralCodeValues.set(sitter.id, publicCode);
+  }
+  const id = `referral-${sitter.id}`;
+  db.state.users.set(sitter.id, { ...sitter });
+  db.state.referralCodes.set(id, {
+    id,
+    sitterId: sitter.id,
+    codeHash: hashPublicReferralCode(publicCode),
+    activeSitterKey: sitter.id,
+    revokedAt: null,
+  });
+  return verifySitterReferralCode({ db, publicCode });
+}
 
 const referralOrigin = {
   id: "origin-referral",
@@ -194,11 +234,17 @@ function snapshot(overrides = {}) {
 }
 
 async function prepareNewWriteIntent(db, verifiedReferral = null) {
+  const trustedReferral = verifiedReferral
+    ? await prepareVerifiedReferral(
+        db,
+        db.state.users.get(verifiedReferral.sitterId),
+      )
+    : null;
   const intent = await resolveClientOriginWriteIntent({
     db,
     email: client.email,
     phone: client.phone,
-    verifiedReferral,
+    verifiedReferral: trustedReferral,
   });
   db.state.clients.set(client.id, { ...client });
   return intent;
@@ -233,33 +279,35 @@ test("new verified SITTER_REFERRAL origin records the valid sitter", async () =>
   assert.equal(result.origin.referringSitterId, sitterA.id);
 });
 
-test("referring user must have SITTER role", async () => {
-  const db = makeDb({ users: [operator] });
-  const intent = await prepareNewWriteIntent(db, {
-    sitterId: operator.id,
-    source: "REFERRAL_LINK",
-  });
-  await assertRejectsCode(
+test("browser-shaped referral cannot satisfy the write contract", async () => {
+  const db = makeDb({ users: [sitterA] });
+  await assert.rejects(
     () =>
-      createOrVerifyClientOrigin({
+      resolveClientOriginWriteIntent({
         db,
-        clientId: client.id,
-        intent,
+        email: client.email,
+        phone: client.phone,
+        verifiedReferral: {
+          sitterId: sitterA.id,
+          source: "REFERRAL_LINK",
+        },
       }),
-    ATTRIBUTION_ERROR_CODES.INVALID_REFERRING_SITTER,
+    (error) => error?.code === "INVALID_REFERRAL_CODE",
   );
 });
 
 test("existing matching origin replay is idempotent", async () => {
-  const db = makeDb({ clients: [client], origins: [referralOrigin] });
+  const db = makeDb({
+    clients: [client],
+    origins: [referralOrigin],
+    users: [sitterA],
+  });
+  const verifiedReferral = await prepareVerifiedReferral(db, sitterA);
   const intent = await resolveClientOriginWriteIntent({
     db,
     email: client.email,
     phone: client.phone,
-    verifiedReferral: {
-      sitterId: referralOrigin.referringSitterId,
-      source: "REFERRAL_LINK",
-    },
+    verifiedReferral,
   });
   const result = await createOrVerifyClientOrigin({
     db,
@@ -271,28 +319,38 @@ test("existing matching origin replay is idempotent", async () => {
 });
 
 test("BUSINESS origin cannot be replaced by referral replay", async () => {
-  const db = makeDb({ clients: [client], origins: [businessOrigin] });
+  const db = makeDb({
+    clients: [client],
+    origins: [businessOrigin],
+    users: [sitterA],
+  });
+  const verifiedReferral = await prepareVerifiedReferral(db, sitterA);
   await assertRejectsCode(
     () =>
       resolveClientOriginWriteIntent({
         db,
         email: client.email,
         phone: client.phone,
-        verifiedReferral: { sitterId: sitterA.id, source: "REFERRAL_LINK" },
+        verifiedReferral,
       }),
     ATTRIBUTION_ERROR_CODES.CLIENT_ORIGIN_CONFLICT,
   );
 });
 
 test("Sitter A origin cannot be replaced by Sitter B", async () => {
-  const db = makeDb({ clients: [client], origins: [referralOrigin] });
+  const db = makeDb({
+    clients: [client],
+    origins: [referralOrigin],
+    users: [sitterB],
+  });
+  const verifiedReferral = await prepareVerifiedReferral(db, sitterB);
   await assertRejectsCode(
     () =>
       resolveClientOriginWriteIntent({
         db,
         email: client.email,
         phone: client.phone,
-        verifiedReferral: { sitterId: sitterB.id, source: "REFERRAL_LINK" },
+        verifiedReferral,
       }),
     ATTRIBUTION_ERROR_CODES.CLIENT_ORIGIN_CONFLICT,
   );
@@ -461,14 +519,15 @@ test("conflicting immutable snapshot replay is rejected", async () => {
 });
 
 test("existing client without origin cannot be claimed by referral intent", async () => {
-  const db = makeDb({ clients: [client] });
+  const db = makeDb({ clients: [client], users: [sitterA] });
+  const verifiedReferral = await prepareVerifiedReferral(db, sitterA);
   await assertRejectsCode(
     () =>
       resolveClientOriginWriteIntent({
         db,
         email: " CLIENT@example.com ",
         phone: null,
-        verifiedReferral: { sitterId: sitterA.id, source: "REFERRAL_LINK" },
+        verifiedReferral,
       }),
     ATTRIBUTION_ERROR_CODES.CLIENT_ORIGIN_CONFLICT,
   );
@@ -495,11 +554,12 @@ test("write boundary rejects a forged NEW referral intent for an existing client
 
 test("NEW referral intent for identity A cannot target unrelated Client B", async () => {
   const db = makeDb({ users: [sitterA] });
+  const verifiedReferral = await prepareVerifiedReferral(db, sitterA);
   const intent = await resolveClientOriginWriteIntent({
     db,
     email: client.email,
     phone: client.phone,
-    verifiedReferral: { sitterId: sitterA.id, source: "REFERRAL_LINK" },
+    verifiedReferral,
   });
   db.state.clients.set(clientB.id, { ...clientB });
   await assertRejectsCode(

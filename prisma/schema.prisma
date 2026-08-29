@@ -419,6 +419,30 @@ model User {
   clientOriginEventsChanged    ClientOriginEvent[]          @relation("ClientOriginEventChangedBy")
   bookingAttributionsReferred  BookingAttributionSnapshot[] @relation("BookingAttributionReferringSitter")
   bookingAttributionsRequested BookingAttributionSnapshot[] @relation("BookingAttributionRequestedSitter")
+  sitterReferralCodes          SitterReferralCode[]         @relation("SitterReferralCodeOwner")
+  sitterReferralCodesCreated   SitterReferralCode[]         @relation("SitterReferralCodeCreatedBy")
+  sitterReferralCodesRevoked   SitterReferralCode[]         @relation("SitterReferralCodeRevokedBy")
+}
+
+model SitterReferralCode {
+  id               String    @id @default(cuid())
+  sitterId         String
+  codeHash         String    @unique
+  activeSitterKey  String?   @unique
+  createdByUserId  String
+  revokedByUserId  String?
+  revocationReason String?
+  createdAt        DateTime  @default(now())
+  revokedAt        DateTime?
+
+  sitter    User  @relation("SitterReferralCodeOwner", fields: [sitterId], references: [id], onDelete: Restrict)
+  createdBy User  @relation("SitterReferralCodeCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  revokedBy User? @relation("SitterReferralCodeRevokedBy", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([sitterId, createdAt])
+  @@index([createdByUserId])
+  @@index([revokedByUserId])
+  @@index([revokedAt])
 }
 
 model Conversation {
