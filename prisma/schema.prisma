@@ -149,11 +149,14 @@ model Booking {
   // 🔹 CHILD VISITS
   visits Visit[]
 
-  history             BookingHistory[]
-  lineItems           BookingLineItem[]
-  bookingPets         BookingPet[]
-  pricingSnapshot     BookingPricingSnapshot?
-  attributionSnapshot BookingAttributionSnapshot?
+  history                        BookingHistory[]
+  lineItems                      BookingLineItem[]
+  bookingPets                    BookingPet[]
+  pricingSnapshot                BookingPricingSnapshot?
+  attributionSnapshot            BookingAttributionSnapshot?
+  sitterRewardEvents             SitterRewardEvent[]         @relation("SitterRewardEventBooking")
+  sitterRewardQualificationEvent SitterRewardEvent?          @relation("SitterRewardEventQualificationBooking")
+  rewardReservation              SitterRewardReservation?
 
   @@index([startTime])
   @@index([status, startTime])
@@ -422,6 +425,11 @@ model User {
   sitterReferralCodes          SitterReferralCode[]         @relation("SitterReferralCodeOwner")
   sitterReferralCodesCreated   SitterReferralCode[]         @relation("SitterReferralCodeCreatedBy")
   sitterReferralCodesRevoked   SitterReferralCode[]         @relation("SitterReferralCodeRevokedBy")
+  sitterRewardAccount          SitterRewardAccount?         @relation("SitterRewardAccountSitter")
+  sitterRewardEvents           SitterRewardEvent[]          @relation("SitterRewardEventSitter")
+  sitterRewardEventsActed      SitterRewardEvent[]          @relation("SitterRewardEventActor")
+  sitterRewardGrants           SitterRewardGrant[]          @relation("SitterRewardGrantSitter")
+  sitterRewardReservations     SitterRewardReservation[]    @relation("SitterRewardReservationSitter")
 }
 
 model SitterReferralCode {
@@ -443,6 +451,96 @@ model SitterReferralCode {
   @@index([createdByUserId])
   @@index([revokedByUserId])
   @@index([revokedAt])
+}
+
+model SitterRewardAccount {
+  id             String   @id @default(cuid())
+  sitterId       String   @unique
+  rewardLevel    Int      @default(0)
+  progressCount  Int      @default(0)
+  version        Int      @default(1)
+  currentGrantId String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sitter       User               @relation("SitterRewardAccountSitter", fields: [sitterId], references: [id], onDelete: Restrict)
+  currentGrant SitterRewardGrant? @relation("SitterRewardAccountCurrentGrant", fields: [currentGrantId], references: [id], onDelete: SetNull)
+
+  @@index([rewardLevel])
+}
+
+model SitterRewardEvent {
+  id                     String          @id @default(cuid())
+  sitterId               String
+  bookingId              String?         @map("auditBookingId")
+  qualificationBookingId String?         @unique(map: "SitterRewardEvent_bookingId_key") @map("bookingId")
+  grantId                String?
+  type                   RewardEventType
+  progressDelta          Int
+  rewardCycle            Int
+  reversesEventId        String?         @unique
+  reason                 String?
+  actorUserId            String?
+  createdAt              DateTime        @default(now())
+
+  sitter               User               @relation("SitterRewardEventSitter", fields: [sitterId], references: [id], onDelete: Restrict)
+  booking              Booking?           @relation("SitterRewardEventBooking", fields: [bookingId], references: [id], onDelete: Restrict)
+  qualificationBooking Booking?           @relation("SitterRewardEventQualificationBooking", fields: [qualificationBookingId], references: [id], onDelete: Restrict, map: "SitterRewardEvent_bookingId_fkey")
+  grant                SitterRewardGrant? @relation("SitterRewardEventGrant", fields: [grantId], references: [id], onDelete: Restrict)
+  actor                User?              @relation("SitterRewardEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  reversesEvent        SitterRewardEvent? @relation("SitterRewardEventReversal", fields: [reversesEventId], references: [id], onDelete: Restrict)
+  reversedByEvent      SitterRewardEvent? @relation("SitterRewardEventReversal")
+  triggeredGrant       SitterRewardGrant? @relation("SitterRewardGrantTrigger")
+
+  @@index([sitterId, rewardCycle, createdAt])
+  @@index([bookingId, createdAt])
+  @@index([grantId, createdAt])
+  @@index([type, createdAt])
+  @@index([actorUserId])
+}
+
+model SitterRewardGrant {
+  id             String            @id @default(cuid())
+  sitterId       String
+  rewardLevel    Int
+  feeBasisPoints Int
+  maximumUses    Int
+  startsAt       DateTime
+  expiresAt      DateTime
+  status         RewardGrantStatus @default(ACTIVE)
+  triggerEventId String            @unique
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  sitter            User                      @relation("SitterRewardGrantSitter", fields: [sitterId], references: [id], onDelete: Restrict)
+  triggerEvent      SitterRewardEvent         @relation("SitterRewardGrantTrigger", fields: [triggerEventId], references: [id], onDelete: Restrict)
+  currentForAccount SitterRewardAccount?      @relation("SitterRewardAccountCurrentGrant")
+  events            SitterRewardEvent[]       @relation("SitterRewardEventGrant")
+  reservations      SitterRewardReservation[]
+
+  @@index([sitterId, status, expiresAt])
+  @@index([status, expiresAt])
+}
+
+model SitterRewardReservation {
+  id            String                  @id @default(cuid())
+  grantId       String
+  bookingId     String                  @unique
+  sitterId      String
+  status        RewardReservationStatus @default(RESERVED)
+  reservedAt    DateTime
+  consumedAt    DateTime?
+  releasedAt    DateTime?
+  releaseReason String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  grant   SitterRewardGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  booking Booking           @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  sitter  User              @relation("SitterRewardReservationSitter", fields: [sitterId], references: [id], onDelete: Restrict)
+
+  @@index([grantId, status])
+  @@index([sitterId, status])
 }
 
 model Conversation {
@@ -767,6 +865,27 @@ enum ClientAttributionSource {
 enum BookingCompensationLane {
   BUSINESS_ASSIGNED
   SITTER_ORIGINATED
+}
+
+enum RewardGrantStatus {
+  ACTIVE
+  EXHAUSTED
+  EXPIRED
+  REVOKED
+}
+
+enum RewardReservationStatus {
+  RESERVED
+  CONSUMED
+  RELEASED
+}
+
+enum RewardEventType {
+  QUALIFYING_COMPLETION
+  QUALIFICATION_REVERSAL
+  OPERATOR_PROGRESS_ADJUSTMENT
+  OPERATOR_LEVEL_ADJUSTMENT
+  GRANT_REVOKED
 }
 
 enum BookingStatus {
