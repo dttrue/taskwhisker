@@ -156,6 +156,7 @@ model Booking {
   attributionSnapshot            BookingAttributionSnapshot?
   sitterRewardEvents             SitterRewardEvent[]         @relation("SitterRewardEventBooking")
   sitterRewardQualificationEvent SitterRewardEvent?          @relation("SitterRewardEventQualificationBooking")
+  sitterRewardProgressEvent      SitterRewardEvent?          @relation("SitterRewardEventProgressBooking")
   rewardReservation              SitterRewardReservation?
 
   @@index([startTime])
@@ -474,6 +475,8 @@ model SitterRewardEvent {
   sitterId               String
   bookingId              String?         @map("auditBookingId")
   qualificationBookingId String?         @unique(map: "SitterRewardEvent_bookingId_key") @map("bookingId")
+  // One credited or suppressed progress adjudication; other audit events leave this null.
+  progressBookingId      String?         @unique
   grantId                String?
   type                   RewardEventType
   progressDelta          Int
@@ -481,11 +484,13 @@ model SitterRewardEvent {
   reversesEventId        String?         @unique
   reason                 String?
   actorUserId            String?
+  occurredAt             DateTime
   createdAt              DateTime        @default(now())
 
   sitter               User               @relation("SitterRewardEventSitter", fields: [sitterId], references: [id], onDelete: Restrict)
   booking              Booking?           @relation("SitterRewardEventBooking", fields: [bookingId], references: [id], onDelete: Restrict)
   qualificationBooking Booking?           @relation("SitterRewardEventQualificationBooking", fields: [qualificationBookingId], references: [id], onDelete: Restrict, map: "SitterRewardEvent_bookingId_fkey")
+  progressBooking      Booking?           @relation("SitterRewardEventProgressBooking", fields: [progressBookingId], references: [id], onDelete: Restrict)
   grant                SitterRewardGrant? @relation("SitterRewardEventGrant", fields: [grantId], references: [id], onDelete: Restrict)
   actor                User?              @relation("SitterRewardEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
   reversesEvent        SitterRewardEvent? @relation("SitterRewardEventReversal", fields: [reversesEventId], references: [id], onDelete: Restrict)
@@ -493,6 +498,7 @@ model SitterRewardEvent {
   triggeredGrant       SitterRewardGrant? @relation("SitterRewardGrantTrigger")
 
   @@index([sitterId, rewardCycle, createdAt])
+  @@index([sitterId, rewardCycle, occurredAt])
   @@index([bookingId, createdAt])
   @@index([grantId, createdAt])
   @@index([type, createdAt])
@@ -882,6 +888,8 @@ enum RewardReservationStatus {
 
 enum RewardEventType {
   QUALIFYING_COMPLETION
+  // Otherwise-qualified completion adjudicated with zero progress.
+  PROGRESS_SUPPRESSED
   QUALIFICATION_REVERSAL
   OPERATOR_PROGRESS_ADJUSTMENT
   OPERATOR_LEVEL_ADJUSTMENT
