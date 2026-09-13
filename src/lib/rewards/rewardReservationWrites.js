@@ -9,6 +9,7 @@ const reservationInclude = {
 };
 const bookingSelect = {
   id: true, sitterId: true, status: true, canceledAt: true, completedAt: true,
+  sitterCompensation: { select: { id: true } },
   attributionSnapshot: { select: {
     clientOriginKind: true, compensationLane: true,
     referringSitterId: true, requestedSitterId: true,
@@ -79,6 +80,7 @@ function touchAccount(tx, account, extra = {}) {
 
 function eligibilityReason(booking, sitter) {
   if (!booking) return "BOOKING_NOT_FOUND";
+  if (booking.sitterCompensation) return "COMPENSATION_ALREADY_COMMITTED";
   if (booking.status === "CANCELED" || booking.canceledAt) return "BOOKING_CANCELED";
   if (!["REQUESTED", "CONFIRMED"].includes(booking.status) || booking.completedAt) return "BOOKING_NOT_RESERVABLE";
   const snapshot = booking.attributionSnapshot;

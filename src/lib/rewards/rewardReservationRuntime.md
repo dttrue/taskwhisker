@@ -161,3 +161,11 @@ test real wall-clock expiry and irreversible transitions, and clean all fixtures
 in `finally`. Every protected and reward-table count must equal baseline after
 cleanup, with explicit zero-residue assertions for temporary entities. No seed,
 reset, schema migration, or pre-existing Booking mutation is involved.
+
+## Subsequent compensation persistence boundary
+
+Canonical BookingSitterCompensation now atomically persists terms and consumes a
+valid reservation; see `../bookings/compensation/README.md`. New reservations are
+refused once a compensation snapshot exists, under the Booking lock, with
+COMPENSATION_ALREADY_COMMITTED. Existing reservation replay and entitlement freeze
+remain unchanged. This does not activate public booking or payout settlement.

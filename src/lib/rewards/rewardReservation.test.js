@@ -104,6 +104,7 @@ for (const status of ["REQUESTED", "CONFIRMED"]) {
 }
 
 for (const [label, change, reason] of [
+  ["compensation committed", (s) => { s.booking.sitterCompensation = { id: "compensation" }; }, "COMPENSATION_ALREADY_COMMITTED"],
   ["missing booking", (s) => { s.booking = null; }, "BOOKING_NOT_FOUND"],
   ["business assigned", (s) => { s.booking.attributionSnapshot.compensationLane = "BUSINESS_ASSIGNED"; }, "NOT_SITTER_ORIGINATED"],
   ["missing attribution", (s) => { s.booking.attributionSnapshot = null; }, "ATTRIBUTION_SNAPSHOT_MISSING"],

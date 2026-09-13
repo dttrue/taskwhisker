@@ -174,6 +174,7 @@ model Booking {
   sitterRewardQualificationEvent SitterRewardEvent?          @relation("SitterRewardEventQualificationBooking")
   sitterRewardProgressEvent      SitterRewardEvent?          @relation("SitterRewardEventProgressBooking")
   rewardReservation              SitterRewardReservation?
+  sitterCompensation             BookingSitterCompensation?
 
   @@index([startTime])
   @@index([status, startTime])
@@ -286,6 +287,71 @@ model BookingPricingSnapshot {
   @@index([careOfferingId])
   @@index([careOptionId])
   @@index([clientRateId])
+}
+
+enum BookingSitterRateSource {
+  SITTER_OVERRIDE
+  DEFAULT_RATE
+  CANONICAL_CLIENT_SERVICE_SUBTOTAL
+}
+
+model BookingSitterCompensation {
+  id        String @id @default(cuid())
+  bookingId String @unique
+  sitterId  String
+  compensationLane BookingCompensationLane
+  currency String
+  quantity Int
+
+  clientBaseAggregateCents   Int?
+  clientServiceSubtotalCents Int?
+  sitterCompensationSubtotalCents Int
+  sitterFeeBasisPoints Int
+  sitterFeeCents Int
+  sitterPayoutCents Int
+  rateSource BookingSitterRateSource
+
+  // Frozen scalar identities survive catalog deletion; versions are real rate versions.
+  sourceRateId String?
+  rateVersion Int?
+  baseUnitCompensationCents Int?
+  baseAggregateCompensationCents Int?
+  additionalPetCompensationCents Int?
+  includedPetCount Int?
+  defaultAdditionalCents Int?
+
+  rewardApplied Boolean @default(false)
+  rewardReservationId String? @unique
+  rewardGrantId String?
+  rewardLevel Int?
+  // Required, with no caller/default clock. Writer samples PostgreSQL clock_timestamp().
+  committedAt DateTime
+  createdAt DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  sitter User @relation(fields: [sitterId], references: [id], onDelete: Restrict)
+  rewardReservation SitterRewardReservation? @relation(fields: [rewardReservationId], references: [id], onDelete: Restrict)
+  rewardGrant SitterRewardGrant? @relation(fields: [rewardGrantId], references: [id], onDelete: Restrict)
+  petCharges BookingSitterCompensationPetCharge[]
+
+  @@index([sitterId, committedAt])
+  @@index([rewardGrantId])
+}
+
+// Applied business pet economics, using the selected parent rate's version.
+// Null sourcePetChargeId means that rate's defaultAdditionalCents fallback.
+model BookingSitterCompensationPetCharge {
+  id String @id @default(cuid())
+  compensationId String
+  petPosition Int
+  species String
+  sourcePetChargeId String?
+  thresholdIncludedCount Int?
+  unitAmountCents Int
+  aggregateAmountCents Int
+  compensation BookingSitterCompensation @relation(fields: [compensationId], references: [id], onDelete: Restrict)
+
+  @@unique([compensationId, petPosition])
 }
 
 model BookingLineItem {
@@ -453,6 +519,7 @@ model User {
   sitterRewardEventsActed      SitterRewardEvent[]          @relation("SitterRewardEventActor")
   sitterRewardGrants           SitterRewardGrant[]          @relation("SitterRewardGrantSitter")
   sitterRewardReservations     SitterRewardReservation[]    @relation("SitterRewardReservationSitter")
+  bookingSitterCompensations    BookingSitterCompensation[]
 }
 
 model SitterReferralCode {
@@ -545,6 +612,7 @@ model SitterRewardGrant {
   currentForAccount SitterRewardAccount?      @relation("SitterRewardAccountCurrentGrant")
   events            SitterRewardEvent[]       @relation("SitterRewardEventGrant")
   reservations      SitterRewardReservation[]
+  compensations     BookingSitterCompensation[]
 
   @@index([sitterId, status, expiresAt])
   @@index([status, expiresAt])
@@ -566,6 +634,7 @@ model SitterRewardReservation {
   grant   SitterRewardGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
   booking Booking           @relation(fields: [bookingId], references: [id], onDelete: Restrict)
   sitter  User              @relation("SitterRewardReservationSitter", fields: [sitterId], references: [id], onDelete: Restrict)
+  compensation BookingSitterCompensation?
 
   @@index([grantId, status])
   @@index([sitterId, status])

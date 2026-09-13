@@ -61,7 +61,7 @@ export function calculateClientEconomics(serviceSubtotalCents) {
   };
 }
 
-export function calculateSitterEconomics(sitterCompensationSubtotalCents) {
+export function calculateSitterEconomics(sitterCompensationSubtotalCents, sitterFeeBasisPoints = SITTER_FEE_BPS) {
   assertMoneyCents(
     sitterCompensationSubtotalCents,
     "sitterCompensationSubtotalCents",
@@ -69,7 +69,7 @@ export function calculateSitterEconomics(sitterCompensationSubtotalCents) {
 
   const sitterFeeCents = calculatePercentageFeeCents(
     sitterCompensationSubtotalCents,
-    SITTER_FEE_BPS,
+    sitterFeeBasisPoints,
   );
   const sitterPayoutCents =
     sitterCompensationSubtotalCents - sitterFeeCents;

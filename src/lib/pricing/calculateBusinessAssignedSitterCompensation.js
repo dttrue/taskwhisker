@@ -95,7 +95,7 @@ function validateRate(rate) {
   }
 }
 
-function validateCareOption(careOption) {
+function validateCareOption(careOption, frozenClientPricing) {
   if (!careOption || typeof careOption !== "object") {
     reject("CARE_OPTION_NOT_FOUND", "The canonical care option does not exist.");
   }
@@ -118,6 +118,13 @@ function validateCareOption(careOption) {
     reject("INVALID_CONFIGURATION", "Care option primary species is invalid.");
   }
 
+  if (frozenClientPricing !== undefined) {
+    requireMoney(frozenClientPricing?.baseAggregateCents, "frozen client baseAggregateCents");
+    if (typeof frozenClientPricing.currency !== "string" || !frozenClientPricing.currency) {
+      reject("INVALID_CONFIGURATION", "Frozen client currency is invalid.");
+    }
+    return;
+  }
   const clientRate = careOption.clientRate;
   if (!clientRate || !clientRate.isActive) {
     reject(
@@ -184,6 +191,7 @@ export function calculateBusinessAssignedSitterCompensation({
   sitterId,
   pets,
   quantity,
+  frozenClientPricing,
 }) {
   if (typeof sitterId !== "string" || !sitterId.trim()) {
     reject("INVALID_INPUT", "sitterId is required.");
@@ -195,7 +203,7 @@ export function calculateBusinessAssignedSitterCompensation({
     reject("INVALID_INPUT", "rateSource is invalid.");
   }
 
-  validateCareOption(careOption);
+  validateCareOption(careOption, frozenClientPricing);
   validateRate(rate);
   let normalizedPets;
   try {
@@ -207,7 +215,7 @@ export function calculateBusinessAssignedSitterCompensation({
     throw error;
   }
 
-  if (rate.currency !== careOption.clientRate.currency) {
+  if (rate.currency !== (frozenClientPricing === undefined ? careOption.clientRate.currency : frozenClientPricing.currency)) {
     reject(
       "CURRENCY_MISMATCH",
       "Client and sitter compensation currencies do not match.",
@@ -216,9 +224,13 @@ export function calculateBusinessAssignedSitterCompensation({
 
   const maximumBaseCompensationCents =
     calculateMaximumOrdinaryBaseCompensationCents(
-      careOption.clientRate.baseRateCents,
+      frozenClientPricing === undefined ? careOption.clientRate.baseRateCents : frozenClientPricing.baseAggregateCents,
     );
-  if (rate.baseCompensationCents > maximumBaseCompensationCents) {
+  // Quotes retain their unit ceiling. Persistence compares aggregate base to
+  // the frozen aggregate ceiling, without reading a mutable client rate.
+  const baseForCeiling = frozenClientPricing === undefined ? rate.baseCompensationCents
+    : multiplyMoney(rate.baseCompensationCents, quantity, "Base compensation total");
+  if (baseForCeiling > maximumBaseCompensationCents) {
     reject(
       "COMPENSATION_CEILING_EXCEEDED",
       "The configured sitter base compensation exceeds the ordinary 90% ceiling.",
@@ -272,6 +284,7 @@ export function calculateBusinessAssignedSitterCompensation({
       species: pet.species,
       speciesOrdinal: ordinal,
       thresholdIncludedCount: charge?.includedCount ?? null,
+      ...(frozenClientPricing === undefined ? {} : { sourcePetChargeId: charge?.id ?? null }),
       unitAmountCents: amountCents,
       quantity,
       totalAmountCents: multiplyMoney(
