@@ -91,9 +91,25 @@ model Booking {
   startTime         DateTime
   endTime           DateTime
   status            BookingStatus @default(REQUESTED)
-  clientTotalCents  Int
-  platformFeeCents  Int
-  sitterPayoutCents Int
+  // Legacy economics only. Canonical bookings leave all three NULL.
+  clientTotalCents  Int?
+  platformFeeCents  Int?
+  sitterPayoutCents Int?
+
+  // Immutable canonical input contract; legacy bookings leave these NULL.
+  // IDs are frozen strings, deliberately not mutable catalog foreign keys.
+  canonicalCreationKey String? @unique
+  canonicalInputHash   String?
+  careOfferingId       String?
+  careOfferingCode     String?
+  careOptionId         String?
+  careOptionCode       String?
+  billingUnit          CareBillingUnit?
+  scheduleKind         CareScheduleKind?
+  durationMinutes      Int?
+  quantity             Int?
+  scheduleTimeZone     String?
+  canonicalSchedule    Json?
   priceConfirmedAt  DateTime?
   canceledAt        DateTime?
   completedAt       DateTime?
@@ -245,6 +261,12 @@ model BookingPricingSnapshot {
   durationMinutes Int?
 
   quantity Int
+
+  // Compensation consumers must use columns, never parse breakdown JSON.
+  baseUnitCents               Int
+  baseAggregateCents          Int
+  additionalPetAggregateCents Int
+  committedAt                DateTime @default(now())
 
   clientRateId      String?
   clientRateVersion Int

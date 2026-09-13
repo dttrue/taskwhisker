@@ -143,6 +143,87 @@ async function assertNewIntentStillResolvesToTarget({
   }
 }
 
+// Internal: intent must have been minted against this exact transaction client.
+// The outer owner controls commit/rollback; never starts an independent transaction.
+export async function createOrVerifyClientOriginInTransaction({ tx, clientId, intent, actorUserId = null }) {
+  const normalizedClientId = normalizeRequiredId(clientId, "clientId");
+  const authorization = intent ? authorizedWriteIntents.get(intent) : null;
+  if (!authorization || authorization.db !== tx) {
+    reject(ATTRIBUTION_ERROR_CODES.INVALID_INPUT, "A server-resolved client-origin intent for this transaction is required.");
+  }
+  const requested = { kind: intent.kind, source: intent.source, referringSitterId: intent.referringSitterId };
+  const result = await writeClientOrigin({ tx, normalizedClientId, intent, actorUserId, authorization, requested });
+  authorization.consumedClientId = normalizedClientId;
+  return result;
+}
+
+async function writeClientOrigin({ tx, normalizedClientId, intent, actorUserId, authorization, requested }) {
+  const client = await tx.client.findUnique({
+    where: { id: normalizedClientId },
+    include: { origin: true },
+  });
+  if (!client) {
+    reject(
+      ATTRIBUTION_ERROR_CODES.CLIENT_NOT_FOUND,
+      "The client was not found.",
+    );
+  }
+  assertIntentTargetsClient({
+    authorization,
+    client,
+    clientId: normalizedClientId,
+  });
+  await assertNewIntentStillResolvesToTarget({
+    tx,
+    authorization,
+    clientId: normalizedClientId,
+  });
+
+  if (client.origin && originsMatch(client.origin, requested)) {
+    return { origin: client.origin, created: false, idempotent: true };
+  }
+  if (client.origin) {
+    reject(
+      ATTRIBUTION_ERROR_CODES.CLIENT_ORIGIN_CONFLICT,
+      "The client already has different authoritative origin attribution.",
+    );
+  }
+
+  const target = validateOriginTarget({
+    ...requested,
+    clientStatus: intent.clientStatus,
+    existingOrigin: client.origin,
+  });
+
+  let setterId = null;
+  if (intent.source === "OPERATOR_VERIFIED") {
+    const normalizedActorId = normalizeRequiredId(actorUserId, "actorUserId");
+    const actor = await tx.user.findUnique({
+      where: { id: normalizedActorId },
+      select: { id: true, role: true },
+    });
+    validateOperator(actor, normalizedActorId);
+    setterId = actor.id;
+  }
+
+  if (target.referringSitterId) {
+    const sitter = await tx.user.findUnique({
+      where: { id: target.referringSitterId },
+      select: { id: true, role: true },
+    });
+    validateReferringSitter(sitter, target.referringSitterId);
+  }
+
+  const origin = await tx.clientOrigin.create({
+    data: {
+      clientId: normalizedClientId,
+      ...target,
+      setByUserId: setterId,
+    },
+  });
+  return { origin, created: true, idempotent: false };
+}
+
 export async function createOrVerifyClientOrigin({
   db,
   clientId,
@@ -166,70 +247,7 @@ export async function createOrVerifyClientOrigin({
 
   try {
     const result = await inTransaction(db, async (tx) => {
-      const client = await tx.client.findUnique({
-        where: { id: normalizedClientId },
-        include: { origin: true },
-      });
-      if (!client) {
-        reject(
-          ATTRIBUTION_ERROR_CODES.CLIENT_NOT_FOUND,
-          "The client was not found.",
-        );
-      }
-      assertIntentTargetsClient({
-        authorization,
-        client,
-        clientId: normalizedClientId,
-      });
-      await assertNewIntentStillResolvesToTarget({
-        tx,
-        authorization,
-        clientId: normalizedClientId,
-      });
-
-      if (client.origin && originsMatch(client.origin, requested)) {
-        return { origin: client.origin, created: false, idempotent: true };
-      }
-      if (client.origin) {
-        reject(
-          ATTRIBUTION_ERROR_CODES.CLIENT_ORIGIN_CONFLICT,
-          "The client already has different authoritative origin attribution.",
-        );
-      }
-
-      const target = validateOriginTarget({
-        ...requested,
-        clientStatus: intent.clientStatus,
-        existingOrigin: client.origin,
-      });
-
-      let setterId = null;
-      if (intent.source === "OPERATOR_VERIFIED") {
-        const normalizedActorId = normalizeRequiredId(actorUserId, "actorUserId");
-        const actor = await tx.user.findUnique({
-          where: { id: normalizedActorId },
-          select: { id: true, role: true },
-        });
-        validateOperator(actor, normalizedActorId);
-        setterId = actor.id;
-      }
-
-      if (target.referringSitterId) {
-        const sitter = await tx.user.findUnique({
-          where: { id: target.referringSitterId },
-          select: { id: true, role: true },
-        });
-        validateReferringSitter(sitter, target.referringSitterId);
-      }
-
-      const origin = await tx.clientOrigin.create({
-        data: {
-          clientId: normalizedClientId,
-          ...target,
-          setByUserId: setterId,
-        },
-      });
-      return { origin, created: true, idempotent: false };
+      return writeClientOrigin({ tx, normalizedClientId, intent, actorUserId, authorization, requested });
     });
     authorization.consumedClientId = normalizedClientId;
     return result;
@@ -383,34 +401,7 @@ export async function createBookingAttributionSnapshot({
 
   try {
     return await inTransaction(db, async (tx) => {
-      const booking = await tx.booking.findUnique({
-        where: { id: normalizedBookingId },
-        select: { id: true, attributionSnapshot: true },
-      });
-      if (!booking) {
-        reject(
-          ATTRIBUTION_ERROR_CODES.INVALID_ATTRIBUTION_STATE,
-          "The booking was not found for attribution snapshot creation.",
-        );
-      }
-      if (booking.attributionSnapshot) {
-        if (snapshotsMatch(booking.attributionSnapshot, normalizedSnapshot)) {
-          return {
-            snapshot: booking.attributionSnapshot,
-            created: false,
-            idempotent: true,
-          };
-        }
-        reject(
-          ATTRIBUTION_ERROR_CODES.ATTRIBUTION_SNAPSHOT_CONFLICT,
-          "The booking already has a different immutable attribution snapshot.",
-        );
-      }
-
-      const created = await tx.bookingAttributionSnapshot.create({
-        data: { bookingId: normalizedBookingId, ...normalizedSnapshot },
-      });
-      return { snapshot: created, created: true, idempotent: false };
+      return createBookingAttributionSnapshotInTransaction({ tx, bookingId: normalizedBookingId, snapshot: normalizedSnapshot });
     });
   } catch (error) {
     if (!isUniqueConstraintError(error)) throw error;
@@ -426,4 +417,38 @@ export async function createBookingAttributionSnapshot({
       "A concurrent write established a different immutable booking snapshot.",
     );
   }
+}
+
+// Internal transaction participant; existing wrapper retains its race handling.
+export async function createBookingAttributionSnapshotInTransaction({ tx, bookingId, snapshot }) {
+  const normalizedBookingId = normalizeRequiredId(bookingId, "bookingId");
+  const normalizedSnapshot = normalizeBookingAttributionSnapshot(snapshot);
+  const booking = await tx.booking.findUnique({
+    where: { id: normalizedBookingId },
+    select: { id: true, attributionSnapshot: true },
+  });
+  if (!booking) {
+    reject(
+      ATTRIBUTION_ERROR_CODES.INVALID_ATTRIBUTION_STATE,
+      "The booking was not found for attribution snapshot creation.",
+    );
+  }
+  if (booking.attributionSnapshot) {
+    if (snapshotsMatch(booking.attributionSnapshot, normalizedSnapshot)) {
+      return {
+        snapshot: booking.attributionSnapshot,
+        created: false,
+        idempotent: true,
+      };
+    }
+    reject(
+      ATTRIBUTION_ERROR_CODES.ATTRIBUTION_SNAPSHOT_CONFLICT,
+      "The booking already has a different immutable attribution snapshot.",
+    );
+  }
+
+  const created = await tx.bookingAttributionSnapshot.create({
+    data: { bookingId: normalizedBookingId, ...normalizedSnapshot },
+  });
+  return { snapshot: created, created: true, idempotent: false };
 }
