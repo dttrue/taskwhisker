@@ -1,5 +1,7 @@
 // src/app/dashboard/sitter/messages/[bookingId]/approveCancellationActions.js
 "use server";
+import { economicsSelect, cancellationGuard } from "@/lib/bookings/economics/bookingEconomics";
+
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
@@ -60,7 +62,7 @@ export async function approveClientCancellationRequestAsSitter({
       status: true,
       sitterId: true,
       clientLinkToken: true,
-      clientTotalCents: true,
+      ...economicsSelect,
     },
   });
 
@@ -99,6 +101,9 @@ export async function approveClientCancellationRequestAsSitter({
 
   const cancellationFeeWaived = Boolean(waiveCancellationFee);
 
+  const guard = cancellationGuard(booking);
+  if (!guard.ok) return guard;
+
   const cancellationFeeCents = cancellationFeeWaived
     ? 0
     : calculateCancellationFeeCents(booking.clientTotalCents);
@@ -133,13 +138,13 @@ export async function approveClientCancellationRequestAsSitter({
   );
 
   if (!result.ok) {
-    const error =
+    const error = result.error || (
       result.reason === "NOT_FOUND"
         ? "Booking not found."
         : result.reason === "COMPLETED"
         ? "Completed bookings cannot be canceled."
-        : "This booking is already canceled.";
-    return { ok: false, error };
+        : "This booking is already canceled.");
+    return { ok: false, error, reason: result.reason };
   }
 
   revalidatePath("/dashboard/sitter");

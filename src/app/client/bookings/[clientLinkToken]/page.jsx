@@ -1,3 +1,4 @@
+import { readBookingEconomics, formatFinancialCents, clientTotalDisplay, economicsInclude } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/client/bookings/[clientLinkToken]/page.jsx
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -62,6 +63,7 @@ export default async function ClientBookingPortalPage({ params }) {
       clientLinkToken,
     },
     include: {
+        ...economicsInclude,
       client: true,
       sitter: true,
       visits: {
@@ -78,6 +80,7 @@ export default async function ClientBookingPortalPage({ params }) {
     notFound();
   }
 
+  const economics = readBookingEconomics(booking);
   const messageHref = `/client/bookings/${booking.clientLinkToken}/messages`;
 
   const isCanceledBooking = booking.status === "CANCELED";
@@ -85,9 +88,9 @@ export default async function ClientBookingPortalPage({ params }) {
   const canRequestChanges = !isCanceledBooking && !isCompletedBooking;
 
   const hasCancellationFeeDecision =
-    isCanceledBooking && booking.cancellationFeeReviewedAt;
+    isCanceledBooking && economics.economicsKind === "LEGACY" && booking.cancellationFeeReviewedAt;
 
-  const cancellationFeeDisplay = !isCanceledBooking
+  const cancellationFeeDisplay = !isCanceledBooking || economics.economicsKind === "CANONICAL"
     ? null
     : booking.cancellationFeeWaived
     ? "Waived"
@@ -143,7 +146,7 @@ export default async function ClientBookingPortalPage({ params }) {
 
             <p>
               <span className="font-semibold text-zinc-950">Total:</span>{" "}
-              {formatMoney(booking.clientTotalCents)}
+              {clientTotalDisplay(booking, formatMoney)}
             </p>
 
             {isCanceledBooking ? (
@@ -219,7 +222,17 @@ export default async function ClientBookingPortalPage({ params }) {
           </div>
         </section>
 
-        {booking.lineItems.length > 0 && (
+        {economics.economicsKind === "CANONICAL" ? (
+          <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <h2 className="text-lg font-bold text-zinc-950">Price summary</h2>
+            <div className="mt-3 space-y-2 text-sm">
+              <p>Service: {formatFinancialCents(economics.client.subtotalCents)}</p>
+              <p>Client fee: {formatFinancialCents(economics.client.feeCents)}</p>
+              <p className="font-bold">Total: {clientTotalDisplay(booking, formatMoney)}</p>
+            </div>
+          </section>
+        ) : null}
+        {economics.economicsKind === "LEGACY" && booking.lineItems.length > 0 && (
           <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <h2 className="text-lg font-bold text-zinc-950">Price summary</h2>
 
@@ -246,7 +259,7 @@ export default async function ClientBookingPortalPage({ params }) {
             <div className="mt-4 space-y-2 border-t border-zinc-200 pt-3 text-sm">
               <div className="flex items-center justify-between font-bold">
                 <span>Total</span>
-                <span>{formatMoney(booking.clientTotalCents)}</span>
+                <span>{clientTotalDisplay(booking, formatMoney)}</span>
               </div>
 
               {isCanceledBooking ? (

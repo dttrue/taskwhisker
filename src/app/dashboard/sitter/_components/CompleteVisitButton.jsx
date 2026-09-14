@@ -30,7 +30,8 @@ export default function CompleteVisitButton({
       const result = await completeVisitAsSitter(formData);
 
       if (result?.ok) {
-        toast.success("Visit completed.");
+        if (result.completionBlocked) toast(result.bookingCompletion.error);
+        else toast.success("Visit completed.");
 
         if (nextVisitStartTime) {
           toast(`Next visit starts at ${formatTime(nextVisitStartTime)}.`, {

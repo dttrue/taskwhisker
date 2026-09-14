@@ -1,3 +1,4 @@
+import { bookingCompletionReview, readBookingEconomics, clientTotalDisplay, sitterPayoutDisplay as displaySitterPayout, economicsInclude } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/sitter/bookings/[id]/page.jsx
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -122,6 +123,7 @@ export default async function SitterBookingDetailPage({ params }) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: {
+        ...economicsInclude,
       client: true,
       sitter: true,
       visits: {
@@ -163,15 +165,17 @@ export default async function SitterBookingDetailPage({ params }) {
     ).length || 0;
   const visitProgressLabel = getVisitProgressLabel(booking.visits || []);
 
+  const completion = bookingCompletionReview(booking);
+  const economics = readBookingEconomics(booking);
   const isCanceledBooking = booking.status === "CANCELED";
   const sitterPayoutDisplay = isCanceledBooking
     ? "Canceled"
-    : formatMoney(booking.sitterPayoutCents || 0);
+    : displaySitterPayout(booking);
 
   const hasCancellationFeeDecision =
-    isCanceledBooking && booking.cancellationFeeReviewedAt;
+    isCanceledBooking && economics.economicsKind === "LEGACY" && booking.cancellationFeeReviewedAt;
 
-  const cancellationFeeDisplay = !isCanceledBooking
+  const cancellationFeeDisplay = !isCanceledBooking || economics.economicsKind === "CANONICAL"
     ? null
     : booking.cancellationFeeWaived
     ? "Waived"
@@ -555,6 +559,7 @@ export default async function SitterBookingDetailPage({ params }) {
                   </span>
                 </div>
 
+                {economics.economicsKind === "CANONICAL" && completion ? <p className="text-sm text-amber-800">{completion.error}</p> : null}
                 <div className="border-t border-zinc-200 pt-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-zinc-500">Sitter payout</span>
@@ -597,7 +602,7 @@ export default async function SitterBookingDetailPage({ params }) {
                       <div className="mt-3 border-t border-zinc-200 pt-3 flex items-center justify-between">
                         <span className="text-sm text-zinc-500">Total</span>
                         <span className="text-sm font-semibold text-zinc-900">
-                          {formatMoney(booking.clientTotalCents || 0)}
+                          {clientTotalDisplay(booking, formatMoney)}
                         </span>
                       </div>
                     </div>

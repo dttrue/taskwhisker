@@ -1,5 +1,7 @@
 // src/app/dashboard/sitter/_components/SitterDashboardLive.jsx
 "use client";
+import { completionGuard, sumKnownAmounts } from "@/lib/bookings/economics/bookingEconomics";
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -98,8 +100,8 @@ export default function SitterDashboardLive({
         return {
           ...booking,
           visits: updatedVisits,
-          status: hasRemainingVisits ? booking.status : "COMPLETED",
-          completedAt: hasRemainingVisits ? booking.completedAt : timestamp,
+          status: hasRemainingVisits || !completionGuard(booking, { legacyInvariant: false }).ok ? booking.status : "COMPLETED",
+          completedAt: hasRemainingVisits || !completionGuard(booking, { legacyInvariant: false }).ok ? booking.completedAt : timestamp,
           updatedAt: timestamp,
         };
       })
@@ -173,13 +175,14 @@ export default function SitterDashboardLive({
     const todayVisitCount = getRemainingVisitCountForToday(localBookings, now);
     const remainingTodayPayout = getRemainingPayoutForToday(localBookings, now);
     const optimisticEarnedToday = pendingOptimisticCompletedEntries.reduce(
-      (sum, v) => sum + (v.sitterPayoutCents || 0),
+      // Preserve the existing legacy optimistic metric; canonical allocation is unavailable.
+      (sum, v) => sumKnownAmounts([sum, v.payoutStatus === "LEGACY" ? 0 : null]),
       0
     );
-    const earnedToday = earnedTodayCents + optimisticEarnedToday;
+    const earnedToday = sumKnownAmounts([earnedTodayCents, optimisticEarnedToday]);
     const completedThisWeekCount =
       completedThisWeek + pendingOptimisticCompletedEntries.length;
-    const totalTodayPayout = remainingTodayPayout + earnedToday;
+    const totalTodayPayout = sumKnownAmounts([remainingTodayPayout, earnedToday]);
 
     const nextUpcomingVisit =
       localBookings

@@ -1,3 +1,4 @@
+import { formatFinancialCents } from "@/lib/bookings/economics/bookingEconomics";
 import { Button, Card, StatusBadge } from "@/components/ui/Foundation";
 
 const STATUS_PRESENTATION = {
@@ -9,8 +10,8 @@ const STATUS_PRESENTATION = {
   SCHEDULED: { label: "Scheduled", tone: "neutral" },
 };
 
-function formatMoney(cents = 0) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatMoney(cents = 0, missing = "Unavailable") {
+  return formatFinancialCents(cents, "USD", missing);
 }
 
 export default function DailyVisitCard({ visit, formatTime }) {
@@ -54,7 +55,7 @@ export default function DailyVisitCard({ visit, formatTime }) {
             <span className="break-words">
               Sitter: {visit.sitterName || "Unassigned"}
             </span>
-            <span>Payout: {formatMoney(visit.payoutPerVisitCents)}</span>
+            <span>Payout: {formatMoney(visit.payoutPerVisitCents, visit.payoutStatus === "PENDING" ? "Pending" : "Unavailable")}</span>
           </div>
 
           {visit.address ? (

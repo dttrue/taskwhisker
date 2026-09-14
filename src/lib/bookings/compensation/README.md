@@ -1,5 +1,7 @@
 # BookingSitterCompensation V1
 
+Current reader/completion integration is documented in [Canonical / legacy reader guarding](../economics/README.md). The phase-specific reader/activation audit below describes the earlier checkpoint; use that current audit for consumer status.
+
 Internal accounting persistence only. `bookingSitterCompensationService.js` exports
 `commitBookingSitterCompensation({ bookingId })`; its server-bound allowlist ignores
 caller sitter/lane, economics, currency, rate/reward identities and timestamps.

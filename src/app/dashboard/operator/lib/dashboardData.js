@@ -1,3 +1,4 @@
+import { economicsSelect, aggregateBookingAmounts, economicsInclude } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/operator/lib/dashboardData.js
 import { prisma } from "@/lib/db";
 import { buildDateWhere } from "./dashboardQuery";
@@ -33,35 +34,12 @@ function serializeBookingForMap(booking) {
   };
 }
 
-export function normalizeMetrics(grouped) {
-  const base = {
-    ALL: { count: 0, revenueCents: 0 },
-    REQUESTED: { count: 0, revenueCents: 0 },
-    CONFIRMED: { count: 0, revenueCents: 0 },
-    COMPLETED: { count: 0, revenueCents: 0 },
-    CANCELED: { count: 0, revenueCents: 0 },
-  };
-
-  for (const row of grouped) {
-    const s = row.status;
-    if (!base[s]) continue;
-    base[s].count = row._count?._all ?? 0;
-    base[s].revenueCents = row._sum?.clientTotalCents ?? 0;
-  }
-
-  base.ALL.count =
-    base.REQUESTED.count +
-    base.CONFIRMED.count +
-    base.COMPLETED.count +
-    base.CANCELED.count;
-
-  base.ALL.revenueCents =
-    base.REQUESTED.revenueCents +
-    base.CONFIRMED.revenueCents +
-    base.COMPLETED.revenueCents +
-    base.CANCELED.revenueCents;
-
-  return base;
+export function normalizeMetrics(bookings) {
+  return Object.fromEntries(["ALL", "REQUESTED", "CONFIRMED", "COMPLETED", "CANCELED"].map((status) => {
+    const rows = status === "ALL" ? bookings : bookings.filter((b) => b.status === status);
+    const amounts = aggregateBookingAmounts(rows);
+    return [status, { count: rows.length, revenueCents: amounts.totalCents, ...amounts }];
+  }));
 }
 
 function toClientValue(value) {
@@ -110,6 +88,7 @@ export async function getOperatorDashboardData({
     prisma.booking.findMany({
       where,
       include: {
+        ...economicsInclude,
         client: true,
         sitter: true,
         lineItems: true,
@@ -120,14 +99,12 @@ export async function getOperatorDashboardData({
       orderBy: { startTime: "asc" },
       take: 50,
     }),
-    prisma.booking.groupBy({
-      by: ["status"],
+    prisma.booking.findMany({
       where: {
         ...(operatorId ? { operatorId } : {}),
         ...dateWhere,
       },
-      _count: { _all: true },
-      _sum: { clientTotalCents: true },
+      select: { status: true, ...economicsSelect },
     }),
   ]);
 

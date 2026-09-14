@@ -96,6 +96,7 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
     serviceSummary,
     petDisplayName,
     payoutPerVisitCents,
+    payoutStatus,
     address,
     hasOpenCancellationRequest = false,
   } = entry;
@@ -138,7 +139,7 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
         </div>
 
         <span className="shrink-0 rounded-full border border-[#c9dfd4] bg-[var(--task-success-soft)] px-2.5 py-1 text-sm font-semibold text-[#285844]">
-          {formatMoney(payoutPerVisitCents)}
+          {formatMoney(payoutPerVisitCents, payoutStatus === "PENDING" ? "Pending" : "Unavailable")}
         </span>
       </div>
 
@@ -205,6 +206,7 @@ export default function VisitCard({ entry, now = new Date(), onComplete }) {
 
               if (result?.ok) {
                 onComplete?.(visit.id);
+                if (result.completionBlocked) setActionError(result.bookingCompletion.error);
               } else if (result?.error) {
                 setActionError(result.error);
               }

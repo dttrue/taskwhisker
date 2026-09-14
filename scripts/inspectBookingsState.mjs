@@ -1,3 +1,4 @@
+import { economicsInclude, readBookingEconomics, clientTotalDisplay, sitterPayoutDisplay, formatFinancialCents } from "../src/lib/bookings/economics/bookingEconomics.js";
 // scripts/inspectBookingsState.mjs
 import "dotenv/config";
 import pkg from "@prisma/client";
@@ -17,6 +18,7 @@ async function main() {
     orderBy: { createdAt: "desc" },
     take: 10,
     include: {
+      ...economicsInclude,
       client: true,
       sitter: true,
       history: {
@@ -40,11 +42,11 @@ async function main() {
     console.log(`Sitter: ${b.sitter?.name || b.sitter?.email || "Unassigned"}`);
     console.log(`Status: ${b.status}`);
     console.log(`Window: ${fmt(b.startTime)} → ${fmt(b.endTime)}`);
-    console.log(
-      `Money: total=$${(b.clientTotalCents / 100).toFixed(2)}, fee=$${(
-        b.platformFeeCents / 100
-      ).toFixed(2)}, payout=$${(b.sitterPayoutCents / 100).toFixed(2)}`
-    );
+    const economics = readBookingEconomics(b);
+    console.log(`Money (${economics.economicsKind}): client total=${clientTotalDisplay(b)}, payout=${sitterPayoutDisplay(b)}`);
+    console.log(economics.economicsKind === "LEGACY"
+      ? `Legacy platform fee=${formatFinancialCents(economics.legacyPlatformFeeCents)}`
+      : `Client fee=${formatFinancialCents(economics.client.feeCents)}, sitter fee=${formatFinancialCents(economics.sitter.feeCents)}`);
     console.log(
       `Timestamps: confirmed=${fmt(b.confirmedAt)}, canceled=${fmt(
         b.canceledAt

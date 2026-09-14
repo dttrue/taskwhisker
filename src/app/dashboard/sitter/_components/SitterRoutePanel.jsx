@@ -1,9 +1,10 @@
 // src/app/dashboard/sitter/_components/SitterRoutePanel.jsx
 "use client";
+import { sitterPayoutDisplay as displaySitterPayout } from "@/lib/bookings/economics/bookingEconomics";
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  formatMoney,
   formatDateTime,
   formatTime,
   getRelativeDayLabel,
@@ -154,6 +155,11 @@ export default function SitterRoutePanel({
         return;
       }
 
+      if (result.completionBlocked) {
+        setCompletionError(result.bookingCompletion.error);
+        return;
+      }
+
       if (nextStop?.id) {
         onSelectBooking?.(nextStop.id);
       }
@@ -209,7 +215,7 @@ export default function SitterRoutePanel({
         <div className="text-left md:text-right">
           <div className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--task-text-muted)]">Payout</div>
           <div className="mt-1 text-lg font-bold text-[var(--task-text)]">
-            {formatMoney(selectedBooking.sitterPayoutCents)}
+            {displaySitterPayout(selectedBooking)}
           </div>
 
           <div className="mt-3">

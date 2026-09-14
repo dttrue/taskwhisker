@@ -1,3 +1,4 @@
+import { sitterPayoutDisplay as displaySitterPayout } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/sitter/_components/BookingTable.jsx
 import {
   STATUS_LABELS,
@@ -5,7 +6,6 @@ import {
   STATUS_PILL_CLASSES,
 } from "@/lib/statusStyles";
 import {
-  formatMoney,
   formatDateTime,
   getBookingNextVisit,
   getVisitSummaryLines,
@@ -90,7 +90,7 @@ export default function BookingTable({ bookings }) {
                 </td>
 
                 <td className="p-3 whitespace-nowrap font-medium text-zinc-900">
-                  {formatMoney(booking.sitterPayoutCents)}
+                  {displaySitterPayout(booking)}
                 </td>
 
                 

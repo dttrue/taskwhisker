@@ -1,3 +1,4 @@
+import { aggregateBookingAmounts, readBookingEconomics, formatFinancialCents } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/operator/lib/dashboardUtils.js
 
 export function formatDateOnly(d) {
@@ -9,7 +10,7 @@ export function formatDateOnly(d) {
 }
 
 export function formatMoney(cents = 0) {
-  return `$${(cents / 100).toFixed(2)}`;
+  return formatFinancialCents(cents);
 }
 
 export function formatTimeOnly(value) {
@@ -39,9 +40,7 @@ export function getTodayVisitCount(bookings, now = new Date()) {
 }
 
 export function getConfirmedRevenue(bookings) {
-  return bookings
-    .filter((b) => b.status === "CONFIRMED")
-    .reduce((sum, b) => sum + (b.clientTotalCents || 0), 0);
+  return aggregateBookingAmounts(bookings.filter((b) => b.status === "CONFIRMED")).totalCents;
 }
 
 export function getBookingNextVisit(booking, now = new Date()) {
@@ -163,7 +162,7 @@ export function getTodaysVisits(bookings, now = new Date()) {
           endTime: visit.endTime,
           bookingStatus: booking.status,
           visitStatus: visit.status,
-          clientTotalCents: booking.clientTotalCents || 0,
+          clientTotalCents: readBookingEconomics(booking).client.totalCents,
         });
       }
     }

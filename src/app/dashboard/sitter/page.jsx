@@ -1,3 +1,4 @@
+import { economicsInclude, economicsSelect, visitPayoutEstimate, visitPayoutStatus, sumKnownAmounts } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/sitter/page.jsx
 import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
@@ -52,6 +53,7 @@ export default async function SitterDashboardPage({ searchParams }) {
       },
       orderBy: { startTime: "asc" },
       include: {
+        ...economicsInclude,
         client: true,
         visits: {
           orderBy: { startTime: "asc" },
@@ -96,7 +98,7 @@ export default async function SitterDashboardPage({ searchParams }) {
         completedAt: true,
         booking: {
           select: {
-            sitterPayoutCents: true,
+            ...economicsSelect,
             _count: { select: { visits: true } },
           },
         },
@@ -113,7 +115,7 @@ export default async function SitterDashboardPage({ searchParams }) {
 
     const totalVisits = visit.booking._count.visits || 1;
     return (
-      total + Math.round((visit.booking.sitterPayoutCents || 0) / totalVisits)
+      sumKnownAmounts([total, visitPayoutEstimate(visit.booking, totalVisits)])
     );
   }, 0);
 
@@ -138,6 +140,7 @@ export default async function SitterDashboardPage({ searchParams }) {
   const visitInclude = {
     booking: {
       include: {
+        ...economicsInclude,
         client: true,
         conversation: {
           include: {
@@ -236,9 +239,8 @@ export default async function SitterDashboardPage({ searchParams }) {
         booking.petNames,
         booking.serviceSummary || "Pet care booking"
       ),
-      payoutPerVisitCents: Math.round(
-        (booking.sitterPayoutCents || 0) / totalVisits
-      ),
+      payoutPerVisitCents: visitPayoutEstimate(booking, totalVisits),
+      payoutStatus: visitPayoutStatus(booking),
       address,
       lat: booking.serviceLat != null ? Number(booking.serviceLat) : null,
       lng: booking.serviceLng != null ? Number(booking.serviceLng) : null,

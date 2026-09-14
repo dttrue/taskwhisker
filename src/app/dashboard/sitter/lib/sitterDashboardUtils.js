@@ -1,9 +1,10 @@
+import { readBookingEconomics, visitPayoutEstimate, visitPayoutStatus, sumKnownAmounts, formatFinancialCents } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/sitter/lib/sitterDashboardUtils.js
 
 import { formatBookingPetNames } from "@/lib/bookings/formatPetNames";
 
-export function formatMoney(cents = 0) {
-  return `$${(cents / 100).toFixed(2)}`;
+export function formatMoney(cents = 0, missing = "Unavailable") {
+  return formatFinancialCents(cents, "USD", missing);
 }
 
 export function formatDateTime(value) {
@@ -139,13 +140,12 @@ export function getRemainingPayoutForToday(
 
     if (!remainingTodayVisits.length) return sum;
 
-    const bookingPayout = booking.sitterPayoutCents || 0;
-    const payoutPerVisit = bookingPayout / totalVisits;
+    const payoutPerVisit = visitPayoutEstimate(booking, totalVisits, { round: false });
 
-    return sum + payoutPerVisit * remainingTodayVisits.length;
+    return sumKnownAmounts([sum, payoutPerVisit == null ? null : payoutPerVisit * remainingTodayVisits.length]);
   }, 0);
 
-  return Math.round(total);
+  return total == null ? null : Math.round(total);
 }
 
 export function getActiveVisitCount(bookings = []) {
@@ -488,7 +488,7 @@ export function getSitterMapBookings(bookings = [], now) {
         todayVisitStart: todayVisit?.startTime || null,
         todayVisitEnd: todayVisit?.endTime || null,
         todayVisitStatus: todayVisit?.status || null,
-        sitterPayoutCents: booking.sitterPayoutCents || 0,
+        economics: readBookingEconomics(booking),
         visits: booking.visits || [],
         hasOpenCancellationRequest: hasOpenCancellationRequest(booking),
       };
@@ -609,9 +609,7 @@ export function getVisitEntries(bookings = []) {
   return bookings.flatMap((booking) => {
     const visits = booking.visits || [];
     const totalVisits = visits.length || 1;
-    const payoutPerVisit = Math.round(
-      (booking.sitterPayoutCents || 0) / totalVisits
-    );
+    const payoutPerVisit = visitPayoutEstimate(booking, totalVisits);
     const openCancellationRequest = hasOpenCancellationRequest(booking);
 
     return visits.map((visit) => {
@@ -639,6 +637,7 @@ export function getVisitEntries(bookings = []) {
           booking.serviceSummary || "Pet care booking"
         ),
         payoutPerVisitCents: payoutPerVisit,
+        payoutStatus: visitPayoutStatus(booking),
         address,
         lat: booking.serviceLat != null ? Number(booking.serviceLat) : null,
         lng: booking.serviceLng != null ? Number(booking.serviceLng) : null,
@@ -713,6 +712,7 @@ export function serializeVisitEntry(entry) {
     petNames: entry.petNames,
     petDisplayName: entry.petDisplayName,
     payoutPerVisitCents: entry.payoutPerVisitCents,
+    payoutStatus: entry.payoutStatus,
     address: entry.address,
     lat: entry.lat,
     lng: entry.lng,

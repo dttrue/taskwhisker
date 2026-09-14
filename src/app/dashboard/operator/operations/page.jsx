@@ -1,3 +1,4 @@
+import { economicsSelect, visitPayoutEstimate, visitPayoutStatus } from "@/lib/bookings/economics/bookingEconomics";
 import Link from "next/link";
 
 import { requireRole } from "@/auth";
@@ -187,7 +188,7 @@ export default async function OperatorOperationsPage({ searchParams }) {
             select: {
               petNames: true,
               serviceSummary: true,
-              sitterPayoutCents: true,
+              ...economicsSelect,
               serviceAddressLine1: true,
               serviceAddressLine2: true,
               serviceCity: true,
@@ -224,9 +225,8 @@ export default async function OperatorOperationsPage({ searchParams }) {
       petDisplayName,
       serviceSummary,
       showServiceContext: serviceSummary !== petDisplayName,
-      payoutPerVisitCents: Math.round(
-        (visit.booking.sitterPayoutCents || 0) / visitCount
-      ),
+      payoutPerVisitCents: visitPayoutEstimate(visit.booking, visitCount),
+      payoutStatus: visitPayoutStatus(visit.booking),
       address: buildAddress(visit.booking),
       lat: coordinates?.lat ?? null,
       lng: coordinates?.lng ?? null,

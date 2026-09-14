@@ -1,5 +1,7 @@
 # Operator confirmation workflow
 
+Current reader/completion integration is documented in [Canonical / legacy reader guarding](../economics/README.md). The phase-specific reader/activation audit below describes the earlier checkpoint; use that current audit for consumer status.
+
 `confirmBooking()` retains its existing operator authorization, Booking ID / form
 input variants and `{ ok, error? }` result contract. It adds a stable `code` and
 delegates to `confirmBookingWithDb`. Neither entry point accepts caller availability,

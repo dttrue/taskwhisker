@@ -1,5 +1,7 @@
 // src/app/dashboard/operator/_components/BookingsTable.jsx
 "use client";
+import { clientTotalDisplay, bookingCompletionReview } from "@/lib/bookings/economics/bookingEconomics";
+
 
 import { completeVisitAsOperator } from "../bookings/actions";
 import { formatMoney } from "../lib/format";
@@ -270,7 +272,8 @@ export default function BookingsTable({
 
                   <div className="mt-2 text-xs text-zinc-500">Total</div>
                   <div className="text-sm font-semibold text-zinc-900">
-                    {formatMoney(b.clientTotalCents)}
+                    {clientTotalDisplay(b, formatMoney)}
+                    {bookingCompletionReview(b) ? <span className="block text-xs font-normal text-amber-800">Booking completion requires manual review.</span> : null}
                   </div>
                 </div>
               </div>
@@ -379,7 +382,8 @@ export default function BookingsTable({
                   </td>
 
                   <td className="whitespace-nowrap p-3 text-right font-semibold text-[var(--task-text)]">
-                    {formatMoney(b.clientTotalCents)}
+                    {clientTotalDisplay(b, formatMoney)}
+                    {bookingCompletionReview(b) ? <span className="block text-xs font-normal text-amber-800">Booking completion requires manual review.</span> : null}
                   </td>
 
                   <td className="p-3">

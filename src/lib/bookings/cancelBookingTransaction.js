@@ -1,4 +1,5 @@
-import { createSystemMessage } from "@/lib/messaging/createSystemMessage";
+import { economicsSelect, cancellationGuard } from "./economics/bookingEconomics.js";
+import { createSystemMessage } from "../messaging/createSystemMessage.js";
 
 export const CLIENT_CANCELLATION_FEE_RATE_BPS = 1500;
 
@@ -6,7 +7,8 @@ export function calculateCancellationFeeCents(
   clientTotalCents,
   rateBps = CLIENT_CANCELLATION_FEE_RATE_BPS
 ) {
-  return Math.round(((clientTotalCents || 0) * rateBps) / 10000);
+  if (!Number.isSafeInteger(clientTotalCents) || clientTotalCents < 0) throw new Error("Legacy cancellation requires a valid stored client total.");
+  return Math.round((clientTotalCents * rateBps) / 10000);
 }
 
 export async function cancelBookingTransaction({
@@ -22,6 +24,7 @@ export async function cancelBookingTransaction({
   const booking = await tx.booking.findUnique({
     where: { id: bookingId },
     select: {
+      ...economicsSelect,
       id: true,
       status: true,
       clientLinkToken: true,
@@ -31,6 +34,9 @@ export async function cancelBookingTransaction({
   if (!booking) {
     return { ok: false, reason: "NOT_FOUND" };
   }
+
+  const guard = cancellationGuard(booking);
+  if (!guard.ok) return guard;
 
   if (booking.status === "CANCELED") {
     return { ok: false, reason: "ALREADY_CANCELED" };

@@ -1,3 +1,4 @@
+import { readBookingEconomics, sumKnownAmounts, economicsInclude } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/operator/lib/getOperatorDashboardData.js
 import { prisma } from "@/lib/db";
 
@@ -46,6 +47,7 @@ export async function getOperatorDashboardData({
   const bookings = await prisma.booking.findMany({
     where,
     include: {
+        ...economicsInclude,
       client: true,
       sitter: true,
       lineItems: true,
@@ -65,11 +67,11 @@ export async function getOperatorDashboardData({
   };
 
   for (const booking of bookings) {
-    const cents = booking.clientTotalCents ?? 0;
+    const cents = readBookingEconomics(booking).client.totalCents;
 
     // Overall
     statsByStatus.ALL.count += 1;
-    statsByStatus.ALL.totalCents += cents;
+    statsByStatus.ALL.totalCents = sumKnownAmounts([statsByStatus.ALL.totalCents, cents]);
 
     // Per status
     const s = booking.status;
@@ -77,7 +79,7 @@ export async function getOperatorDashboardData({
       statsByStatus[s] = { count: 0, totalCents: 0 };
     }
     statsByStatus[s].count += 1;
-    statsByStatus[s].totalCents += cents;
+    statsByStatus[s].totalCents = sumKnownAmounts([statsByStatus[s].totalCents, cents]);
   }
 
   return {

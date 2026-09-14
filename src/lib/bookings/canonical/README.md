@@ -1,5 +1,7 @@
 # Canonical Booking V1: internal contract and activation audit
 
+Current reader/completion integration is documented in [Canonical / legacy reader guarding](../economics/README.md). The phase-specific reader/activation audit below describes the earlier checkpoint; use that current audit for consumer status.
+
 This service is internal and unwired. No public action, route, preview submit,
 email sender or production caller invokes it. QA fixtures are deleted. Legacy
 creation, calculations and readers are unchanged. Do not create lasting production

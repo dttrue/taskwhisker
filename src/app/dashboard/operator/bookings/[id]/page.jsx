@@ -1,3 +1,4 @@
+import { readBookingEconomics, formatFinancialCents, bookingCompletionReview, clientTotalDisplay, sitterPayoutDisplay as displaySitterPayout, economicsInclude } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/operator/bookings/[id]/page.jsx
 import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
@@ -182,6 +183,7 @@ export default async function OperatorBookingDetailPage({
   const booking = await prisma.booking.findUnique({
     where: { id },
     include: {
+        ...economicsInclude,
       client: true,
       sitter: true,
       lineItems: true,
@@ -207,6 +209,9 @@ export default async function OperatorBookingDetailPage({
       </main>
     );
   }
+
+  const economics = readBookingEconomics(booking);
+  const completion = bookingCompletionReview(booking);
 
   const petDisplayName = formatBookingPetNames(
     booking.petNames,
@@ -315,7 +320,7 @@ export default async function OperatorBookingDetailPage({
                   <span>{scheduleSummary}</span>
                   <span aria-hidden="true">·</span>
                   <span className="font-semibold text-[var(--task-text)]">
-                    Total: {formatMoney(booking.clientTotalCents)}
+                    Total: {clientTotalDisplay(booking, formatMoney)}
                   </span>
                 </div>
               </div>
@@ -544,14 +549,16 @@ export default async function OperatorBookingDetailPage({
           </SummaryCard>
 
           <SummaryCard label="Money">
+            {economics.economicsKind === "CANONICAL" && completion ? <p className="mb-2 text-sm text-amber-800">{completion.error}</p> : null}
+            {economics.economicsKind === "CANONICAL" ? <div className="mb-1 text-zinc-600">Service: {formatFinancialCents(economics.client.subtotalCents)}<br />Sitter fee: {formatFinancialCents(economics.sitter.feeCents, economics.sitter.currency, economics.sitter.status === "PENDING" ? "Pending" : "Unavailable")}</div> : null}
             <div className="font-medium text-zinc-900">
-              {formatMoney(booking.clientTotalCents)}
+              {clientTotalDisplay(booking, formatMoney)}
             </div>
             <div className="mt-1 text-zinc-600">
-              Fee: {formatMoney(booking.platformFeeCents)}
+              {economics.economicsKind === "LEGACY" ? "Fee" : "Client fee"}: {formatFinancialCents(economics.economicsKind === "LEGACY" ? economics.legacyPlatformFeeCents : economics.client.feeCents)}
             </div>
             <div className="mt-1 text-zinc-600">
-              Payout: {formatMoney(booking.sitterPayoutCents)}
+              Payout: {displaySitterPayout(booking)}
             </div>
             {booking.serviceSummary ? (
               <div className="mt-2 text-xs text-zinc-500">

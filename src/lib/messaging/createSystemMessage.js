@@ -1,5 +1,5 @@
 // src/lib/messaging/createSystemMessage.js
-import { prisma } from "@/lib/db";
+import { prisma } from "../db.js";
 
 export async function createSystemMessage({
   bookingId,

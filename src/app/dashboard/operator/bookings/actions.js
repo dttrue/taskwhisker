@@ -1,5 +1,7 @@
 // src/app/dashboard/operator/bookings/actions.js
 "use server";
+import { economicsSelect, cancellationGuard } from "@/lib/bookings/economics/bookingEconomics";
+
 
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/auth";
@@ -10,10 +12,7 @@ import {
   calculateCancellationFeeCents,
   cancelBookingTransaction,
 } from "@/lib/bookings/cancelBookingTransaction";
-import {
-  buildOperatorCompletionData,
-  isBookingReadyForAutoCompletion,
-} from "@/lib/visits/visitPerformerAttribution";
+import { completeWholeBookingWithDb, completeVisitWithDb } from "@/lib/bookings/economics/completionService";
 import { confirmBookingWithDb, assignBookingSitterWithDb } from "@/lib/bookings/confirmation/confirmationService";
 
 async function getActorId(session) {
@@ -262,13 +261,13 @@ export async function cancelBooking(arg1, arg2) {
   );
 
   if (!result.ok) {
-    const error =
+    const error = result.error || (
       result.reason === "NOT_FOUND"
         ? "Booking not found."
         : result.reason === "COMPLETED"
         ? "Completed bookings cannot be canceled."
-        : "Booking is already canceled.";
-    return { ok: false, error };
+        : "Booking is already canceled.");
+    return { ok: false, error, reason: result.reason };
   }
 
   revalidateCancellationViews(bookingId, result.clientLinkToken);
@@ -292,7 +291,7 @@ export async function approveClientCancellationRequest(arg1, arg2) {
       id: true,
       status: true,
       clientLinkToken: true,
-      clientTotalCents: true,
+      ...economicsSelect,
     },
   });
 
@@ -303,6 +302,9 @@ export async function approveClientCancellationRequest(arg1, arg2) {
   if (!(await hasClientCancellationRequest(bookingId))) {
     return { ok: false, error: "No client cancellation request was found." };
   }
+
+  const guard = cancellationGuard(booking);
+  if (!guard.ok) return guard;
 
   const cancellationFeeCents = calculateCancellationFeeCents(
     booking.clientTotalCents
@@ -325,13 +327,13 @@ export async function approveClientCancellationRequest(arg1, arg2) {
   );
 
   if (!result.ok) {
-    const error =
+    const error = result.error || (
       result.reason === "NOT_FOUND"
         ? "Booking not found."
         : result.reason === "COMPLETED"
         ? "Cannot cancel a completed booking."
-        : "Booking is already canceled.";
-    return { ok: false, error };
+        : "Booking is already canceled.");
+    return { ok: false, error, reason: result.reason };
   }
 
   revalidateCancellationViews(bookingId, result.clientLinkToken);
@@ -348,152 +350,20 @@ export async function completeBooking(arg1, arg2) {
     return { ok: false, error: "Missing booking id." };
   }
   
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    select: {
-      id: true,
-      status: true,
-      clientTotalCents: true,
-      platformFeeCents: true,
-      sitterPayoutCents: true,
-    },
-  });
-
-  if (!booking) {
-    return { ok: false, error: "Booking not found." };
-  }
-
-  if (booking.status === "CANCELED") {
-    return { ok: false, error: "Cannot complete a canceled booking." };
-  }
-
-  if (booking.status === "COMPLETED") {
-    return { ok: false, error: "Booking is already completed." };
-  }
-
-  if (booking.status !== "CONFIRMED") {
-    return {
-      ok: false,
-      error: `Only CONFIRMED bookings can be completed (current: ${booking.status}).`,
-    };
-  }
-
-  const visits = await prisma.visit.findMany({
-    where: { bookingId },
-    select: { status: true },
-  });
-
-  const hasVisits = visits.length > 0;
-  const allVisitsCompleted = visits.every(
-    (visit) => visit.status === "COMPLETED"
-  );
-
-  if (!hasVisits || !allVisitsCompleted) {
-    return {
-      ok: false,
-      error:
-        "All visits must be completed before the booking can be completed.",
-    };
-  }
-
-  const expected = booking.platformFeeCents + booking.sitterPayoutCents;
-  if (expected !== booking.clientTotalCents) {
-    return {
-      ok: false,
-      error:
-        "Payment breakdown is inconsistent (total != fee + payout). Please review this booking.",
-    };
-  }
-
-  await prisma.$transaction([
-    prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: "COMPLETED", completedAt: new Date() },
-    }),
-    prisma.bookingHistory.create({
-      data: {
-        bookingId,
-        fromStatus: booking.status,
-        toStatus: "COMPLETED",
-        note: "Operator marked booking complete",
-        changedByUserId: actorId,
-      },
-    }),
-  ]);
-
-  revalidateOperator(bookingId);
-  return { ok: true };
+  const result = await completeWholeBookingWithDb({ db: prisma, bookingId, actorId });
+  if (result.ok) revalidateOperator(bookingId);
+  return result;
 }
 
 export async function completeVisitAsOperator(visitId) {
   const session = await requireRole(["OPERATOR"]);
   const actorId = await getActorId(session);
-
-  const visit = await prisma.visit.findUnique({
-    where: { id: visitId },
-    select: {
-      id: true,
-      status: true,
-      bookingId: true,
-    },
-  });
-
-  if (!visit) return { ok: false, error: "Visit not found." };
-
-  if (visit.status !== "CONFIRMED") {
-    return { ok: false, error: "Only confirmed visits can be completed." };
+  const result = await completeVisitWithDb({ db: prisma, visitId, actorId, actorRole: "OPERATOR" });
+  if (result.ok) {
+    revalidateOperator(result.bookingId);
+    revalidatePath("/dashboard/sitter");
   }
-
-  const now = new Date();
-
-  await prisma.$transaction(async (tx) => {
-    await tx.visit.update({
-      where: { id: visit.id },
-      data: buildOperatorCompletionData(now),
-    });
-
-    const remainingActiveVisits = await tx.visit.count({
-      where: {
-        bookingId: visit.bookingId,
-        status: {
-          notIn: ["COMPLETED", "CANCELED"],
-        },
-      },
-    });
-
-    if (isBookingReadyForAutoCompletion(remainingActiveVisits)) {
-      const booking = await tx.booking.findUnique({
-        where: { id: visit.bookingId },
-        select: { status: true },
-      });
-
-      if (booking && booking.status !== "COMPLETED") {
-        await tx.booking.update({
-          where: { id: visit.bookingId },
-          data: {
-            status: "COMPLETED",
-            completedAt: now,
-          },
-        });
-
-        await tx.bookingHistory.create({
-          data: {
-            bookingId: visit.bookingId,
-            fromStatus: booking.status,
-            toStatus: "COMPLETED",
-            changedByUserId: actorId,
-            note: "Operator completed overdue visit and auto-completed booking.",
-          },
-        });
-      }
-    }
-  });
-
-  revalidatePath("/dashboard/operator");
-  revalidatePath(`/dashboard/operator/bookings/${visit.bookingId}`);
-  revalidatePath("/dashboard/sitter");
-
-  return { ok: true };
+  return result;
 }
 
 // ---- ASSIGN SITTER ----
