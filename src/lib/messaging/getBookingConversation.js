@@ -19,6 +19,8 @@ export async function getBookingConversation(bookingId) {
 
       booking: {
         include: {
+          pricingSnapshot: { select: { id: true } },
+          sitterCompensation: { select: { id: true } },
           client: true,
           sitter: true,
           operator: true,

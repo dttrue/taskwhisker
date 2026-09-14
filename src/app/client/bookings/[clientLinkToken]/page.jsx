@@ -186,7 +186,7 @@ export default async function ClientBookingPortalPage({ params }) {
                 </p>
               ) : (
                 <p className="mt-2">
-                  The cancellation fee is still pending review.
+                  {economics.economicsKind === "CANONICAL" ? "Cancellation fees and refunds require manual review. No refund or cancellation fee has been decided." : "The cancellation fee is still pending review."}
                 </p>
               )}
             </div>

@@ -108,3 +108,18 @@ test("pending before care is neutral; finished operations expose manual review i
   b.visits[0].status = "COMPLETED";
   assert((await html()).includes("Valid sitter compensation is required for booking completion."));
 });
+
+for (const kind of ["pending", "committed", "reward"]) for (const [name, path, props] of [
+  ["client", "app/client/bookings/[clientLinkToken]/page.jsx", { params: { clientLinkToken: "client-token" } }],
+  ["sitter", "app/dashboard/sitter/bookings/[id]/page.jsx", { params: { id: "booking" } }],
+  ["operator", "app/dashboard/operator/bookings/[id]/page.jsx", { params: { id: "booking" }, searchParams: {} }],
+]) test(`${name} canceled canonical ${kind}: manual review without invented financial decision`, async () => {
+  const b = await bookingFixture(kind); b.status = "CANCELED"; b.canceledAt = new Date();
+  b.visits.forEach((v) => { v.status = "CANCELED"; });
+  // Even misleading legacy defaults/review metadata cannot authorize a fee.
+  b.cancellationFeeCents = 0; b.cancellationFeeWaived = true; b.cancellationFeeReviewedAt = new Date();
+  const Page = surfaceLoader(b).load(path).default;
+  const html = renderToStaticMarkup(await Page(props));
+  assert.match(html, /manual review/i); assert.doesNotMatch(html, /\$0\.00|fee was waived|payout is not active/);
+  if (name === "client") assert.doesNotMatch(html, /sitter payable|committed compensation/i);
+});

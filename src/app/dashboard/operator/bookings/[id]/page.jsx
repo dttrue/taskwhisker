@@ -549,6 +549,7 @@ export default async function OperatorBookingDetailPage({
           </SummaryCard>
 
           <SummaryCard label="Money">
+            {economics.economicsKind === "CANONICAL" && booking.status === "CANCELED" ? <p className="mb-2 text-sm text-amber-800">Cancellation requires manual review. Fees, refunds, and sitter payable amounts have not been decided. Frozen financial commitments are retained.</p> : null}
             {economics.economicsKind === "CANONICAL" && completion ? <p className="mb-2 text-sm text-amber-800">{completion.error}</p> : null}
             {economics.economicsKind === "CANONICAL" ? <div className="mb-1 text-zinc-600">Service: {formatFinancialCents(economics.client.subtotalCents)}<br />Sitter fee: {formatFinancialCents(economics.sitter.feeCents, economics.sitter.currency, economics.sitter.status === "PENDING" ? "Pending" : "Unavailable")}</div> : null}
             <div className="font-medium text-zinc-900">

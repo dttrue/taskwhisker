@@ -169,7 +169,7 @@ export default async function SitterBookingDetailPage({ params }) {
   const economics = readBookingEconomics(booking);
   const isCanceledBooking = booking.status === "CANCELED";
   const sitterPayoutDisplay = isCanceledBooking
-    ? "Canceled"
+    ? (economics.economicsKind === "CANONICAL" ? "Manual review" : "Canceled")
     : displaySitterPayout(booking);
 
   const hasCancellationFeeDecision =
@@ -476,7 +476,7 @@ export default async function SitterBookingDetailPage({ params }) {
 
           {isCanceledBooking ? (
             <p className="mt-2 text-xs text-zinc-500">
-              This booking was canceled, so sitter payout is not active.
+              {economics.economicsKind === "CANONICAL" ? "Cancellation requires manual review. Committed compensation is retained; the sitter payable amount has not been decided." : "This booking was canceled, so sitter payout is not active."}
             </p>
           ) : null}
 
@@ -575,7 +575,7 @@ export default async function SitterBookingDetailPage({ params }) {
 
                   {isCanceledBooking ? (
                     <p className="mt-2 text-xs text-zinc-500">
-                      This booking was canceled, so payout is not active.
+                      {economics.economicsKind === "CANONICAL" ? "Sitter payable amount requires manual review. Cancellation does not change committed compensation." : "This booking was canceled, so payout is not active."}
                     </p>
                   ) : null}
                 </div>

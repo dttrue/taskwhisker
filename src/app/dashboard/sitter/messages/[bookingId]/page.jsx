@@ -1,3 +1,4 @@
+import { isCanonicalBooking } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/sitter/messages/[bookingId]/page.jsx
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
@@ -166,8 +167,7 @@ export default async function SitterBookingMessagesPage({ params }) {
               </p>
 
               <p className="mt-1 text-sm text-red-800">
-                The client requested to cancel this booking. Approving will mark
-                the booking and its unfinished visits as canceled.
+                {isCanonicalBooking(booking) ? "The client requested cancellation. Operational approval is available only before care starts; financial terms require manual review." : "The client requested to cancel this booking. Approving will mark the booking and its unfinished visits as canceled."}
               </p>
 
               {cancellationRequest?.body && (
@@ -176,7 +176,7 @@ export default async function SitterBookingMessagesPage({ params }) {
                 </div>
               )}
 
-              <ApproveCancellationRequestButton bookingId={booking.id} />
+              <ApproveCancellationRequestButton bookingId={booking.id} canonical={isCanonicalBooking(booking)} />
             </div>
           )}
 

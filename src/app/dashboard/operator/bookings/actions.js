@@ -1,6 +1,7 @@
 // src/app/dashboard/operator/bookings/actions.js
 "use server";
-import { economicsSelect, cancellationGuard } from "@/lib/bookings/economics/bookingEconomics";
+import { cancelCanonicalBookingWithDb } from "@/lib/bookings/cancellation/canonicalCancellation";
+import { economicsSelect, cancellationGuard, isCanonicalBooking } from "@/lib/bookings/economics/bookingEconomics";
 
 
 import { prisma } from "@/lib/db";
@@ -230,7 +231,7 @@ export async function cancelBooking(arg1, arg2) {
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
-    select: { status: true },
+    select: { status: true, ...economicsSelect },
   });
 
   if (!booking) return { ok: false, error: "Booking not found." };
@@ -240,6 +241,13 @@ export async function cancelBooking(arg1, arg2) {
       ok: false,
       error: "Cancel reason required for confirmed bookings.",
     };
+  }
+
+  if (isCanonicalBooking(booking)) {
+    const result = await cancelCanonicalBookingWithDb({ db: prisma, bookingId, actorId,
+      reason: reason || "Operator canceled requested booking." });
+    if (result.ok) revalidateCancellationViews(bookingId, result.clientLinkToken);
+    return result;
   }
 
   const historyNote = reason
@@ -301,6 +309,12 @@ export async function approveClientCancellationRequest(arg1, arg2) {
 
   if (!(await hasClientCancellationRequest(bookingId))) {
     return { ok: false, error: "No client cancellation request was found." };
+  }
+
+  if (isCanonicalBooking(booking)) {
+    const result = await cancelCanonicalBookingWithDb({ db: prisma, bookingId, actorId, requireClientRequest: true });
+    if (result.ok) revalidateCancellationViews(bookingId, result.clientLinkToken);
+    return result;
   }
 
   const guard = cancellationGuard(booking);

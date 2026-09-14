@@ -38,7 +38,7 @@ export default function CancelBookingForm({
     if (!state) return;
 
     if (state.ok) {
-      toast.success("Booking canceled.");
+      toast.success(state.message || "Booking canceled.");
     } else if (state.error) {
       toast.error(state.error || "Could not cancel booking.");
     }

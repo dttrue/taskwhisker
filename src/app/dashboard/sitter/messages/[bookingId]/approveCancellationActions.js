@@ -1,6 +1,7 @@
 // src/app/dashboard/sitter/messages/[bookingId]/approveCancellationActions.js
 "use server";
-import { economicsSelect, cancellationGuard } from "@/lib/bookings/economics/bookingEconomics";
+import { cancelCanonicalBookingWithDb } from "@/lib/bookings/cancellation/canonicalCancellation";
+import { economicsSelect, cancellationGuard, isCanonicalBooking } from "@/lib/bookings/economics/bookingEconomics";
 
 
 import { revalidatePath } from "next/cache";
@@ -100,6 +101,24 @@ export async function approveClientCancellationRequestAsSitter({
   }
 
   const cancellationFeeWaived = Boolean(waiveCancellationFee);
+
+  if (isCanonicalBooking(booking)) {
+    const result = await cancelCanonicalBookingWithDb({ db: prisma, bookingId, actorId: sitter.id,
+      requireClientRequest: true, waiveFee: cancellationFeeWaived });
+    if (result.ok) {
+      revalidatePath("/dashboard/sitter");
+      revalidatePath("/dashboard/sitter/messages");
+      revalidatePath(`/dashboard/sitter/messages/${booking.id}`);
+      revalidatePath(`/dashboard/sitter/bookings/${booking.id}`);
+      revalidatePath("/dashboard/operator");
+      revalidatePath(`/dashboard/operator/bookings/${booking.id}`);
+      if (booking.clientLinkToken) {
+        revalidatePath(`/client/bookings/${booking.clientLinkToken}`);
+        revalidatePath(`/client/bookings/${booking.clientLinkToken}/messages`);
+      }
+    }
+    return result;
+  }
 
   const guard = cancellationGuard(booking);
   if (!guard.ok) return guard;

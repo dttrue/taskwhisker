@@ -4,7 +4,7 @@
 import { useState, useTransition } from "react";
 import { approveClientCancellationRequestAsSitter } from "./approveCancellationActions";
 
-export default function ApproveCancellationRequestButton({ bookingId }) {
+export default function ApproveCancellationRequestButton({ bookingId, canonical = false }) {
   const [isPending, startTransition] = useTransition();
 
   const [waiveCancellationFee, setWaiveCancellationFee] = useState(false);
@@ -27,20 +27,24 @@ export default function ApproveCancellationRequestButton({ bookingId }) {
       }
 
       setMessage(
-        result.cancellationFeeWaived
+        result.message || (result.cancellationFeeWaived
           ? "Cancellation approved. Fee waived."
-          : "Cancellation approved. Cancellation fee applied."
+          : "Cancellation approved. Cancellation fee applied.")
       );
     });
   }
 
-  const buttonLabel = waiveCancellationFee
+  const buttonLabel = canonical ? "Approve operational cancellation" : waiveCancellationFee
     ? "Approve cancellation and waive fee"
     : "Approve cancellation with 15% fee";
 
   return (
     <div className="mt-4 space-y-3">
-      <div className="rounded-xl border border-red-100 bg-white p-3">
+      {canonical ? (
+        <p className="text-sm text-zinc-600">
+          Cancellation can proceed only before care starts. Fees, refunds, and sitter payable amounts require manual review; approval does not decide financial amounts.
+        </p>
+      ) : <div className="rounded-xl border border-red-100 bg-white p-3">
         <p className="text-sm font-semibold text-zinc-950">Cancellation fee</p>
 
         <p className="mt-1 text-sm text-zinc-600">
@@ -67,7 +71,7 @@ export default function ApproveCancellationRequestButton({ bookingId }) {
             </span>
           </span>
         </label>
-      </div>
+      </div>}
 
       {error && <p className="text-sm font-medium text-red-700">{error}</p>}
 

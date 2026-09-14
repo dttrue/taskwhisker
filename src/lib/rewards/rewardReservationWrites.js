@@ -218,3 +218,12 @@ export async function releaseRewardReservationWithDb({ db, bookingId, reason } =
   if (!normalizedReason) throw new RewardReservationError("INVALID_RELEASE_REASON", "A non-empty release reason is required.");
   return run({ db, bookingId }, (tx, id) => transitionInTransaction(tx, id, "RELEASED", normalizedReason));
 }
+
+// Transaction composition only: caller must lock Booking/Visits and prove that
+// cancellation permanently voids pre-service care with no compensation snapshot.
+// Reuses the exact runtime transition; does not reopen grants or consumed rewards.
+export async function releaseRewardReservationInTransaction({ tx, bookingId, reason }) {
+  const normalizedReason = typeof reason === "string" ? reason.trim().replace(/\s+/g, " ") : "";
+  if (!normalizedReason) throw new RewardReservationError("INVALID_RELEASE_REASON", "A non-empty release reason is required.");
+  return transitionInTransaction(tx, bookingId, "RELEASED", normalizedReason);
+}

@@ -43,6 +43,12 @@ Legacy automatic Visit completion keeps its historical operational criterion (no
 
 ## Cancellation boundary
 
+**Continuation:** [Canonical cancellation guardrails](../cancellation/README.md) now
+permit authoritative pre-service operational cancellation with explicit financial
+review, including safe RESERVED release when no compensation exists. The following
+paragraphs describe the reader-phase baseline; the legacy low-level guard remains.
+Canonical fee/refund/settlement policy is still undefined.
+
 `cancellationGuard` refuses canonical cancellation with `CANONICAL_CANCELLATION_REQUIRES_REVIEW`, including waived-fee requests. Operator and sitter approval guard before legacy calculation; the shared cancellation transaction guards again before any writes. The valid legacy fee calculation remains Math.round(clientTotalCents * 1500 / 10000), or the explicitly supplied rate. Null is rejected, not zeroed. Legacy transaction writes and system messages are preserved.
 
 Canonical cancellation/refunds, client fee refundability, sitter cancellation compensation and reward release policy remain undefined. Existing canceled canonical rows cannot present legacy cancellation defaults as an approved fee decision. Public cancellation requests may still request human review; approval cannot enter legacy economics.
