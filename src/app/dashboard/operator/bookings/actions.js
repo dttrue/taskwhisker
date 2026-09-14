@@ -11,10 +11,11 @@ import {
   cancelBookingTransaction,
 } from "@/lib/bookings/cancelBookingTransaction";
 import {
-  REASSIGNABLE_VISIT_STATUSES,
   buildOperatorCompletionData,
   isBookingReadyForAutoCompletion,
 } from "@/lib/visits/visitPerformerAttribution";
+import { confirmBookingWithDb, assignBookingSitterWithDb } from "@/lib/bookings/confirmation/confirmationService";
+
 async function getActorId(session) {
   if (session?.user?.id) {
     const byId = await prisma.user.findUnique({
@@ -200,96 +201,10 @@ export async function confirmBooking(arg1, arg2) {
     return { ok: false, error: "Missing booking id." };
   }
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    select: {
-      id: true,
-      status: true,
-      clientTotalCents: true,
-      platformFeeCents: true,
-      sitterPayoutCents: true,
-      visits: {
-        select: {
-          id: true,
-          status: true,
-        },
-      },
-    },
-  });
-
-  if (!booking) {
-    return { ok: false, error: "Booking not found." };
-  }
-
-  if (booking.status === "CANCELED" || booking.status === "COMPLETED") {
-    return {
-      ok: false,
-      error: `Cannot confirm a ${booking.status.toLowerCase()} booking.`,
-    };
-  }
-
-  if (booking.status !== "REQUESTED") {
-    return {
-      ok: false,
-      error: `Only REQUESTED bookings can be confirmed (current: ${booking.status}).`,
-    };
-  }
-
-  if (booking.sitterId) {
-    for (const visit of booking.visits) {
-      const conflict = await prisma.visit.findFirst({
-        where: {
-          bookingId: { not: booking.id },
-          sitterId: booking.sitterId,
-          status: "CONFIRMED",
-          startTime: { lt: visit.endTime },
-          endTime: { gt: visit.startTime },
-        },
-        select: {
-          id: true,
-          bookingId: true,
-          startTime: true,
-          endTime: true,
-        },
-      });
-
-      if (conflict) {
-        return {
-          ok: false,
-          error:
-            "This sitter already has a confirmed visit that overlaps one of this booking’s visit times.",
-        };
-      }
-    }
-  }
-
-  
-
-  await prisma.$transaction([
-    prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: "CONFIRMED", confirmedAt: new Date() },
-    }),
-    prisma.visit.updateMany({
-      where: { bookingId },
-      data: { status: "CONFIRMED" },
-    }),
-    prisma.bookingHistory.create({
-      data: {
-        bookingId,
-        fromStatus: booking.status,
-        toStatus: "CONFIRMED",
-        note: "Operator confirmed booking",
-        changedByUserId: actorId,
-      },
-    }),
-  ]);
-
-  revalidateOperator(bookingId);
-  return { ok: true };
+  const result = await confirmBookingWithDb({ db: prisma, bookingId, actorId });
+  if (result.ok) revalidateOperator(bookingId);
+  return result;
 }
-
-
 
 // ---- CANCEL ----
 export async function cancelBooking(arg1, arg2) {
@@ -613,114 +528,11 @@ export async function assignSitter(arg1, arg2) {
     nextSitterId = nextSitterIdRaw || null;
   }
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    select: {
-      id: true,
-      sitterId: true,
-      status: true,
-      startTime: true,
-      endTime: true,
-      visits: {
-        select: {
-          id: true,
-          startTime: true,
-          endTime: true,
-        },
-        orderBy: { startTime: "asc" },
-      },
-    },
+  const result = await assignBookingSitterWithDb({
+    db: prisma, bookingId, actorId, sitterId: nextSitterId, assignToMe,
   });
-
-  if (!booking) {
-    return { ok: false, error: "Booking not found." };
-  }
-
-  if (booking.status === "CANCELED" || booking.status === "COMPLETED") {
-    return {
-      ok: false,
-      error: `Cannot change sitter for a ${booking.status.toLowerCase()} booking.`,
-    };
-  }
-
-  const fromSitterId = booking.sitterId ?? null;
-  const toSitterId = nextSitterId;
-
-  if (fromSitterId === toSitterId) {
-    return { ok: true };
-  }
-
-  if (toSitterId) {
-    const sitterExists = await prisma.user.findFirst({
-      where: {
-        id: toSitterId,
-        role: "SITTER",
-      },
-      select: { id: true },
-    });
-
-    if (!sitterExists) {
-      return { ok: false, error: "Selected sitter was not found." };
-    }
-
-    for (const visit of booking.visits) {
-      const conflict = await prisma.visit.findFirst({
-        where: {
-          bookingId: { not: booking.id },
-          sitterId: toSitterId,
-          status: "CONFIRMED",
-          startTime: { lt: visit.endTime },
-          endTime: { gt: visit.startTime },
-        },
-        select: {
-          id: true,
-          bookingId: true,
-          startTime: true,
-          endTime: true,
-        },
-      });
-
-      if (conflict) {
-        return {
-          ok: false,
-          error:
-            "This sitter already has a confirmed visit that overlaps one of this booking’s visit times.",
-        };
-      }
-    }
-  }
-
-  await prisma.$transaction([
-    prisma.booking.update({
-      where: { id: bookingId },
-      data: { sitterId: toSitterId },
-    }),
-    prisma.visit.updateMany({
-      where: {
-        bookingId,
-        status: { in: REASSIGNABLE_VISIT_STATUSES },
-      },
-      data: { sitterId: toSitterId },
-    }),
-    prisma.bookingHistory.create({
-      data: {
-        bookingId,
-        fromSitterId,
-        toSitterId,
-        note: assignToMe
-          ? "Operator assigned booking to self"
-          : !fromSitterId && toSitterId
-          ? "Operator assigned sitter"
-          : fromSitterId && !toSitterId
-          ? "Operator unassigned sitter"
-          : "Operator reassigned sitter",
-        changedByUserId: actorId,
-      },
-    }),
-  ]);
-
-  revalidateOperator(bookingId);
-  return { ok: true };
+  if (result.ok) revalidateOperator(bookingId);
+  return result;
 }
 
 // ---- REVIEW MISSED VISIT ----

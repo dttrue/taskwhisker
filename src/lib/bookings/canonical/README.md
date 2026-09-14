@@ -257,9 +257,11 @@ Additional boundaries audited:
   unit and must re-quote the selected aggregate schedule before future submission.
 - Existing BookingLineItem UI is a legacy explanation; future client/operator review
   must render the frozen canonical breakdown instead of assuming legacy line items.
-- Confirmation must enforce real sitter availability atomically; existing legacy
-  same-day scheduling and fixed-offset availability conversion are unsuitable for
-  canonical overnight/DST submission. REQUESTED does not claim confirmed availability.
+- The [operator confirmation workflow](../confirmation/README.md) now enforces
+  persisted Visit availability atomically, including overnight intervals. Public
+  legacy creation still bypasses it; same-day scheduling and fixed-offset public
+  availability conversion remain unsuitable for canonical overnight/DST submission.
+  REQUESTED does not claim confirmed availability.
 - Schedule-change flows must define how changes affect frozen input/price contracts;
   changing Visits cannot silently alter frozen quantity or economics.
 - Blocklist checks, authenticated ownership, service-address requirements, notification

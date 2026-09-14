@@ -30,9 +30,12 @@ contract. Replay still validates Booking/sitter/lane/currency identity, current
 Visit assignment, frozen basis and reward linkage, and never rewrites money or
 committedAt. completed performer identity remains a separate fact.
 
-The known `confirmBooking()` omission of sitterId and Visit times from its select,
-and safe canonical availability/confirmation integration, remain activation
-blockers. No confirmation workflow change is included here.
+The known operator `confirmBooking()` omission of sitterId and Visit times is now
+resolved by the [confirmation workflow](../confirmation/README.md), which validates
+persisted assignment and availability transactionally for legacy/canonical Visits.
+Compensation still defends its own boundary independently. Public legacy creation
+continues to bypass that confirmation service; public canonical availability,
+notification and reader integrations remain activation work.
 
 ## Lane and sitter authority
 
