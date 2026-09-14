@@ -3,7 +3,7 @@ import { readBookingEconomics, formatFinancialCents, bookingCompletionReview, cl
 import { requireRole } from "@/auth";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import ReviewSubmitButton from "@/app/dashboard/operator/_components/ReviewSubmitButton";
 import MissedVisitCard from "@/app/dashboard/operator/_components/MissedVisitCard";
 import {
