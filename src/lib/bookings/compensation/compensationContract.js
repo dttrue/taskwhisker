@@ -1,3 +1,4 @@
+import { resolveEffectiveBookingCompensationLane, rewardReservationMatchesHistoricalAttribution } from "./effectiveCompensationLane.js";
 import { normalizeBookingAttributionSnapshot } from "../../attribution/clientAttributionContract.js";
 import { calculateClientEconomics, calculateSitterEconomics, CLIENT_FEE_BPS, SITTER_FEE_BPS, MAX_MONEY_CENTS } from "../../pricing/calculatePricing.js";
 import { REWARD_SITTER_FEE_BPS } from "../../rewards/rewardPolicy.js";
@@ -42,10 +43,12 @@ export function validateCanonicalCompensationBooking(booking) {
   if (!a) reject("ATTRIBUTION_SNAPSHOT_MISSING", "Frozen attribution is required.");
   if (a.bookingId !== booking.id) reject("INVALID_ATTRIBUTION", "Attribution belongs to another Booking.");
   try { normalizeBookingAttributionSnapshot(a); } catch { reject("INVALID_ATTRIBUTION", "Attribution semantics are invalid."); }
-  const sitterId = a.compensationLane === "SITTER_ORIGINATED" ? a.referringSitterId : booking.sitterId;
-  if (!text(sitterId) || booking.sitterId !== sitterId || booking.sitter?.id !== sitterId || booking.sitter.role !== "SITTER" ||
-      (a.compensationLane === "SITTER_ORIGINATED" && a.requestedSitterId !== sitterId)) reject("SITTER_MISMATCH", "Authoritative compensation sitter and current assignment disagree.");
-  return { sitterId, compensationLane: a.compensationLane, pricing: p };
+  if (booking.sitter?.id !== booking.sitterId || booking.sitter?.role !== "SITTER") reject("SITTER_MISMATCH", "Authoritative sitter relation and assignment disagree.");
+  const effective = resolveEffectiveBookingCompensationLane(booking);
+  if (!effective.ok) reject(effective.code, "Frozen attribution, compensation or current assignment requires review.");
+  const { sitterId, compensationLane } = effective;
+  if (booking.sitter?.id !== sitterId || booking.sitter.role !== "SITTER") reject("SITTER_MISMATCH", "Authoritative compensation sitter and current assignment disagree.");
+  return { sitterId, compensationLane, pricing: p };
 }
 
 export function validateInitialCommitment(booking, sitterId, now) {
@@ -62,11 +65,13 @@ export function validateInitialCommitment(booking, sitterId, now) {
   }
 }
 
-export function validateReservation(reservation, bookingId, sitterId, lane) {
+export function validateReservation(reservation, bookingId, sitterId, lane, attributionSnapshot = null) {
   if (!reservation) return;
-  if (lane !== "SITTER_ORIGINATED") reject("BUSINESS_REWARD_CONTRADICTION", "Business-assigned compensation cannot have a reward reservation.");
+  const historical = lane === "BUSINESS_ASSIGNED" && reservation.status === "RELEASED" &&
+    rewardReservationMatchesHistoricalAttribution({ id: bookingId, attributionSnapshot }, reservation);
+  if (lane !== "SITTER_ORIGINATED" && !historical) reject("BUSINESS_REWARD_CONTRADICTION", "Business-assigned compensation may only retain a valid released historical reward.");
   const r = reservation, g = r.grant;
-  if (!text(r.id) || r.bookingId !== bookingId || r.sitterId !== sitterId || !g || r.grantId !== g.id || g.sitterId !== sitterId) reject("REWARD_IDENTITY_MISMATCH", "Reward Booking, sitter or grant identity disagrees.");
+  if (!text(r.id) || r.bookingId !== bookingId || (!historical && r.sitterId !== sitterId) || !g || r.grantId !== g.id || g.sitterId !== r.sitterId) reject("REWARD_IDENTITY_MISMATCH", "Reward Booking, sitter or grant identity disagrees.");
   if (!["RESERVED", "CONSUMED", "RELEASED"].includes(r.status) || !validDate(r.reservedAt) ||
       (r.status === "RESERVED" && (r.consumedAt !== null || r.releasedAt !== null)) ||
       (r.status === "CONSUMED" && (!validDate(r.consumedAt) || r.consumedAt < r.reservedAt || r.releasedAt !== null)) ||

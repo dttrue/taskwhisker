@@ -525,6 +525,7 @@ export default async function OperatorBookingDetailPage({
             </div>
             <div className="mt-3">
               <AssignSitterForm
+                compensationCommitted={Boolean(booking.sitterCompensation)}
                 bookingId={booking.id}
                 currentSitterId={booking.sitterId}
                 sitters={sitters}

@@ -26,6 +26,15 @@ Missing compensation is PENDING with null payout. An omitted relation is UNAVAIL
 
 Projected map DTOs carry `economics`; Booking money columns are not repurposed. Shared economicsInclude/economicsSelect load snapshots, attribution and the small reward linkage needed for validation in the financial Booking query. PostgreSQL tests verify relation query count is constant for one versus five Bookings. There is no query per rendered row.
 
+## Effective compensation lane continuation
+
+Readers now use the shared effective-lane contract. Historical SITTER_ORIGINATED
+attribution may coexist with frozen BUSINESS_ASSIGNED compensation for the new
+sitter after pre-commit reassignment; arbitrary mismatches still fail closed.
+The frozen compensation lane governs sitter economics, while attribution governs
+origin history. A correctly owned RELEASED reservation is historical evidence and
+does not invalidate business compensation. See [reassignment policy](../confirmation/reassignment.md).
+
 ## Completion V1 decision
 
 Completed Visits record operational truth. Canonical Booking COMPLETED additionally requires valid frozen pricing and valid committed compensation. All retained actions delegate to completionService.js:

@@ -1,4 +1,4 @@
-import { normalizeBookingAttributionSnapshot } from "../../attribution/clientAttributionContract.js";
+import { resolveEffectiveBookingCompensationLane, rewardReservationMatchesHistoricalAttribution } from "../compensation/effectiveCompensationLane.js";
 import { economicsInclude, isCanonicalBooking, readBookingEconomics } from "../economics/bookingEconomics.js";
 import { releaseRewardReservationInTransaction, RewardReservationError } from "../../rewards/rewardReservationWrites.js";
 import { isRetryableRewardTransactionError } from "../../rewards/rewardProgressGrantWrites.js";
@@ -36,13 +36,12 @@ export function inspectCanonicalCancellation(booking, now, { waiveFee = false } 
   if (booking.sitterCompensation && economics.sitter.status !== "COMMITTED") return review(economics.sitter.reason);
   if (booking.sitterCompensation === undefined || booking.rewardReservation === undefined) return review("REQUIRED_RELATION_NOT_LOADED");
   if (booking.pricingSnapshot.committedAt > now || booking.sitterCompensation?.committedAt > now) return review("COMMITMENT_TIME_INVALID");
-  const r = booking.rewardReservation, a = booking.attributionSnapshot;
-  try { normalizeBookingAttributionSnapshot(a || {}); } catch { return review("ATTRIBUTION_STATE_INVALID"); }
-  if (!a || a.bookingId !== booking.id || !["BUSINESS_ASSIGNED", "SITTER_ORIGINATED"].includes(a.compensationLane) ||
-      (a.compensationLane === "SITTER_ORIGINATED" && (a.clientOriginKind !== "SITTER_REFERRAL" || a.referringSitterId !== booking.sitterId || a.requestedSitterId !== booking.sitterId))) return review("ATTRIBUTION_STATE_INVALID");
-  if (r && (!a || a.bookingId !== booking.id || a.compensationLane !== "SITTER_ORIGINATED" || a.referringSitterId !== booking.sitterId ||
-      a.requestedSitterId !== booking.sitterId || r.bookingId !== booking.id || r.sitterId !== booking.sitterId || !r.grant ||
-      r.grant.id !== r.grantId || r.grant.sitterId !== r.sitterId || !validDate(r.reservedAt) || r.reservedAt > now ||
+  const r = booking.rewardReservation;
+  const effective = resolveEffectiveBookingCompensationLane(booking, { requireVisits: true, allowUnassigned: true });
+  if (!effective.ok) return review("ATTRIBUTION_STATE_INVALID");
+  if (r && (!rewardReservationMatchesHistoricalAttribution(booking, r) ||
+      (r.status !== "RELEASED" && (effective.compensationLane !== "SITTER_ORIGINATED" || r.sitterId !== booking.sitterId)) ||
+      !validDate(r.reservedAt) || r.reservedAt > now ||
       !["RESERVED", "RELEASED", "CONSUMED"].includes(r.status) ||
       (r.status === "RESERVED" && (r.consumedAt !== null || r.releasedAt !== null)) ||
       (r.status === "RELEASED" && (!validDate(r.releasedAt) || r.releasedAt > now || r.consumedAt !== null)) ||

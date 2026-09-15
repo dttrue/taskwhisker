@@ -1,3 +1,5 @@
+import { REASSIGNMENT_SELECT, reassignmentPlan, validateReassignmentCare } from "./reassignmentContract.js";
+import { releaseRewardReservationInTransaction, RewardReservationError } from "../../rewards/rewardReservationWrites.js";
 import { isRetryableRewardTransactionError, REWARD_TRANSACTION_ATTEMPTS } from "../../rewards/rewardProgressGrantWrites.js";
 import { REASSIGNABLE_VISIT_STATUSES } from "../../visits/visitPerformerAttribution.js";
 import {
@@ -5,12 +7,12 @@ import {
   validateConfirmation, validateVisitIntervals, validatePreService, assertSitterAvailable,
 } from "./confirmationContract.js";
 
-async function loadLockedBooking(tx, bookingId) {
+async function loadLockedBooking(tx, bookingId, select = CONFIRMATION_SELECT) {
   // Same order as compensation/reservations. Ordinary assignment/cancellation
   // UPDATEs also respect these row locks; Serializable retries stale snapshots.
   await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${bookingId} FOR UPDATE`;
   await tx.$queryRaw`SELECT "id" FROM "Visit" WHERE "bookingId" = ${bookingId} ORDER BY "id" FOR UPDATE`;
-  const booking = await tx.booking.findUnique({ where: { id: bookingId }, select: CONFIRMATION_SELECT });
+  const booking = await tx.booking.findUnique({ where: { id: bookingId }, select });
   validateBookingState(booking);
   return booking;
 }
@@ -20,7 +22,7 @@ async function databaseNow(tx) {
   return clock?.now;
 }
 
-async function operationalTransaction(db, bookingId, actorId, work) {
+async function operationalTransaction(db, bookingId, actorId, work, select = CONFIRMATION_SELECT) {
   if (typeof bookingId !== "string" || !bookingId.trim() || typeof actorId !== "string" || !actorId.trim() || !db?.$transaction) {
     return { ok: false, code: "INVALID_INPUT", error: "A booking and operator identity are required." };
   }
@@ -30,9 +32,10 @@ async function operationalTransaction(db, bookingId, actorId, work) {
         // Internal WithDb boundary still rejects non-operator actors.
         const actor = await tx.user.findUnique({ where: { id: actorId }, select: { role: true } });
         if (actor?.role !== "OPERATOR") reject("NOT_AUTHORIZED", "Operator authorization is required.");
-        return work(tx, await loadLockedBooking(tx, bookingId));
+        return work(tx, await loadLockedBooking(tx, bookingId, select));
       }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
     } catch (error) {
+      if (error instanceof RewardReservationError) return { ok: false, code: "REWARD_STATE_CONFLICT", error: "Reward state requires review before reassignment." };
       if (error instanceof BookingConfirmationError) return { ok: false, code: error.code, error: error.message };
       if (isRetryableRewardTransactionError(error)) {
         if (attempt + 1 < REWARD_TRANSACTION_ATTEMPTS) continue;
@@ -79,8 +82,16 @@ export async function assignBookingSitterWithDb({ db, bookingId, actorId, sitter
     return { ok: false, code: "INVALID_SITTER", error: "Selected sitter was not found." };
   }
   return operationalTransaction(db, bookingId, actorId, async (tx, booking) => {
+    if (booking.rewardReservation) {
+      const rewardSitterId = booking.rewardReservation.sitterId;
+      await tx.$queryRaw`SELECT "id" FROM "SitterRewardAccount" WHERE "sitterId" = ${rewardSitterId} FOR UPDATE`;
+      if (!await tx.sitterRewardAccount.findUnique({ where: { sitterId: rewardSitterId } })) reject("REWARD_STATE_CONFLICT", "Reward account is unavailable.");
+      booking = await tx.booking.findUnique({ where: { id: bookingId }, select: REASSIGNMENT_SELECT });
+      validateBookingState(booking);
+    }
     const fromSitterId = booking.sitterId ?? null;
-    if (fromSitterId === sitterId) return { ok: true, code: "ALREADY_ASSIGNED" };
+    const plan = reassignmentPlan(booking, sitterId, await databaseNow(tx));
+    if (plan.alreadyAssigned) return { ok: true, code: "ALREADY_ASSIGNED" };
     if (sitterId) {
       const sitter = await tx.user.findUnique({ where: { id: sitterId }, select: { role: true } });
       if (sitter?.role !== "SITTER") reject("INVALID_SITTER", "Selected sitter was not found.");
@@ -91,6 +102,11 @@ export async function assignBookingSitterWithDb({ db, bookingId, actorId, sitter
     await tx.visit.updateMany({
       where: { bookingId: booking.id, status: { in: REASSIGNABLE_VISIT_STATUSES } }, data: { sitterId },
     });
+    if (plan.releaseReservation) {
+      const result = await releaseRewardReservationInTransaction({ tx, bookingId: booking.id,
+        reason: "Pre-service reassignment invalidated sitter-originated reward eligibility before compensation commitment." });
+      if (result.status !== "RELEASED") reject("REWARD_STATE_CONFLICT", "Reward release conflicted with another update.");
+    }
     await tx.bookingHistory.create({ data: {
       bookingId: booking.id, fromSitterId, toSitterId: sitterId,
       note: assignToMe ? "Operator assigned booking to self"
@@ -98,6 +114,8 @@ export async function assignBookingSitterWithDb({ db, bookingId, actorId, sitter
         : fromSitterId && !sitterId ? "Operator unassigned sitter" : "Operator reassigned sitter",
       changedByUserId: actorId,
     } });
-    return { ok: true, code: "ASSIGNED" };
-  });
+    // The entire assignment/history/release rolls back if DB work crosses start.
+    validateReassignmentCare(booking, await databaseNow(tx));
+    return { ok: true, code: "ASSIGNED", ...(plan.compensationLane ? { effectiveCompensationLane: plan.compensationLane } : {}) };
+  }, REASSIGNMENT_SELECT);
 }

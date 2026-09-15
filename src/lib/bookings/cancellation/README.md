@@ -37,6 +37,15 @@ triage action, not a Booking cancellation or financial adjustment; this phase
 does not redefine its behavior. No Stripe checkout, payment, refund, payout, or
 transfer runtime was found in the audited cancellation paths.
 
+## Effective compensation lane continuation
+
+Cancellation validates identity through the shared effective-lane contract.
+Historical SITTER_ORIGINATED attribution can legitimately remain unchanged after
+pre-compensation reassignment produces effective/frozen BUSINESS_ASSIGNED economics.
+A RELEASED reward still belongs to the historical referring sitter and is retained.
+Active reward contradictions remain review-only. No cancellation money or lifecycle
+policy changes. See [reassignment guardrails](../confirmation/reassignment.md).
+
 ## Operational decision
 
 | Locked state | Outcome |

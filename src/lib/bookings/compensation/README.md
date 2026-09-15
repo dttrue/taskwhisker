@@ -41,19 +41,20 @@ notification and reader integrations remain activation work.
 
 ## Lane and sitter authority
 
-Lane comes only from immutable `BookingAttributionSnapshot.compensationLane`,
-validated with the existing attribution contract. For SITTER_ORIGINATED, the
-referring sitter, requested sitter, Booking.sitterId and every Visit.sitterId must
-agree. BUSINESS_ASSIGNED uses current Booking.sitterId with a valid SITTER-role
-User and matching Visits. It never guesses from historical referral attribution.
+Historical attribution is immutable. The shared `resolveEffectiveBookingCompensationLane`
+contract derives the pre-commit effective lane from that attribution and consistent
+current Booking/Visit assignment. Historical BUSINESS_ASSIGNED stays business.
+Historical SITTER_ORIGINATED stays sitter-originated only while referring,
+requested, Booking and Visit sitters agree; legitimate pre-commit reassignment
+away derives BUSINESS_ASSIGNED for the new sitter. No attribution field changes.
 
-Before commitment, business reassignment is accepted only when the current
-Booking and all Visits consistently name the new sitter. Sitter-originated
-reassignment away from its immutable referring/requested sitter fails closed.
-After commitment, contradictory reassignment fails replay and does not mutate the
-snapshot. No reassignment hooks are added. Future reassignment requires explicit
-adjustment/reallocation policy. Split performer allocation and final payout
-settlement remain unsolved; performer attribution cannot rewrite committed terms.
+The compensation snapshot freezes the effective lane and sitter. Replay validates
+that frozen identity; it never derives a replacement lane or reloads rates.
+Different-sitter reassignment after commitment is blocked. Released historical
+reward reservations may remain attached to a reassigned business Booking, belong
+to the original sitter, and never apply a reward. Active business reward
+reservations remain contradictory. See [reassignment guardrails](../confirmation/reassignment.md).
+Split performer allocation and final payout settlement remain unresolved.
 
 ## Frozen economics
 

@@ -67,6 +67,12 @@ Retry exhaustion returns CONCURRENT_CONFIRMATION_CONFLICT. Unknown persistence
 errors are converted to BOOKING_PERSISTENCE_ERROR without leaking database details.
 No schema, advisory lock, sitter counter or migration is needed.
 
+**Reassignment continuation:** [Post-compensation guardrails](reassignment.md)
+now block different-sitter changes after commitment and whole-booking changes
+after care starts. Pre-commit changes derive the effective lane and atomically
+release invalidated RESERVED rewards. The paragraphs below record the earlier
+confirmation-phase baseline; the confirmation workflow itself remains unchanged.
+
 The operator's existing `assignSitter()` now uses the same Serializable Booking/Visit
 lock boundary and overlap helper. This narrowly closes its old check-then-write
 race with confirmation. Assignment choices, self-assignment resolution, editable

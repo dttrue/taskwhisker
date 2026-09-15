@@ -220,7 +220,8 @@ export async function releaseRewardReservationWithDb({ db, bookingId, reason } =
 }
 
 // Transaction composition only: caller must lock Booking/Visits and prove that
-// cancellation permanently voids pre-service care with no compensation snapshot.
+// cancellation voids pre-service care or reassignment invalidates reward eligibility,
+// with no compensation snapshot or performed care.
 // Reuses the exact runtime transition; does not reopen grants or consumed rewards.
 export async function releaseRewardReservationInTransaction({ tx, bookingId, reason }) {
   const normalizedReason = typeof reason === "string" ? reason.trim().replace(/\s+/g, " ") : "";

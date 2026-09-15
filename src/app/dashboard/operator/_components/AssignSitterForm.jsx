@@ -15,6 +15,7 @@ export default function AssignSitterForm({
   bookingStatus,
   visitSummary,
   canAssignToMe = false,
+  compensationCommitted = false,
 }) {
   const [state, formAction, pending] = useActionState(
     assignSitter,
@@ -29,10 +30,12 @@ export default function AssignSitterForm({
     }
   }, [state]);
 
-  const disabled = bookingStatus === "COMPLETED" || pending;
+  const disabled = ["COMPLETED", "CANCELED"].includes(bookingStatus) || compensationCommitted || pending;
 
   return (
     <div className="mt-2 space-y-2">
+      {compensationCommitted ? <p className="text-xs text-zinc-600">Compensation is already committed. This reassignment requires review.</p> : null}
+      {state?.error ? <p className="text-xs text-red-700">{state.error}</p> : null}
       {visitSummary ? (
         <p className="text-[11px] text-zinc-500">
           Assign sitter for {visitSummary}

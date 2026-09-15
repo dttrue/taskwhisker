@@ -123,3 +123,12 @@ for (const kind of ["pending", "committed", "reward"]) for (const [name, path, p
   assert.match(html, /manual review/i); assert.doesNotMatch(html, /\$0\.00|fee was waived|payout is not active/);
   if (name === "client") assert.doesNotMatch(html, /sitter payable|committed compensation/i);
 });
+
+for (const kind of ["pending", "committed"]) test(`operator reassignment form exposes the commitment guard for ${kind} compensation`, async () => {
+  const b = await bookingFixture(kind), loader = surfaceLoader(b);
+  const Page = loader.load("app/dashboard/operator/bookings/[id]/page.jsx").default;
+  const html = renderToStaticMarkup(await Page({ params: { id: b.id }, searchParams: {} }));
+  const message = "Compensation is already committed. This reassignment requires review.";
+  assert.equal(html.includes(message), kind === "committed");
+  if (kind === "committed") assert.match(html, /<select[^>]*name="sitterId"[^>]*disabled/);
+});

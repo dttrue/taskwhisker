@@ -13,7 +13,7 @@ const reservationFor = (tx, bookingId) => tx.sitterRewardReservation.findUnique(
 
 export async function resolveBookingSitterCompensationEconomics({ tx, booking, identity, reservation }) {
   const { sitterId, compensationLane, pricing } = identity;
-  const rewardApplied = reservation?.status === "RESERVED";
+  const rewardApplied = compensationLane === "SITTER_ORIGINATED" && reservation?.status === "RESERVED";
   const common = {
     bookingId: booking.id, sitterId, compensationLane, currency: pricing.currency, quantity: booking.quantity,
     clientBaseAggregateCents: null, clientServiceSubtotalCents: null,
@@ -68,15 +68,17 @@ async function commitInTransaction(tx, bookingId) {
   const booking = await tx.booking.findUnique({ where: { id: bookingId }, include: bookingInclude });
   const identity = validateCanonicalCompensationBooking(booking);
   let reservation = await reservationFor(tx, bookingId);
-  validateReservation(reservation, bookingId, identity.sitterId, identity.compensationLane);
+  validateReservation(reservation, bookingId, identity.sitterId, identity.compensationLane, booking.attributionSnapshot);
   let account = null;
   if (reservation) {
-    await tx.$queryRaw`SELECT "id" FROM "SitterRewardAccount" WHERE "sitterId" = ${identity.sitterId} FOR UPDATE`;
-    account = await tx.sitterRewardAccount.findUnique({ where: { sitterId: identity.sitterId } });
+    // Released historical entitlement still belongs to the original sitter.
+    const rewardSitterId = reservation.sitterId;
+    await tx.$queryRaw`SELECT "id" FROM "SitterRewardAccount" WHERE "sitterId" = ${rewardSitterId} FOR UPDATE`;
+    account = await tx.sitterRewardAccount.findUnique({ where: { sitterId: rewardSitterId } });
     if (!account) reject("INVALID_REWARD_STATE", "Reservation reward account is missing.");
     reservation = await reservationFor(tx, bookingId);
     if (!reservation) reject("INVALID_REWARD_STATE", "Reservation disappeared during commitment.");
-    validateReservation(reservation, bookingId, identity.sitterId, identity.compensationLane);
+    validateReservation(reservation, bookingId, identity.sitterId, identity.compensationLane, booking.attributionSnapshot);
   }
   if (booking.sitterCompensation) {
     if (booking.visits.some((v) => v.sitterId !== identity.sitterId)) reject("VISIT_ASSIGNMENT_MISMATCH", "Current Visit assignment contradicts frozen compensation.");

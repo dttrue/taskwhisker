@@ -187,12 +187,12 @@ test("legacy and canonical-shaped inputs produce the same operational result", a
     assert.equal(h.state.booking.clientTotalCents, money);
   }
 });
-test("reassignment preserves completed performer records and one assignment history", async () => {
+test("whole-booking reassignment with completed care is blocked without changing performer or history", async () => {
   const b = fixture(); b.visits.push({ ...b.visits[0], id: "complete", status: "COMPLETED", performedBySitterId: "sitter" });
   const h = harness({ booking: b });
-  assert.equal((await assignBookingSitterWithDb({ db: h.db, bookingId: b.id, actorId: "operator", sitterId: "other" })).code, "ASSIGNED");
-  assert.equal(h.state.booking.visits[0].sitterId, "other"); assert.equal(h.state.booking.visits[1].sitterId, "sitter");
-  assert.equal(h.state.history[0].fromSitterId, "sitter"); assert.equal(h.state.history[0].toSitterId, "other");
+  assert.equal((await assignBookingSitterWithDb({ db: h.db, bookingId: b.id, actorId: "operator", sitterId: "other" })).code, "CARE_ALREADY_STARTED");
+  assert.equal(h.state.booking.visits[0].sitterId, "sitter"); assert.equal(h.state.booking.visits[1].sitterId, "sitter");
+  assert.equal(h.state.history.length, 0); assert.equal(h.state.booking.visits[1].performedBySitterId, "sitter");
 });
 test("operator wrappers retain authorization, ID resolution and postcommit revalidation", async () => {
   const source = await readFile(new URL("../../../app/dashboard/operator/bookings/actions.js", import.meta.url), "utf8");
