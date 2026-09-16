@@ -4,7 +4,7 @@ import test from "node:test";
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import {
-  reserveRewardForBookingWithDb as reserve,
+  reserveRewardForBookingWithDb as rawReserve,
   consumeRewardReservationWithDb as consume,
   releaseRewardReservationWithDb as release,
 } from "./rewardReservationWrites.js";
@@ -44,6 +44,8 @@ test("guarded PostgreSQL reward reservation lifecycle and concurrency", {
   ];
   const counts = async () => Object.fromEntries(await Promise.all(protectedModels.map(async (model) => [model, await db[model].count()])));
   const marker = `reward-reservation-qa-${randomUUID()}`;
+  const ownerSitterId = `${marker}-owner-sitter`;
+  const reserve = (args) => rawReserve({ ...args, ownerConfiguration: { operatorId, sitterId: ownerSitterId } });
   const userIds = [], sitterIds = [], bookingIds = [];
   const operatorId = `${marker}-operator`, clientId = `${marker}-client`;
   let beforeCounts;
@@ -127,6 +129,8 @@ test("guarded PostgreSQL reward reservation lifecycle and concurrency", {
     beforeCounts = await counts();
     userIds.push(operatorId);
     await db.user.create({ data: { id: operatorId, role: "OPERATOR", name: "Temporary reservation QA", email: `${operatorId}@example.invalid` } });
+    userIds.push(ownerSitterId);
+    await db.user.create({ data: { id: ownerSitterId, role: "SITTER", email: `${ownerSitterId}@example.invalid` } });
     await db.client.create({ data: { id: clientId, name: "Temporary reservation QA" } });
 
     await t.test("successful reservation preserves Booking money and does not create progress events", async () => {

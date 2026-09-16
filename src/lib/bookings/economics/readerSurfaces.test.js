@@ -14,7 +14,7 @@ import { compensationFixture } from "../compensation/fixtures.js";
 const require = createRequire(import.meta.url);
 const src = fileURLToPath(new URL("../../../", import.meta.url));
 await swc.loadBindings();
-function surfaceLoader(booking) {
+function surfaceLoader(booking, actorId = "sitter") {
   const cache = new Map();
   const queries = [];
   const db = {
@@ -37,7 +37,7 @@ function surfaceLoader(booking) {
     function dependency(name) {
       if (name === "next/link") return { __esModule: true, default: ({ children, ...props }) => React.createElement("a", props, children) };
       if (name === "next/navigation") return { notFound() { throw new Error("Not found"); }, useRouter: () => ({ refresh() {} }), usePathname: () => "/dashboard/sitter" };
-      if (name === "@/auth" || name === "@/lib/auth") return { requireRole: async () => ({ user: { id: "sitter", email: "sitter@example.invalid" } }), auth: async () => ({ user: { id: "sitter" } }) };
+      if (name === "@/auth" || name === "@/lib/auth") return { requireRole: async () => ({ user: { id: actorId, email: "sitter@example.invalid" } }), auth: async () => ({ user: { id: actorId } }) };
       if (name === "@/lib/db") return { prisma: db };
       if (/actions(?:\.js)?$/.test(name) || /approveCancellationActions$/.test(name)) return actions;
       if (name.startsWith("@/") || name.startsWith(".")) {
@@ -66,6 +66,12 @@ async function bookingFixture(kind) {
   }
   return b;
 }
+test("Visit participant does not gain lead booking financial/history access", async () => {
+  const booking = await bookingFixture("committed");
+  booking.visits[0].sitterId = "participant";
+  const Component = surfaceLoader(booking, "participant").load("app/dashboard/sitter/bookings/[id]/page.jsx").default;
+  await assert.rejects(Component({ params: { id: booking.id } }), /Not found/);
+});
 for (const [name, path, props, amount, pending] of [
   ["operator table", "app/dashboard/operator/_components/BookingsTable.jsx", (b) => ({ bookings: [b] }), "$27.50", false],
   ["sitter table", "app/dashboard/sitter/_components/BookingTable.jsx", (b) => ({ bookings: [b] }), "$22.50", true],

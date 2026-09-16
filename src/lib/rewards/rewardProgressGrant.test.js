@@ -1,3 +1,4 @@
+import { ownerConfiguration, ownerFixtureUser } from "../bookings/ownerIdentityFixtures.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -139,7 +140,7 @@ test("transaction normalizes ACTIVE capacity exhaustion without creating a reser
       attributionSnapshot: { clientOriginKind: "SITTER_REFERRAL", compensationLane: "SITTER_ORIGINATED", referringSitterId: "sitter", requestedSitterId: "sitter" },
       visits: [{ status: "COMPLETED", performedBySitterId: "sitter", completedAt: new Date(now.getTime() - 1000) }],
     }; } },
-    user: { async findUnique() { return { id: "sitter", role: "SITTER" }; } },
+    user: { async findUnique({ where }) { return ownerFixtureUser(where.id) ?? { id: "sitter", role: "SITTER" }; } },
     sitterRewardAccount: {
       async createMany(input) { assert.equal(input.skipDuplicates, true); },
       async findUnique() { return account; },
@@ -173,7 +174,7 @@ test("transaction normalizes ACTIVE capacity exhaustion without creating a reser
     },
   };
   const value = await recordQualifyingSitterOriginatedCompletionWithDb({
-    db: { $transaction: (work) => work(tx) }, bookingId: "booking", clock: () => now,
+    db: { $transaction: (work) => work(tx) }, bookingId: "booking", clock: () => now, ownerConfiguration,
   });
   assert.equal(value.status, "RECORDED");
   assert.equal(value.progressAfter, 1);

@@ -3,8 +3,10 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { requireRole } from "@/auth";
 
 export async function sendBookingMessage(formData) {
+  await requireRole(["OPERATOR"]);
   const bookingId = String(formData.get("bookingId") || "");
   const body = String(formData.get("body") || "").trim();
 

@@ -30,6 +30,7 @@ for (const route of ["operator direct", "operator approval", "sitter approval", 
     if (name === "@/auth") return { auth: async () => ({ user: { email: "qa@example.invalid" } }), requireRole: async () => ({ user: { id } }) };
     if (name === "next/cache") return { revalidatePath: (path) => paths.push(path) };
     if (name === "next/navigation") return {};
+    if (name.includes("businessOwnerIdentity")) return {};
     if (name.endsWith("economics/bookingEconomics")) return economics;
     if (name.endsWith("cancellation/canonicalCancellation")) return { cancelCanonicalBookingWithDb: async (args) => { calls.push({ canonical: args }); return canonicalResult; } };
     if (name.endsWith("cancelBookingTransaction")) return { CLIENT_CANCELLATION_FEE_RATE_BPS: 1500,

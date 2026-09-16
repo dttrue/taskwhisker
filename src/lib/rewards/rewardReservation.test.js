@@ -1,3 +1,4 @@
+import { ownerConfiguration, ownerFixtureUser } from "../bookings/ownerIdentityFixtures.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -34,7 +35,7 @@ function fixture() {
       state.calls.push("databaseClock"); return [{ now: state.now }];
     },
     booking: { async findUnique() { return structuredClone(state.booking); } },
-    user: { async findUnique() { return structuredClone(state.sitter); } },
+    user: { async findUnique({ where }) { return ownerFixtureUser(where.id) ?? structuredClone(state.sitter); } },
     sitterRewardAccount: {
       async findUnique() { return structuredClone(state.account); },
       async update({ data }) {
@@ -78,7 +79,7 @@ function fixture() {
     locked = false;
     try { return await work(tx); } catch (error) { Object.assign(state, before); throw error; }
   } };
-  return { state, db, reserve: () => reserve({ db, bookingId: "booking" }), consume: () => consume({ db, bookingId: "booking" }),
+  return { state, db, reserve: () => reserve({ db, bookingId: "booking", ownerConfiguration }), consume: () => consume({ db, bookingId: "booking" }),
     release: (reason = "  Booking   canceled  ") => release({ db, bookingId: "booking", reason }) };
 }
 
@@ -285,7 +286,7 @@ test("server wrappers bind the real DB and allowlist only bookingId/reason", asy
 });
 
 test("WithDb also ignores caller clock and economic overrides", async () => {
-  const f = fixture(); const value = await reserve({ db: f.db, bookingId: "booking", clock: () => new Date(0), sitterId: "evil", grantId: "evil", feeBasisPoints: 0, capacity: 0 });
+  const f = fixture(); const value = await reserve({ db: f.db, bookingId: "booking", ownerConfiguration, clock: () => new Date(0), sitterId: "evil", grantId: "evil", feeBasisPoints: 0, capacity: 0 });
   assert.equal(value.reservation.feeBasisPoints, 500); assert.deepEqual(value.reservation.reservedAt, f.state.now);
 });
 

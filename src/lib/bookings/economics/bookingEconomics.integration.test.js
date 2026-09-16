@@ -40,7 +40,7 @@ test("guarded PostgreSQL economics readers and completion policy", {
     const grant = await db.sitterRewardGrant.create({ data: { sitterId, rewardLevel: 1, feeBasisPoints: 500, maximumUses: 10, triggerEventId: event.id,
       startsAt: new Date(+clock.now - 60000), expiresAt: new Date(+clock.now + 3600000) } });
     await db.sitterRewardAccount.upsert({ where: { sitterId }, create: { sitterId, rewardLevel: 1, currentGrantId: grant.id }, update: { currentGrantId: grant.id } });
-    assert.equal((await reserveRewardForBookingWithDb({ db, bookingId })).status, "RESERVED");
+    assert.equal((await reserveRewardForBookingWithDb({ db, bookingId, ownerConfiguration: { operatorId, sitterId: otherId } })).status, "RESERVED");
     return grant;
   }
   try {

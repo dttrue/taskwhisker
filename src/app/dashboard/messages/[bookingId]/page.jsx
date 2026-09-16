@@ -1,5 +1,6 @@
 // src/app/dashboard/messages/[bookingId]/page.jsx
 import { notFound } from "next/navigation";
+import { requireRole } from "@/auth";
 import Link from "next/link";
 import { getBookingConversation } from "@/lib/messaging/getBookingConversation";
 import MessageForm from "./MessageForm";
@@ -25,6 +26,7 @@ function getSenderLabel(message) {
 }
 
 export default async function BookingMessagesPage({ params }) {
+  await requireRole(["OPERATOR"]);
   const { bookingId } = await params;
 
   const conversation = await getBookingConversation(bookingId);

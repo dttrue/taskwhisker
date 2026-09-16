@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
-import { recordQualifyingSitterOriginatedCompletionWithDb as record } from "./rewardProgressGrantWrites.js";
+import { recordQualifyingSitterOriginatedCompletionWithDb as rawRecord } from "./rewardProgressGrantWrites.js";
 import { REWARD_DURATION_MS } from "./rewardPolicy.js";
 
 // Opt-in only. No seed/reset, existing-row mutation, live completion action,
@@ -44,6 +44,8 @@ test("guarded PostgreSQL reward progress and concurrency", {
     return Object.fromEntries(await Promise.all(protectedModels.map(async (model) => [model, await db[model].count()])));
   }
   const marker = `reward-runtime-qa-${randomUUID()}`;
+  const ownerSitterId = `${marker}-owner-sitter`;
+  const record = (args) => rawRecord({ ...args, ownerConfiguration: { operatorId, sitterId: ownerSitterId } });
   const userIds = [];
   const sitterIds = [];
   const bookingIds = [];
@@ -108,6 +110,8 @@ test("guarded PostgreSQL reward progress and concurrency", {
   try {
     userIds.push(operatorId);
     await db.user.create({ data: { id: operatorId, role: "OPERATOR", name: "Temporary reward QA", email: `${operatorId}@example.invalid` } });
+    userIds.push(ownerSitterId);
+    await db.user.create({ data: { id: ownerSitterId, role: "SITTER", email: `${ownerSitterId}@example.invalid` } });
     await db.client.create({ data: { id: clientId, name: "Temporary reward runtime QA" } });
 
     await t.test("first multi-visit booking creates one account and exactly one credit", async () => {

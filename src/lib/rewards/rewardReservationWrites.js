@@ -1,3 +1,4 @@
+import { isBusinessOwnerSitterWithDb, BusinessOwnerIdentityError } from "../bookings/businessOwnerIdentityContract.js";
 import { inspectCurrentRewardGrant } from "./rewardPolicy.js";
 import {
   isRetryableRewardTransactionError,
@@ -92,7 +93,7 @@ function eligibilityReason(booking, sitter) {
   return null;
 }
 
-async function reserveInTransaction(tx, bookingId) {
+async function reserveInTransaction(tx, bookingId, ownerConfiguration) {
   // Also keep the current assignment/lifecycle stable through the decision.
   // No Booking writes or booking-creation integration are performed here.
   await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${bookingId} FOR UPDATE`;
@@ -107,6 +108,9 @@ async function reserveInTransaction(tx, bookingId) {
   const sitter = sitterId ? await tx.user.findUnique({ where: { id: sitterId }, select: { id: true, role: true } }) : null;
   const reason = eligibilityReason(booking, sitter);
   if (reason) return result("NOT_ELIGIBLE", bookingId, reason);
+  if (await isBusinessOwnerSitterWithDb({ db: tx, userId: sitterId, configuration: ownerConfiguration })) {
+    return result("NOT_ELIGIBLE", bookingId, "OWNER_REWARD_EXCLUDED");
+  }
   const account = await lockAccount(tx, sitterId);
   if (!account) return result("NO_REWARD_AVAILABLE", bookingId, "NO_REWARD_ACCOUNT");
   const existingAfterLock = await findReservation(tx, bookingId);
@@ -181,6 +185,7 @@ async function run({ db, bookingId }, work, allowReserveReplay = false) {
         isolationLevel: "Serializable", maxWait: 10000, timeout: 20000,
       });
     } catch (error) {
+      if (error instanceof BusinessOwnerIdentityError) throw new RewardReservationError(error.code, error.message);
       if (error instanceof RewardReservationError) throw error;
       if (isRetryableRewardTransactionError(error)) {
         if (attempt + 1 < REWARD_TRANSACTION_ATTEMPTS) continue;
@@ -203,8 +208,8 @@ async function run({ db, bookingId }, work, allowReserveReplay = false) {
 
 // Injectable database boundary for tests/internal composition only. Production
 // callers use rewardReservationService.js, which binds the server database.
-export function reserveRewardForBookingWithDb({ db, bookingId } = {}) {
-  return run({ db, bookingId }, reserveInTransaction, true);
+export function reserveRewardForBookingWithDb({ db, bookingId, ownerConfiguration } = {}) {
+  return run({ db, bookingId }, (tx, id) => reserveInTransaction(tx, id, ownerConfiguration), true);
 }
 
 export function consumeRewardReservationWithDb({ db, bookingId } = {}) {

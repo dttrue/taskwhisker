@@ -1,3 +1,4 @@
+import { isBusinessOwnerSitterWithDb, BusinessOwnerIdentityError } from "../bookings/businessOwnerIdentityContract.js";
 import {
   REWARD_MAX_USES,
   REWARD_SITTER_FEE_BPS,
@@ -93,7 +94,7 @@ function validateGrant(grant, sitterId) {
       grant.expiresAt <= grant.startsAt || !Number.isInteger(grant.maximumUses) || grant.maximumUses < 1) invalidState();
 }
 
-async function recordInTransaction(tx, bookingId, clock) {
+async function recordInTransaction(tx, bookingId, clock, ownerConfiguration) {
   const recorded = await existingAdjudication(tx, bookingId);
   if (recorded) return recorded;
   const booking = await tx.booking.findUnique({ where: { id: bookingId }, select: REWARD_QUALIFICATION_SELECT });
@@ -104,6 +105,9 @@ async function recordInTransaction(tx, bookingId, clock) {
   const qualification = evaluateRewardQualification(booking, sitter);
   if (!qualification.qualified) return result("NOT_QUALIFIED", bookingId, { reasonCode: qualification.reasonCode });
   const { sitterId, qualificationTime } = qualification;
+  if (await isBusinessOwnerSitterWithDb({ db: tx, userId: sitterId, configuration: ownerConfiguration })) {
+    return result("NOT_QUALIFIED", bookingId, { reasonCode: "OWNER_REWARD_EXCLUDED" });
+  }
 
   // Unique sitterId handles creation races; SERIALIZABLE retries restart any
   // transaction whose snapshot predates a competing creator/locked update.
@@ -185,17 +189,18 @@ async function recordInTransaction(tx, bookingId, clock) {
   });
 }
 
-export async function recordQualifyingSitterOriginatedCompletionWithDb({ db, bookingId, clock = () => new Date() }) {
+export async function recordQualifyingSitterOriginatedCompletionWithDb({ db, bookingId, clock = () => new Date(), ownerConfiguration }) {
   const id = typeof bookingId === "string" ? bookingId.trim() : "";
   if (!id || typeof db?.$transaction !== "function" || typeof clock !== "function") {
     throw new RewardProgressError("INVALID_INPUT", "A booking ID and transaction-capable database are required.");
   }
   for (let attempt = 0; attempt < REWARD_TRANSACTION_ATTEMPTS; attempt += 1) {
     try {
-      return await db.$transaction((tx) => recordInTransaction(tx, id, clock), {
+      return await db.$transaction((tx) => recordInTransaction(tx, id, clock, ownerConfiguration), {
         isolationLevel: "Serializable", maxWait: 10000, timeout: 20000,
       });
     } catch (error) {
+      if (error instanceof BusinessOwnerIdentityError) throw new RewardProgressError(error.code, error.message);
       if (error instanceof RewardProgressError) {
         if (error.code === "COMPLETION_TIME_IN_FUTURE") {
           return result("NOT_QUALIFIED", id, { reasonCode: error.code });

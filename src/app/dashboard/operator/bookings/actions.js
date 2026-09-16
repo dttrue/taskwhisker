@@ -5,6 +5,8 @@ import { economicsSelect, cancellationGuard, isCanonicalBooking } from "@/lib/bo
 
 
 import { prisma } from "@/lib/db";
+import { resolveBusinessOwnerSelfAssignment } from "@/lib/bookings/businessOwnerIdentity";
+import { BusinessOwnerIdentityError } from "@/lib/bookings/businessOwnerIdentityContract";
 import { requireRole } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -119,29 +121,6 @@ export async function reviewMissedVisit({
   }
   return { ok: true };
 }
-async function resolveAssignableSitterIdForOperator(session) {
-  const operatorEmail = session?.user?.email;
-  if (!operatorEmail) return null;
-
-  let sitterEmail = null;
-
-  if (operatorEmail === "therainbowniche@gmail.com") {
-    sitterEmail = "lunajobs13@gmail.com";
-  }
-
-  if (!sitterEmail) return null;
-
-  const sitter = await prisma.user.findFirst({
-    where: {
-      role: "SITTER",
-      email: sitterEmail,
-    },
-    select: { id: true },
-  });
-
-  return sitter?.id ?? null;
-}
-
 function revalidateOperator(bookingId) {
   revalidatePath("/dashboard/operator");
   revalidatePath(`/dashboard/operator/bookings/${bookingId}`);
@@ -398,14 +377,11 @@ export async function assignSitter(arg1, arg2) {
   let nextSitterId = null;
 
   if (assignToMe) {
-    nextSitterId = await resolveAssignableSitterIdForOperator(session);
-
-    if (!nextSitterId) {
-      return {
-        ok: false,
-        error:
-          "No linked sitter account was found for this operator. Make sure your sitter account exists and uses the same email.",
-      };
+    try {
+      nextSitterId = await resolveBusinessOwnerSelfAssignment(actorId);
+    } catch (error) {
+      if (error instanceof BusinessOwnerIdentityError) return { ok: false, code: error.code, error: error.message };
+      throw error;
     }
   } else {
     const nextSitterIdRaw = formData?.get("sitterId")?.toString() || "";
