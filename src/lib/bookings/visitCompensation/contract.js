@@ -85,6 +85,7 @@ export function authorizationValid(booking, visit, row) {
   if (row.revision === 1 && ["sitterId", "compensationLane", "performerPolicy", "feePolicy", "rateSource", "sourceRateId", "rateVersion", "rewardReservationId", "rewardGrantId"].some((k) => row[k] !== c[k])) return false;
   if (row.revision === 1 && row.performerPolicy === "ORDINARY" && row.compensationLane === "BUSINESS_ASSIGNED" &&
       (row.sitterBaseCents !== c.baseUnitCompensationCents || row.sitterPetCents * c.quantity !== c.additionalPetCompensationCents)) return false;
+  if (row.compensationLane === "SITTER_ORIGINATED" && (booking.attributionSnapshot?.compensationLane !== "SITTER_ORIGINATED" || booking.attributionSnapshot.referringSitterId !== row.sitterId || booking.attributionSnapshot.requestedSitterId !== row.sitterId)) return false;
   const reward = row.feePolicy === "REWARD_5_PERCENT";
   if (reward) {
     const r = booking.rewardReservation, a = booking.attributionSnapshot;
@@ -110,6 +111,7 @@ export function inspectFinancialReadiness(booking, visitId = null) {
     if (!Array.isArray(rows) || rows.filter((a) => a.revision === 1).length !== 1) return fail("AUTHORIZATION_MISSING");
     const ordered = [...rows].sort((a, b) => a.revision - b.revision);
     if (ordered.some((a, i) => a.revision !== i + 1 || a.predecessorId !== (i ? ordered[i - 1].id : null))) return fail("AUTHORIZATION_INVALID");
+    if (ordered.some((a, i) => !authorizationValid(booking, { ...visit, sitterId: a.sitterId }, { ...a, void: null }) || i && (ordered[i - 1].void || a.authorizedAt < ordered[i - 1].authorizedAt))) return fail("AUTHORIZATION_INVALID");
     if (visitId && visit.id !== visitId) continue;
     if (visit.status === "CANCELED") continue;
     if (!authorizationValid(booking, visit, activeAuthorization(visit))) return fail("AUTHORIZATION_INVALID");

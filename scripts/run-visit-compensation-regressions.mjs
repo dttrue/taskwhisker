@@ -4,6 +4,7 @@ import { writeFile } from "node:fs/promises";
 import { authenticateCanonicalQa } from "./canonical-booking-qa.mjs";
 await authenticateCanonicalQa().catch(()=>{console.error("QA authentication failed; no tests started.");process.exit(1);});
 const suites=[
+ ["HANDOFF","bookings/handoff/handoff"],
  ["VISIT_COMPENSATION","bookings/visitCompensation/visitCompensation"],
  ["COMPENSATION","bookings/compensation/bookingSitterCompensation"],
  ["READERS","bookings/economics/bookingEconomics"],

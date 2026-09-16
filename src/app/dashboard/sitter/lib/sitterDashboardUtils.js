@@ -84,7 +84,7 @@ export function getRemainingVisitCountForToday(
   return bookings.reduce((count, booking) => {
     const remainingTodayVisits =
       booking.visits?.filter((visit) => {
-        if (visit.status === "COMPLETED" || visit.status === "CANCELED") {
+        if (visit.canExecute === false || visit.status === "COMPLETED" || visit.status === "CANCELED") {
           return false;
         }
 
@@ -126,7 +126,7 @@ export function getRemainingPayoutForToday(
     if (!totalVisits) return sum;
 
     const remainingTodayVisits = visits.filter((visit) => {
-      if (visit.status === "COMPLETED" || visit.status === "CANCELED") {
+      if (visit.canExecute === false || visit.status === "COMPLETED" || visit.status === "CANCELED") {
         return false;
       }
 
@@ -142,7 +142,7 @@ export function getRemainingPayoutForToday(
 
     const payoutPerVisit = visitPayoutEstimate(booking, totalVisits, { round: false });
 
-    return sumKnownAmounts([sum, payoutPerVisit == null ? null : payoutPerVisit * remainingTodayVisits.length]);
+    return sumKnownAmounts([sum, ...remainingTodayVisits.map(v => v.ownMoney?.payoutCents ?? payoutPerVisit)]);
   }, 0);
 
   return total == null ? null : Math.round(total);
@@ -230,7 +230,7 @@ export function getActionableVisitForBooking(booking, now) {
     const start = new Date(visit.startTime);
     if (Number.isNaN(start.getTime())) return false;
 
-    return visit.status === "CONFIRMED" && isVisitWithinGrace(visit, now);
+    return visit.canExecute !== false && visit.status === "CONFIRMED" && isVisitWithinGrace(visit, now);
   });
 
   return (
@@ -241,7 +241,7 @@ export function getActionableVisitForBooking(booking, now) {
 }
 
 export function canCompleteVisit(visit, now) {
-  if (!visit || !now) return false;
+  if (!visit || !now || visit.canExecute === false) return false;
 
   const start = new Date(visit.startTime);
   if (Number.isNaN(start.getTime())) return false;
@@ -449,12 +449,12 @@ export function getSitterMapBookings(bookings = [], now) {
       const todayVisit =
         booking.visits?.find(
           (visit) =>
-            visit.status === "CONFIRMED" &&
+            visit.canExecute !== false && visit.status === "CONFIRMED" &&
             isSameDay(new Date(visit.startTime), now) &&
             isVisitWithinGrace(visit, now)
         ) || null;
 
-      const nextVisit = getBookingNextVisit(booking, now);
+      const nextVisit = getBookingNextVisit({ ...booking, visits: booking.visits?.filter(v => v.canExecute !== false) }, now);
 
       const address = [
         booking.serviceAddressLine1,
@@ -489,6 +489,7 @@ export function getSitterMapBookings(bookings = [], now) {
         todayVisitEnd: todayVisit?.endTime || null,
         todayVisitStatus: todayVisit?.status || null,
         economics: readBookingEconomics(booking),
+        hasVisitHandoff: Boolean(booking.hasVisitHandoff),
         visits: booking.visits || [],
         hasOpenCancellationRequest: hasOpenCancellationRequest(booking),
       };
@@ -612,7 +613,7 @@ export function getVisitEntries(bookings = []) {
     const payoutPerVisit = visitPayoutEstimate(booking, totalVisits);
     const openCancellationRequest = hasOpenCancellationRequest(booking);
 
-    return visits.map((visit) => {
+    return visits.filter(v => v.canExecute !== false).map((visit) => {
       const address = [
         booking.serviceAddressLine1,
         booking.serviceAddressLine2,
@@ -636,7 +637,7 @@ export function getVisitEntries(bookings = []) {
           booking.petNames,
           booking.serviceSummary || "Pet care booking"
         ),
-        payoutPerVisitCents: payoutPerVisit,
+        payoutPerVisitCents: visit.ownMoney?.payoutCents ?? payoutPerVisit,
         payoutStatus: visitPayoutStatus(booking),
         address,
         lat: booking.serviceLat != null ? Number(booking.serviceLat) : null,
@@ -720,6 +721,7 @@ export function serializeVisitEntry(entry) {
     visit: {
       id: entry.visit?.id,
       status: entry.visit?.status,
+      canExecute: entry.visit?.canExecute,
       startTime:
         entry.visit?.startTime?.toISOString?.() || entry.visit?.startTime,
       endTime: entry.visit?.endTime?.toISOString?.() || entry.visit?.endTime,

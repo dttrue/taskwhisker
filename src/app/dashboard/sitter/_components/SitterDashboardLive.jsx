@@ -3,6 +3,7 @@
 import { completionGuard, sumKnownAmounts } from "@/lib/bookings/economics/bookingEconomics";
 
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import StatCard from "./StatCard";
@@ -188,7 +189,7 @@ export default function SitterDashboardLive({
       localBookings
         .flatMap((b) => b.visits || [])
         .filter((v) => {
-          if (v.status === "COMPLETED" || v.status === "CANCELED") return false;
+          if (v.canExecute === false || v.status === "COMPLETED" || v.status === "CANCELED") return false;
           return new Date(v.startTime) > now;
         })
         .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))[0] ||
@@ -206,7 +207,7 @@ export default function SitterDashboardLive({
     const tomorrowCount = localBookings.reduce((count, booking) => {
       const visits =
         booking.visits?.filter((visit) => {
-          if (visit.status === "COMPLETED" || visit.status === "CANCELED") {
+          if (visit.canExecute === false || visit.status === "COMPLETED" || visit.status === "CANCELED") {
             return false;
           }
 
@@ -382,6 +383,21 @@ export default function SitterDashboardLive({
             onCompleteVisit={handleVisitCompleted}
           />
         ) : null}
+
+        {localBookings.filter(b => b.hasVisitHandoff).map(booking => (
+          <section key={booking.id} className="rounded-xl border bg-white p-5">
+            <h2 className="font-semibold">Full booking schedule · {booking.serviceSummary}</h2>
+            <p className="mt-1 text-sm">You remain the lead sitter. Completion controls and earnings cover only your assigned Visits.</p>
+            <ul className="mt-3 space-y-2">
+              {booking.visits.map(visit => (
+                <li key={visit.id} className="text-sm">
+                  {formatDateTime(visit.startTime)} – {formatDateTime(visit.endTime)} · {visit.status} · Scheduled sitter: {visit.scheduledSitterName}
+                </li>
+              ))}
+            </ul>
+            <Link className="mt-3 inline-block underline" href={`/dashboard/sitter/bookings/${booking.id}`}>View booking</Link>
+          </section>
+        ))}
 
         <TodayVisitsSection
           visits={derived.todayVisitEntries}

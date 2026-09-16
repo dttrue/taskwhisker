@@ -1,3 +1,4 @@
+import { careReadiness } from "../visitCompensation/readiness.js";
 import { visitFinancialInclude } from "../visitCompensation/contract.js";
 import { voidVisitAuthorization } from "../visitCompensation/writes.js";
 import { resolveEffectiveBookingCompensationLane, rewardReservationMatchesHistoricalAttribution } from "../compensation/effectiveCompensationLane.js";
@@ -30,8 +31,9 @@ export function inspectCanonicalCancellation(booking, now, { waiveFee = false } 
   if (careStarted) return review("CARE_STARTED_OR_PERFORMED");
   if (!validDate(now) || booking.canceledAt || booking.completedAt || !visits.length || visits.length !== booking.quantity ||
       visits.some((v) => !validDate(v.startTime) || !validDate(v.endTime) || v.endTime <= v.startTime ||
-        v.bookingId !== booking.id || v.operatorId !== booking.operatorId || v.sitterId !== booking.sitterId ||
+        v.bookingId !== booking.id || v.operatorId !== booking.operatorId || (!booking.sitterCompensation && v.sitterId !== booking.sitterId) ||
         v.status !== (booking.status === "REQUESTED" ? "PENDING" : "CONFIRMED"))) return review("OPERATIONAL_STATE_INVALID");
+  if (booking.visits.some(v => v.sitterId !== booking.sitterId) && !careReadiness(booking).ok) return review("FINANCIAL_READINESS_MISSING");
   const economics = readBookingEconomics(booking);
   if (economics.client.status !== "AVAILABLE") return review(economics.client.reason);
   if (booking.status === "REQUESTED" && booking.sitterCompensation) return review("COMPENSATION_STATUS_CONTRADICTION");
@@ -39,7 +41,7 @@ export function inspectCanonicalCancellation(booking, now, { waiveFee = false } 
   if (booking.sitterCompensation === undefined || booking.rewardReservation === undefined) return review("REQUIRED_RELATION_NOT_LOADED");
   if (booking.pricingSnapshot.committedAt > now || booking.sitterCompensation?.committedAt > now) return review("COMMITMENT_TIME_INVALID");
   const r = booking.rewardReservation;
-  const effective = resolveEffectiveBookingCompensationLane(booking, { requireVisits: true, allowUnassigned: true });
+  const effective = resolveEffectiveBookingCompensationLane(booking.sitterCompensation ? { ...booking, visits: undefined } : booking, { requireVisits: !booking.sitterCompensation, allowUnassigned: true });
   if (!effective.ok) return review("ATTRIBUTION_STATE_INVALID");
   if (r && (!rewardReservationMatchesHistoricalAttribution(booking, r) ||
       (r.status !== "RELEASED" && (effective.compensationLane !== "SITTER_ORIGINATED" || r.sitterId !== booking.sitterId)) ||

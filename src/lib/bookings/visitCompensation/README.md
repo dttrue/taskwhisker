@@ -1,5 +1,9 @@
 # Visit compensation foundation
 
+Continuation: [internal selected-Visit handoff](../handoff/README.md) now supplies
+revision replacement and a bounded participant DTO. UI activation remains disabled.
+The sections below describe the original foundation phase.
+
 Canonical confirmation is the financial-readiness boundary. Public canonical
 creation and split handoff remain disabled. No settlement or payout transfer is
 implemented.

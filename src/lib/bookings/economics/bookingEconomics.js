@@ -1,3 +1,4 @@
+import { inspectFinancialReadiness, activeAuthorization } from "../visitCompensation/contract.js";
 import { resolveEffectiveBookingCompensationLane, rewardReservationMatchesHistoricalAttribution } from "../compensation/effectiveCompensationLane.js";
 // Frozen accounting read boundary. No rate lookup, quote engine, or writes.
 const moneyFields = ["clientTotalCents", "platformFeeCents", "sitterPayoutCents"];
@@ -54,7 +55,7 @@ export function readBookingEconomics(booking) {
   const policyValid = c && (c.performerPolicy == null && c.feePolicy == null ||
     c.performerPolicy === "ORDINARY" && c.feePolicy === (c.rewardApplied ? "REWARD_5_PERCENT" : "STANDARD_10_PERCENT") ||
     owner && c.feePolicy === "OWNER_0_PERCENT");
-  const effective = c ? resolveEffectiveBookingCompensationLane(booking) : null;
+  const effective = c ? resolveEffectiveBookingCompensationLane({ ...booking, visits: undefined }) : null;
   let sitter;
   if (c === undefined) sitter = unavailable("COMPENSATION_RELATION_NOT_LOADED");
   else if (!c) sitter = { ...unavailable("COMPENSATION_NOT_COMMITTED"), status: "PENDING", currency: p.currency };
@@ -86,7 +87,8 @@ export function clientTotalDisplay(booking, legacyFormat = formatFinancialCents)
 }
 export function sitterPayoutDisplay(booking) {
   const { sitter } = readBookingEconomics(booking);
-  return formatFinancialCents(sitter.payoutCents, sitter.currency, sitter.status === "PENDING" ? "Pending" : "Unavailable");
+  const amount = formatFinancialCents(sitter.payoutCents, sitter.currency, sitter.status === "PENDING" ? "Pending" : "Unavailable");
+  return booking.hasVisitHandoff || booking.visits?.some(v => v.compensationAuthorizations?.some(a => a.revision > 1)) ? `Original commitment: ${amount}` : amount;
 }
 // Canonical per-Visit earnings/allocation are undefined in V1, even when committed.
 export function visitPayoutStatus(booking) {
@@ -118,12 +120,25 @@ export function cancellationGuard(booking) {
   if (readBookingEconomics(booking).client.status !== "AVAILABLE") return { ok: false, reason: "LEGACY_MONEY_UNAVAILABLE", error: "Booking money is unavailable. Manual review is required." };
   return { ok: true };
 }
+function splitCompletionCoverage(booking) {
+  if (!inspectFinancialReadiness(booking).ok) return false;
+  return booking.visits.every(visit => {
+    if (visit.status !== "COMPLETED") return true;
+    const authorization = activeAuthorization(visit), earned = visit.compensationAllocation;
+    return earned && authorization && earned.authorizationId === authorization.id &&
+      earned.performedBySitterId === visit.performedBySitterId && visit.performedBySitterId === authorization.sitterId &&
+      ["sitterCompensationSubtotalCents", "sitterFeeBasisPoints", "sitterFeeCents", "sitterPayoutCents", "feePolicy", "performerPolicy", "compensationLane", "currency", "rewardReservationId", "rewardGrantId"].every(key => earned[key] === authorization[key]);
+  });
+}
 export function completionGuard(booking, { legacyInvariant = true } = {}) {
   const e = readBookingEconomics(booking);
   if (e.economicsKind === "CANONICAL") {
     if (e.client.status !== "AVAILABLE") return { ok: false, code: e.client.reason, error: "Canonical pricing is unavailable. Booking completion requires manual review." };
     if (e.sitter.status !== "COMMITTED") return { ok: false, code: "COMPENSATION_REQUIRED_FOR_COMPLETION", error: "Valid sitter compensation is required for booking completion. Manual review is required." };
-    if (booking.visits && (booking.visits.length !== booking.quantity || booking.visits.some((v) => v.sitterId !== booking.sitterId || (v.performedBySitterId && v.performedBySitterId !== booking.sitterId)))) return { ok: false, code: "COMPENSATION_REQUIRED_FOR_COMPLETION", error: "Compensation and visit assignment disagree. Manual review is required." };
+    if (booking.visits && (booking.visits.length !== booking.quantity ||
+        booking.visits.some(v => v.sitterId !== booking.sitterId || v.performedBySitterId && v.performedBySitterId !== booking.sitterId) && !splitCompletionCoverage(booking))) {
+      return { ok: false, code: "COMPENSATION_REQUIRED_FOR_COMPLETION", error: "Compensation and visit assignment disagree. Manual review is required." };
+    }
   } else if (e.client.status !== "AVAILABLE" || (legacyInvariant && booking.platformFeeCents + booking.sitterPayoutCents !== booking.clientTotalCents)) {
     return { ok: false, code: "LEGACY_PAYMENT_INCONSISTENT", error: "Payment breakdown is inconsistent (total != fee + payout). Please review this booking." };
   }

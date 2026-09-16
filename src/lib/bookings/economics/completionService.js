@@ -78,6 +78,7 @@ export async function completeVisitWithDb({ db, visitId, actorId, actorRole, lat
     if (actorRole === "SITTER") await tx.bookingHistory.create({ data: { bookingId: booking.id, fromStatus: null, toStatus: null, changedByUserId: actorId,
       note: missed ? `Sitter completed missed visit late. Reason: ${lateReason}` : "Sitter completed visit." } });
     const finance = canonical ? await allocateCompletedVisit(tx, { booking, visit, actorUserId: actorId }) : {};
+    if (finance.allocation) visit.compensationAllocation = finance.allocation;
     const allDone = booking.visits.every((v) => ["COMPLETED", "CANCELED"].includes(v.status));
     if (allDone && !["COMPLETED", "CANCELED"].includes(booking.status)) {
       const blocked = blockedBookingCompletion(booking);

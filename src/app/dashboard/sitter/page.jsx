@@ -1,3 +1,4 @@
+import { leadVisibleVisits, ownVisitMoney } from "@/lib/bookings/handoff/participation";
 import { visitFinancialInclude } from "@/lib/bookings/visitCompensation/contract";
 import { actionableCareUnavailable } from "@/lib/bookings/visitCompensation/readiness";
 import { economicsInclude, economicsSelect, visitPayoutEstimate, visitPayoutStatus, sumKnownAmounts } from "@/lib/bookings/economics/bookingEconomics";
@@ -58,7 +59,7 @@ export default async function SitterDashboardPage({ searchParams }) {
         ...economicsInclude,
         client: true,
         visits: {
-          include: visitFinancialInclude,
+          include: { ...visitFinancialInclude, sitter: { select: { id: true, name: true } } },
           orderBy: { startTime: "asc" },
         },
         conversation: {
@@ -78,19 +79,21 @@ export default async function SitterDashboardPage({ searchParams }) {
         sitterId: userId,
         status: { notIn: ["COMPLETED", "CANCELED"] },
         startTime: { gte: upcomingStartsAt },
-        booking: { status: { notIn: ["COMPLETED", "CANCELED"] } },
+        booking: { sitterId: userId, status: { notIn: ["COMPLETED", "CANCELED"] } },
       },
     }),
     prisma.visit.count({
       where: {
         sitterId: userId,
         status: "COMPLETED",
+        booking: { sitterId: userId },
       },
     }),
     prisma.visit.findMany({
       where: {
         sitterId: userId,
         status: "COMPLETED",
+        booking: { sitterId: userId },
         completedAt: {
           gte: weekStartsAt,
           lt: upcomingStartsAt,
@@ -167,7 +170,7 @@ export default async function SitterDashboardPage({ searchParams }) {
         sitterId: userId,
         status: { notIn: ["COMPLETED", "CANCELED"] },
         startTime: { gte: upcomingStartsAt },
-        booking: { status: { notIn: ["COMPLETED", "CANCELED"] } },
+        booking: { sitterId: userId, status: { notIn: ["COMPLETED", "CANCELED"] } },
       },
       orderBy: [{ startTime: "asc" }, { id: "asc" }],
       skip: (upcomingPage - 1) * VISIT_PAGE_SIZE,
@@ -178,6 +181,7 @@ export default async function SitterDashboardPage({ searchParams }) {
       where: {
         sitterId: userId,
         status: "COMPLETED",
+        booking: { sitterId: userId },
       },
       orderBy: [
         { completedAt: { sort: "desc", nulls: "last" } },
@@ -218,7 +222,10 @@ export default async function SitterDashboardPage({ searchParams }) {
   }
 
   const unavailableBookings = bookings.filter(actionableCareUnavailable);
-  const serializedBookings = serializeForClient(bookings.filter((b) => !actionableCareUnavailable(b)));
+  const serializedBookings = serializeForClient(bookings.filter((b) => !actionableCareUnavailable(b)).map(b => ({
+    ...b, hasVisitHandoff: b.visits.some(v => v.compensationAuthorizations?.some(a => a.revision > 1)),
+    visits: leadVisibleVisits(b, userId),
+  })));
   function toVisitEntry(visit) {
     const booking = visit.booking;
     const totalVisits = booking._count.visits || 1;
@@ -244,7 +251,7 @@ export default async function SitterDashboardPage({ searchParams }) {
         booking.petNames,
         booking.serviceSummary || "Pet care booking"
       ),
-      payoutPerVisitCents: visitPayoutEstimate(booking, totalVisits),
+      payoutPerVisitCents: ownVisitMoney(booking, booking.visits.find(v => v.id === visit.id), userId)?.payoutCents ?? visitPayoutEstimate(booking, totalVisits),
       payoutStatus: visitPayoutStatus(booking),
       address,
       lat: booking.serviceLat != null ? Number(booking.serviceLat) : null,

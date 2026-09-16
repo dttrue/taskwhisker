@@ -1,3 +1,4 @@
+import { visitFinancialInclude } from "@/lib/bookings/visitCompensation/contract";
 import { readBookingEconomics, formatFinancialCents, bookingCompletionReview, clientTotalDisplay, sitterPayoutDisplay as displaySitterPayout, economicsInclude } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/operator/bookings/[id]/page.jsx
 import { requireRole } from "@/auth";
@@ -188,6 +189,7 @@ export default async function OperatorBookingDetailPage({
       sitter: true,
       lineItems: true,
       visits: {
+        include: { ...visitFinancialInclude, sitter: { select: { name: true, email: true } } },
         orderBy: [{ date: "asc" }, { startTime: "asc" }],
       },
       history: {
@@ -610,8 +612,8 @@ export default async function OperatorBookingDetailPage({
                           </div>
                           <div className="mt-1 break-words text-xs text-zinc-500">
                             Owner: {booking.client?.name || "Client"} · Sitter:{" "}
-                            {booking.sitter?.name ||
-                              booking.sitter?.email ||
+                            {visit.sitter?.name ||
+                              visit.sitter?.email ||
                               "Unassigned"}
                           </div>
                         </div>

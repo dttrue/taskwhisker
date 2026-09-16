@@ -1,3 +1,4 @@
+import { leadVisibleVisits } from "@/lib/bookings/handoff/participation";
 import { visitFinancialInclude } from "@/lib/bookings/visitCompensation/contract";
 import { actionableCareUnavailable } from "@/lib/bookings/visitCompensation/readiness";
 import { bookingCompletionReview, readBookingEconomics, clientTotalDisplay, sitterPayoutDisplay as displaySitterPayout, economicsInclude } from "@/lib/bookings/economics/bookingEconomics";
@@ -129,7 +130,7 @@ export default async function SitterBookingDetailPage({ params }) {
       client: true,
       sitter: true,
       visits: {
-        include: visitFinancialInclude,
+        include: { ...visitFinancialInclude, sitter: { select: { id: true, name: true } } },
         orderBy: { startTime: "asc" },
       },
       lineItems: {
@@ -152,11 +153,13 @@ export default async function SitterBookingDetailPage({ params }) {
   );
   const now = new Date();
   const address = buildAddress(booking);
-  const visitGroups = groupVisitsByDay(booking.visits || []);
-  const actionableVisit = getActionableVisitForBooking(booking, now);
+  const visibleVisits = leadVisibleVisits(booking, sitterId);
+  const actionableOwnVisits = visibleVisits.filter(v => v.canExecute);
+  const visitGroups = groupVisitsByDay(visibleVisits);
+  const actionableVisit = getActionableVisitForBooking({ ...booking, visits: actionableOwnVisits }, now);
   const canCompleteActionableVisit = canCompleteVisit(actionableVisit, now);
   const nextUpcomingVisit =
-    booking.visits?.find(
+    visibleVisits.find(
       (visit) =>
         visit.status === "CONFIRMED" &&
         new Date(visit.startTime).getTime() > now.getTime()
@@ -384,6 +387,7 @@ export default async function SitterBookingDetailPage({ params }) {
 
                               <div className="mt-1 text-xs text-zinc-500">
                                 Visit ID: {visit.id}
+                                <div>Scheduled sitter: {visit.scheduledSitterName}</div>
                               </div>
                             </div>
 

@@ -138,3 +138,48 @@ for (const kind of ["pending", "committed"]) test(`operator reassignment form ex
   assert.equal(html.includes(message), kind === "committed");
   if (kind === "committed") assert.match(html, /<select[^>]*name="sitterId"[^>]*disabled/);
 });
+
+
+test("split route projection preserves original-commitment label", async () => {
+  const booking = await bookingFixture("committed");
+  Object.assign(booking, { hasVisitHandoff: true, serviceLat: 40, serviceLng: -74 });
+  const loader = surfaceLoader(booking);
+  const { getSitterMapBookings } = loader.load("app/dashboard/sitter/lib/sitterDashboardUtils.js");
+  const { sitterPayoutDisplay } = loader.load("lib/bookings/economics/bookingEconomics.js");
+  const [projected] = getSitterMapBookings([booking], booking.visits[0].startTime);
+  assert.equal(projected.hasVisitHandoff, true);
+  assert.match(sitterPayoutDisplay(projected), /^Original commitment: /);
+});
+
+async function splitLeadFixture() {
+  const f = compensationFixture({ quantity: 2 }); await f.commit();
+  const booking = { ...f.state.booking, rewardReservation: null, client: { name: "Client" }, sitter: { id: "sitter", name: "Bridget" },
+    serviceSummary: "Pet care", petNames: ["Milo"], history: [], lineItems: [], serviceLat: 40, serviceLng: -74, hasVisitHandoff: true };
+  for (const v of booking.visits) { v.date = v.startTime = new Date(Date.now()-1000); v.endTime = new Date(Date.now()+3600000); v.sitter={id:v.sitterId,name:"Bridget"}; }
+  const visit=booking.visits[1], original=visit.compensationAuthorizations[0];
+  visit.sitterId="bob";visit.sitter={id:"bob",name:"Bob"};
+  visit.compensationAuthorizations.push({...original,id:"replacement-auth",revision:2,predecessorId:original.id,sitterId:"bob",compensationLane:"BUSINESS_ASSIGNED",rateSource:"DEFAULT_RATE",sourceRateId:"replacement-rate",rateVersion:1,
+    sitterBaseCents:2000,sitterPetCents:0,sitterCompensationSubtotalCents:2000,sitterFeeCents:200,sitterPayoutCents:1800,reason:"handoff",operationId:"handoff"});
+  return booking;
+}
+test("lead detail renders full split schedule and replacement identity without replacement execution or money", async()=>{
+  const booking=await splitLeadFixture(),loader=surfaceLoader(booking);
+  const Component=loader.load("app/dashboard/sitter/bookings/[id]/page.jsx").default;
+  const html=renderToStaticMarkup(await Component({params:{id:booking.id}}));
+  for(const v of booking.visits)assert(html.includes(v.id));
+  assert.match(html,/Scheduled sitter:.*Bob/);assert.match(html,/value="visit-0"/);assert(!html.includes('value="visit-1"'));
+  assert(!html.includes("$18.00"));assert.match(html,/Original commitment/);
+});
+test("lead dashboard projection keeps full context while route actions, lists and earnings remain own",async()=>{
+  const booking=await splitLeadFixture(),loader=surfaceLoader(booking);
+  const {leadVisibleVisits}=loader.load("lib/bookings/handoff/participation.js");
+  const utils=loader.load("app/dashboard/sitter/lib/sitterDashboardUtils.js");
+  const projected={...booking,visits:leadVisibleVisits(booking,"sitter")},now=new Date();
+  const [map]=utils.getSitterMapBookings([projected],now);
+  assert.equal(map.visits.length,2);assert.equal(map.visits[1].scheduledSitterName,"Bob");assert.equal(map.visits[1].ownMoney,null);
+  assert.equal(utils.getActionableVisitForBooking(map,now).id,"visit-0");assert.equal(utils.canCompleteVisit(map.visits[1],now),false);
+  assert.deepEqual(utils.getVisitEntries([projected]).map(v=>v.id),["visit-0"]);
+  assert.equal(utils.getRemainingPayoutForToday([projected],now),2250);
+  const onlyReplacement={...projected,visits:projected.visits.slice(1)};
+  assert.equal(utils.getRemainingPayoutForToday([onlyReplacement],now),0);assert.equal(utils.getActionableVisitForBooking(onlyReplacement,now),null);
+});
