@@ -1,3 +1,4 @@
+import { ownerConfiguration, ownerFixtureUser } from "../ownerIdentityFixtures.js";
 import assert from "node:assert/strict";
 import { optionFixture, bookingInput } from "../canonical/fixtures.js";
 import { aggregateCanonicalQuote } from "../canonical/pricingSnapshot.js";
@@ -17,7 +18,7 @@ export function compensationFixture({ business = false, quantity = 1, pets = boo
     pricingSnapshot: { id: "pricing", bookingId: "booking", ...pricing, committedAt: new Date("2026-09-12T12:00:00Z") },
     attributionSnapshot: { bookingId: "booking", clientOriginKind: business ? "BUSINESS" : "SITTER_REFERRAL", attributionSource: business ? "BUSINESS_DEFAULT" : "REFERRAL_LINK",
       compensationLane: business ? "BUSINESS_ASSIGNED" : "SITTER_ORIGINATED", referringSitterId: business ? null : "sitter", requestedSitterId: business ? null : "sitter" },
-    visits: Array.from({ length: quantity }, (_, i) => ({ id: `visit-${i}`, bookingId: "booking", operatorId: "operator", sitterId: "sitter", status: "CONFIRMED", completedAt: null, performedBySitterId: null,
+    visits: Array.from({ length: quantity }, (_, i) => ({ id: `visit-${i}`, canonicalUnitPosition: i, compensationAuthorizations: [], bookingId: "booking", operatorId: "operator", sitterId: "sitter", status: "CONFIRMED", completedAt: null, performedBySitterId: null,
       startTime: new Date(`2030-09-${12 + i}T13:00:00Z`), endTime: new Date(`2030-09-${12 + i}T13:30:00Z`) })),
     sitterCompensation: null,
   };
@@ -33,6 +34,12 @@ export function compensationFixture({ business = false, quantity = 1, pets = boo
       grant: { id: "grant", sitterId: "sitter", feeBasisPoints: 500, rewardLevel: 1, status: "ACTIVE" } } : null,
   };
   const tx = {
+    user: { async findUnique({ where }) { return ownerFixtureUser(where.id); } },
+    visitSitterCompensationAuthorization: { async create({ data }) {
+      const { petCharges, ...scalars } = data; const row = { id: `auth-${data.visitId}`, ...scalars, petCharges: petCharges.create, void: null };
+      state.booking.visits.find((v) => v.id === data.visitId).compensationAuthorizations.push(row);
+      return structuredClone(row);
+    } },
     async $queryRaw(strings) { const sql = strings.join("?"); state.calls.push(sql); return sql.includes("clock_timestamp()") ? [{ now: state.now }] : [{ id: "locked" }]; },
     booking: { async findUnique() { return structuredClone(state.booking); } },
     sitterRewardReservation: {
@@ -65,5 +72,5 @@ export function compensationFixture({ business = false, quantity = 1, pets = boo
     const before = structuredClone(state);
     try { return await work(tx); } catch (error) { Object.assign(state, before); throw error; }
   } };
-  return { state, db, commit: (noise = {}) => commitBookingSitterCompensationWithDb({ ...noise, db, bookingId: "booking" }) };
+  return { state, db, commit: (noise = {}) => commitBookingSitterCompensationWithDb({ ...noise, db, ownerConfiguration, bookingId: "booking" }) };
 }

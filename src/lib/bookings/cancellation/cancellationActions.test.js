@@ -36,6 +36,7 @@ for (const route of ["operator direct", "operator approval", "sitter approval", 
     if (name.endsWith("cancelBookingTransaction")) return { CLIENT_CANCELLATION_FEE_RATE_BPS: 1500,
       calculateCancellationFeeCents: (amount) => { assert.equal(canonical, false, "Canonical must never enter fee math"); return calculateCancellationFeeCents(amount); },
       cancelBookingTransaction: async (args) => { assert.equal(canonical, false); calls.push({ legacy: args }); return { ok: true, clientLinkToken: "token" }; } };
+    if (name.includes("reviewMissedVisit")) return {};
     if (name.includes("completionService") || name.includes("confirmationService")) return {};
     throw new Error(`Unexpected dependency ${name}`);
   });

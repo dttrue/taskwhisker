@@ -68,7 +68,7 @@ export async function createCanonicalBookingWithDb({ db, operatorId, creationKey
           serviceCountry: location.country, accessInstructions: location.accessInstructions, locationNotes: location.locationNotes,
           bookingPets: { create: intent.pets.map((pet, position) => ({ position, nameSnapshot: pet.name, speciesSnapshot: pet.species })) },
         } });
-        await tx.visit.createMany({ data: schedule.windows.map((window) => ({ ...window, bookingId: booking.id, operatorId: intent.operatorId, sitterId: sitter.id, status: "PENDING" })) });
+        await tx.visit.createMany({ data: schedule.windows.map((window, canonicalUnitPosition) => ({ ...window, canonicalUnitPosition, bookingId: booking.id, operatorId: intent.operatorId, sitterId: sitter.id, status: "PENDING" })) });
         await createBookingAttributionSnapshotInTransaction({ tx, bookingId: booking.id, snapshot: attribution });
         await createBookingPricingSnapshotWithDb({ tx, bookingId: booking.id, careOption, quote, quantity: schedule.quantity });
         await tx.bookingHistory.create({ data: { bookingId: booking.id, toStatus: "REQUESTED", note: "Internal canonical booking created; public activation pending." } });

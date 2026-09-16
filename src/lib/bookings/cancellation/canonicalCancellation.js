@@ -1,3 +1,5 @@
+import { visitFinancialInclude } from "../visitCompensation/contract.js";
+import { voidVisitAuthorization } from "../visitCompensation/writes.js";
 import { resolveEffectiveBookingCompensationLane, rewardReservationMatchesHistoricalAttribution } from "../compensation/effectiveCompensationLane.js";
 import { economicsInclude, isCanonicalBooking, readBookingEconomics } from "../economics/bookingEconomics.js";
 import { releaseRewardReservationInTransaction, RewardReservationError } from "../../rewards/rewardReservationWrites.js";
@@ -58,7 +60,7 @@ async function clock(tx) {
   const [row] = await tx.$queryRaw`SELECT date_trunc('milliseconds', clock_timestamp()) AS "now"`;
   return row?.now;
 }
-const include = { ...economicsInclude, visits: { orderBy: { id: "asc" } }, rewardReservation: { include: { grant: true } } };
+const include = { ...economicsInclude, visits: { orderBy: { id: "asc" }, include: visitFinancialInclude }, rewardReservation: { include: { grant: true } } };
 
 // No fee, refund, compensation or caller clock enters this server-internal API.
 export async function cancelCanonicalBookingWithDb({ db, bookingId, actorId, reason = "", requireClientRequest = false, waiveFee = false } = {}) {
@@ -91,6 +93,7 @@ export async function cancelCanonicalBookingWithDb({ db, bookingId, actorId, rea
         // Only operational columns. Legacy fee/waiver/review columns stay untouched.
         await tx.booking.update({ where: { id: bookingId }, data: { status: "CANCELED", canceledAt: now } });
         await tx.visit.updateMany({ where: { bookingId, status: { in: ["PENDING", "CONFIRMED"] }, completedAt: null, performedBySitterId: null, startTime: { gt: now } }, data: { status: "CANCELED" } });
+        for (const visit of booking.visits) await voidVisitAuthorization(tx, { visit, actorUserId: actorId, reason: "CANCELED_UNPERFORMED", operationId: `cancel:${bookingId}` });
         let rewardReservationStatus = outcome.rewardReservationStatus;
         if (outcome.releaseReservation) {
           const released = await releaseRewardReservationInTransaction({ tx, bookingId, reason: "Canonical pre-service operational cancellation; no committed compensation or performed care." });

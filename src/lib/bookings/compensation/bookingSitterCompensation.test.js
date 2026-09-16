@@ -1,3 +1,4 @@
+import { ownerConfiguration } from "../ownerIdentityFixtures.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
@@ -138,7 +139,7 @@ for (const fail of ["afterInsert", "afterConsume", "transitionCount"]) test(`${f
 for (const code of ["P2034", "40001", "40P01", "P2002"]) test(`${code} retries outside failed transaction`, async () => {
   const f = compensationFixture(); let attempts = 0;
   const db = { $transaction(...args) { if (++attempts === 1) throw Object.assign(new Error("raw db"), { code }); return f.db.$transaction(...args); } };
-  assert(await commitBookingSitterCompensationWithDb({ db, bookingId: "booking" })); assert.equal(attempts, 2);
+  assert(await commitBookingSitterCompensationWithDb({ db, bookingId: "booking", ownerConfiguration })); assert.equal(attempts, 2);
 });
 test("retry exhaustion is sanitized", async () => {
   await assert.rejects(commitBookingSitterCompensationWithDb({ db: { $transaction() { throw Object.assign(new Error("private"), { code: "P2002" }); } }, bookingId: "booking" }), { code: "COMPENSATION_TRANSACTION_CONFLICT" });

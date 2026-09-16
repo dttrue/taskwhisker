@@ -50,6 +50,10 @@ export function readBookingEconomics(booking) {
   if (reason) return { economicsKind: "CANONICAL", client: unavailable(reason), sitter: unavailable(reason), legacyPlatformFeeCents: null };
   const client = { status: "AVAILABLE", totalCents: p.clientTotalCents, subtotalCents: p.serviceSubtotalCents, feeCents: p.clientFeeCents, currency: p.currency };
   const c = booking.sitterCompensation, a = booking.attributionSnapshot, r = booking.rewardReservation;
+  const owner = c?.performerPolicy === "OWNER_OPERATOR";
+  const policyValid = c && (c.performerPolicy == null && c.feePolicy == null ||
+    c.performerPolicy === "ORDINARY" && c.feePolicy === (c.rewardApplied ? "REWARD_5_PERCENT" : "STANDARD_10_PERCENT") ||
+    owner && c.feePolicy === "OWNER_0_PERCENT");
   const effective = c ? resolveEffectiveBookingCompensationLane(booking) : null;
   let sitter;
   if (c === undefined) sitter = unavailable("COMPENSATION_RELATION_NOT_LOADED");
@@ -59,11 +63,12 @@ export function readBookingEconomics(booking) {
       !effective.ok || !["BUSINESS_ASSIGNED", "SITTER_ORIGINATED"].includes(c.compensationLane) ||
       ["sitterCompensationSubtotalCents", "sitterFeeCents", "sitterPayoutCents"].some((key) => !money(c[key])) ||
       c.sitterFeeCents + c.sitterPayoutCents !== c.sitterCompensationSubtotalCents ||
-      typeof c.rewardApplied !== "boolean" ||
-      (c.compensationLane === "SITTER_ORIGINATED" && (c.rateSource !== "CANONICAL_CLIENT_SERVICE_SUBTOTAL" || c.sourceRateId !== null || c.rateVersion !== null || a.referringSitterId !== c.sitterId || a.requestedSitterId !== c.sitterId || c.clientServiceSubtotalCents !== p.serviceSubtotalCents || c.sitterCompensationSubtotalCents !== p.serviceSubtotalCents)) ||
-      (c.compensationLane === "BUSINESS_ASSIGNED" && (!["SITTER_OVERRIDE", "DEFAULT_RATE"].includes(c.rateSource) || !text(c.sourceRateId) || !Number.isInteger(c.rateVersion) || c.rateVersion < 1 || c.clientBaseAggregateCents !== p.baseAggregateCents || (r && (r.status !== "RELEASED" || !rewardReservationMatchesHistoricalAttribution(booking, r))) || c.rewardApplied)) ||
+      typeof c.rewardApplied !== "boolean" || !policyValid ||
+      (owner && (c.rateSource !== "OWNER_FROZEN_CLIENT_SERVICE" || c.clientServiceSubtotalCents !== p.serviceSubtotalCents || c.sitterCompensationSubtotalCents !== p.serviceSubtotalCents || c.sitterFeeBasisPoints !== 0 || c.sitterFeeCents !== 0 || c.sitterPayoutCents !== p.serviceSubtotalCents || c.sourceRateId !== null || c.rateVersion !== null || c.rewardApplied || c.rewardReservationId !== null || c.rewardGrantId !== null || c.rewardLevel !== null || (r && (r.status !== "RELEASED" || !rewardReservationMatchesHistoricalAttribution(booking, r))))) ||
+      (!owner && c.compensationLane === "SITTER_ORIGINATED" && (c.rateSource !== "CANONICAL_CLIENT_SERVICE_SUBTOTAL" || c.sourceRateId !== null || c.rateVersion !== null || a.referringSitterId !== c.sitterId || a.requestedSitterId !== c.sitterId || c.clientServiceSubtotalCents !== p.serviceSubtotalCents || c.sitterCompensationSubtotalCents !== p.serviceSubtotalCents)) ||
+      (!owner && c.compensationLane === "BUSINESS_ASSIGNED" && (!["SITTER_OVERRIDE", "DEFAULT_RATE"].includes(c.rateSource) || !text(c.sourceRateId) || !Number.isInteger(c.rateVersion) || c.rateVersion < 1 || c.clientBaseAggregateCents !== p.baseAggregateCents || (r && (r.status !== "RELEASED" || !rewardReservationMatchesHistoricalAttribution(booking, r))) || c.rewardApplied)) ||
       (c.rewardApplied ? (c.sitterFeeBasisPoints !== 500 || !Number.isInteger(c.rewardLevel) || c.rewardLevel < 1 || !r || !r.grant || r.grant.id !== c.rewardGrantId || r.grant.sitterId !== c.sitterId || r.grant.rewardLevel !== c.rewardLevel || r.grant.feeBasisPoints !== c.sitterFeeBasisPoints || r.status !== "CONSUMED" || r.id !== c.rewardReservationId || r.grantId !== c.rewardGrantId || r.sitterId !== c.sitterId || r.bookingId !== booking.id || !date(r.consumedAt) || +new Date(r.consumedAt) !== +new Date(c.committedAt)) :
-        (c.sitterFeeBasisPoints !== 1000 || c.rewardReservationId != null || c.rewardGrantId != null || c.rewardLevel != null || (r && r.status !== "RELEASED")))) {
+        (!owner && c.sitterFeeBasisPoints !== 1000 || c.rewardReservationId != null || c.rewardGrantId != null || c.rewardLevel != null || (r && r.status !== "RELEASED")))) {
     sitter = unavailable("COMPENSATION_SNAPSHOT_INVALID");
   } else sitter = { status: "COMMITTED", payoutCents: c.sitterPayoutCents, subtotalCents: c.sitterCompensationSubtotalCents,
     feeCents: c.sitterFeeCents, currency: c.currency, compensationLane: c.compensationLane, rewardApplied: c.rewardApplied };

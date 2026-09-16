@@ -1,3 +1,5 @@
+import { isCanonicalBooking } from "../economics/bookingEconomics.js";
+import { prepareBookingSitterCompensationWithinConfirmationTx } from "../compensation/commitBookingSitterCompensation.js";
 import { REASSIGNMENT_SELECT, reassignmentPlan, validateReassignmentCare } from "./reassignmentContract.js";
 import { releaseRewardReservationInTransaction, RewardReservationError } from "../../rewards/rewardReservationWrites.js";
 import { isRetryableRewardTransactionError, REWARD_TRANSACTION_ATTEMPTS } from "../../rewards/rewardProgressGrantWrites.js";
@@ -36,7 +38,7 @@ async function operationalTransaction(db, bookingId, actorId, work, select = CON
       }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
     } catch (error) {
       if (error instanceof RewardReservationError) return { ok: false, code: "REWARD_STATE_CONFLICT", error: "Reward state requires review before reassignment." };
-      if (error instanceof BookingConfirmationError) return { ok: false, code: error.code, error: error.message };
+      if (error instanceof BookingConfirmationError || ["BookingSitterCompensationError", "BusinessOwnerIdentityError", "VisitCompensationError", "BusinessAssignedSitterCompensationError"].includes(error.name)) return { ok: false, code: error.code, error: error.message };
       if (isRetryableRewardTransactionError(error)) {
         if (attempt + 1 < REWARD_TRANSACTION_ATTEMPTS) continue;
         return { ok: false, code: "CONCURRENT_CONFIRMATION_CONFLICT", error: "The booking changed concurrently. Please retry." };
@@ -54,6 +56,12 @@ export async function confirmBookingWithDb({ db, bookingId, actorId } = {}) {
     await assertSitterAvailable(tx, booking.id, booking.sitterId, booking.visits);
     // A replay doesn't transition or retroactively accept care. It still checks
     // assignment/status/availability, but elapsed time alone doesn't undo success.
+    if (isCanonicalBooking(booking)) {
+      // Financial writes precede status changes and share THIS transaction.
+      // Existing confirmed state is validation-only; no retroactive repair.
+      if (booking.status === "CONFIRMED" && !booking.sitterCompensation) reject("FINANCIAL_READINESS_MISSING", "Confirmed canonical booking requires financial review.");
+      await prepareBookingSitterCompensationWithinConfirmationTx({ tx, bookingId, actorUserId: actorId });
+    }
     if (booking.status === "CONFIRMED") return { ok: true, code: "ALREADY_CONFIRMED" };
     const now = await databaseNow(tx);
     validatePreService(booking.visits, now);

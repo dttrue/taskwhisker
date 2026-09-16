@@ -1,3 +1,4 @@
+import { cleanupVisitFinance } from "../../../../scripts/visit-compensation-qa.mjs";
 import { economicsInclude, economicsSelect, readBookingEconomics, aggregateBookingAmounts, clientTotalDisplay, sitterPayoutDisplay, visitPayoutEstimate } from "./bookingEconomics.js";
 import { completeVisitWithDb, completeWholeBookingWithDb } from "./completionService.js";
 import { cancelBookingTransaction } from "../cancelBookingTransaction.js";
@@ -92,6 +93,12 @@ test("guarded PostgreSQL economics readers and completion policy", {
     for (const role of ["OPERATOR", "SITTER"]) {
       await t.test(`${role}: operational completion persists, stable block, concurrent/repeated retry has no duplicate history`, async () => {
         const b = await create(); const results = await Promise.all([finish(b, role), finish(b, role)]);
+        if (role === "SITTER") {
+          assert(results.every((r) => !r.ok && r.code === "FINANCIAL_READINESS_MISSING"));
+          assert.equal((await load(b.id)).visits[0].status, "CONFIRMED");
+          assert.equal(await db.visitFinancialReview.count({ where: { visitId: b.visits[0].id } }), 1);
+          return;
+        }
         assert(results.every((r) => r.ok && r.code === "COMPENSATION_REQUIRED_FOR_COMPLETION"));
         const after = await load(b.id); assert.equal(after.visits[0].status, "COMPLETED"); assert.equal(after.status, "CONFIRMED"); assert.equal(after.sitterCompensation, null);
         const history = await db.bookingHistory.findMany({ where: { bookingId: b.id } });
@@ -114,7 +121,7 @@ test("guarded PostgreSQL economics readers and completion policy", {
       const after = await load(b.id); assert.equal(after.status, "CONFIRMED"); assert.equal(after.visits[0].status, "COMPLETED");
     });
     await t.test("whole-booking action blocks missing compensation and never creates it retroactively", async () => {
-      await finish(pending); const result = await completeWholeBookingWithDb({ db, bookingId: pending.id, actorId: operatorId });
+      await finish(pending, "OPERATOR"); const result = await completeWholeBookingWithDb({ db, bookingId: pending.id, actorId: operatorId });
       assert.equal(result.code, "COMPENSATION_REQUIRED_FOR_COMPLETION"); assert.equal((await load(pending.id)).sitterCompensation, null);
     });
     await t.test("legacy completion invariant and successful path preserved", async () => {
@@ -145,6 +152,7 @@ test("guarded PostgreSQL economics readers and completion policy", {
       const bookings = await db.booking.findMany({ where: { operatorId }, select: { id: true, clientId: true } });
       const bookingIds = bookings.map((b) => b.id), clientIds = bookings.map((b) => b.clientId);
       await db.$transaction(async (tx) => {
+        await cleanupVisitFinance(tx, bookingIds);
         await tx.bookingSitterCompensationPetCharge.deleteMany({ where: { compensation: { bookingId: { in: bookingIds } } } });
         await tx.bookingSitterCompensation.deleteMany({ where: { bookingId: { in: bookingIds } } });
         await tx.sitterRewardReservation.deleteMany({ where: { bookingId: { in: bookingIds } } });

@@ -1,5 +1,7 @@
 # Canonical / legacy reader guarding
 
+Current continuation: [Visit compensation and atomic canonical financial readiness](../visitCompensation/README.md) adds owner economics, positioned authorizations, allocation/review, and confirmation integration. Earlier phase records below remain historical context.
+
 Checkpoint: `main`, `e0a64a0e0638b5b4c152990cc892b6b69cc620f8` (Harden booking confirmation workflow). Initial worktree was clean; cached origin/main and the live remote main matched. No migration is required. Public canonical booking remains inactive.
 
 ## Authoritative read contract

@@ -84,7 +84,7 @@ for (const [name, path, props, amount, pending] of [
     const b = await bookingFixture(kind), loader = surfaceLoader(b);
     const Component = loader.load(path).default;
     const html = renderToStaticMarkup(await Component({ confirmBooking: async () => ({ ok: true }), completeBooking: async () => ({ ok: true }), cancelBooking: async () => ({ ok: true }), ...props(b) }));
-    const expected = kind === "pending" && pending ? "Pending" : kind === "reward" && amount === "$22.50" ? "$23.75" : amount;
+    const expected = kind === "pending" && name === "sitter detail" ? "Unavailable for service" : kind === "pending" && pending ? "Pending" : kind === "reward" && amount === "$22.50" ? "$23.75" : amount;
     assert(html.includes(expected), `Expected ${expected} in ${name}`);
     assert(!html.includes("$0.00"), "Missing legacy money must not render as zero");
     for (const query of loader.queries) {

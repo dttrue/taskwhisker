@@ -293,6 +293,18 @@ enum BookingSitterRateSource {
   SITTER_OVERRIDE
   DEFAULT_RATE
   CANONICAL_CLIENT_SERVICE_SUBTOTAL
+  OWNER_FROZEN_CLIENT_SERVICE
+}
+
+enum CompensationPerformerPolicy {
+  ORDINARY
+  OWNER_OPERATOR
+}
+
+enum CompensationFeePolicy {
+  STANDARD_10_PERCENT
+  REWARD_5_PERCENT
+  OWNER_0_PERCENT
 }
 
 model BookingSitterCompensation {
@@ -302,6 +314,9 @@ model BookingSitterCompensation {
   compensationLane BookingCompensationLane
   currency String
   quantity Int
+  // NULL pair retains the pre-authorization historical contract, without backfill.
+  performerPolicy CompensationPerformerPolicy?
+  feePolicy CompensationFeePolicy?
 
   clientBaseAggregateCents   Int?
   clientServiceSubtotalCents Int?
@@ -333,6 +348,7 @@ model BookingSitterCompensation {
   rewardReservation SitterRewardReservation? @relation(fields: [rewardReservationId], references: [id], onDelete: Restrict)
   rewardGrant SitterRewardGrant? @relation(fields: [rewardGrantId], references: [id], onDelete: Restrict)
   petCharges BookingSitterCompensationPetCharge[]
+  visitAuthorizations VisitSitterCompensationAuthorization[]
 
   @@index([sitterId, committedAt])
   @@index([rewardGrantId])
@@ -388,6 +404,12 @@ model Visit {
   endTime   DateTime
 
   status VisitStatus @default(CONFIRMED)
+  canonicalUnitPosition Int?
+  compensationAuthorizations VisitSitterCompensationAuthorization[]
+  compensationAllocation VisitSitterCompensationAllocation?
+  financialReviews VisitFinancialReview[]
+
+  @@unique([bookingId, canonicalUnitPosition])
 
   @@index([bookingId])
   @@index([operatorId, date])
@@ -520,6 +542,8 @@ model User {
   sitterRewardGrants           SitterRewardGrant[]          @relation("SitterRewardGrantSitter")
   sitterRewardReservations     SitterRewardReservation[]    @relation("SitterRewardReservationSitter")
   bookingSitterCompensations    BookingSitterCompensation[]
+  visitCompensationAuthorizations VisitSitterCompensationAuthorization[] @relation("VisitAuthorizationSitter")
+  visitCompensationAllocations VisitSitterCompensationAllocation[] @relation("VisitAllocationPerformer")
 }
 
 model SitterReferralCode {
@@ -1018,4 +1042,112 @@ enum MessageType {
   TEXT
   SYSTEM
   ALERT
+}
+
+// Terms are append-only. The highest revision is current unless voided; a
+// successor supersedes its predecessor without updating historical terms.
+model VisitSitterCompensationAuthorization {
+  id String @id @default(cuid())
+  visitId String
+  bookingId String
+  commitmentId String
+  revision Int
+  predecessorId String? @unique
+  sitterId String
+  compensationLane BookingCompensationLane
+  performerPolicy CompensationPerformerPolicy
+  feePolicy CompensationFeePolicy
+  currency String
+  canonicalUnitPosition Int
+  unitBaseCents Int
+  unitAdditionalPetCents Int
+  unitServiceSubtotalCents Int
+  sitterBaseCents Int
+  sitterPetCents Int
+  sitterCompensationSubtotalCents Int
+  sitterFeeBasisPoints Int
+  sitterFeeCents Int
+  sitterPayoutCents Int
+  rateSource BookingSitterRateSource
+  sourceRateId String?
+  rateVersion Int?
+  includedPetCount Int?
+  defaultAdditionalCents Int?
+  rewardReservationId String?
+  rewardGrantId String?
+  policyVersion Int
+  actorUserId String
+  reason String
+  operationId String
+  authorizedAt DateTime
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  commitment BookingSitterCompensation @relation(fields: [commitmentId], references: [id], onDelete: Restrict)
+  sitter User @relation("VisitAuthorizationSitter", fields: [sitterId], references: [id], onDelete: Restrict)
+  predecessor VisitSitterCompensationAuthorization? @relation("AuthorizationRevision", fields: [predecessorId], references: [id], onDelete: Restrict)
+  successor VisitSitterCompensationAuthorization? @relation("AuthorizationRevision")
+  petCharges VisitCompensationAuthorizationPetCharge[]
+  void VisitCompensationAuthorizationVoid?
+  allocation VisitSitterCompensationAllocation?
+  @@unique([visitId, revision])
+  @@unique([visitId, operationId])
+  @@index([bookingId])
+}
+
+model VisitCompensationAuthorizationPetCharge {
+  id String @id @default(cuid())
+  authorizationId String
+  petPosition Int
+  species String
+  sourcePetChargeId String?
+  thresholdIncludedCount Int?
+  unitAmountCents Int
+  authorization VisitSitterCompensationAuthorization @relation(fields: [authorizationId], references: [id], onDelete: Restrict)
+  @@unique([authorizationId, petPosition])
+}
+
+model VisitCompensationAuthorizationVoid {
+  id String @id @default(cuid())
+  authorizationId String @unique
+  actorUserId String
+  reason String
+  operationId String
+  voidedAt DateTime
+  authorization VisitSitterCompensationAuthorization @relation(fields: [authorizationId], references: [id], onDelete: Restrict)
+}
+
+model VisitSitterCompensationAllocation {
+  id String @id @default(cuid())
+  visitId String @unique
+  authorizationId String @unique
+  performedBySitterId String
+  compensationLane BookingCompensationLane
+  performerPolicy CompensationPerformerPolicy
+  feePolicy CompensationFeePolicy
+  currency String
+  sitterCompensationSubtotalCents Int
+  sitterFeeBasisPoints Int
+  sitterFeeCents Int
+  sitterPayoutCents Int
+  rewardReservationId String?
+  rewardGrantId String?
+  allocatedAt DateTime
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  authorization VisitSitterCompensationAuthorization @relation(fields: [authorizationId], references: [id], onDelete: Restrict)
+  performer User @relation("VisitAllocationPerformer", fields: [performedBySitterId], references: [id], onDelete: Restrict)
+}
+
+// Append-only observations. Same evidence has one durable review, even on retry.
+// No resolution writer is exposed in this phase.
+model VisitFinancialReview {
+  id String @id @default(cuid())
+  visitId String
+  reason String
+  evidenceKey String
+  authorizationId String?
+  performedBySitterId String?
+  actorUserId String
+  operationId String
+  recordedAt DateTime
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  @@unique([visitId, reason, evidenceKey])
 }

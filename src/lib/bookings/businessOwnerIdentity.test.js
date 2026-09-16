@@ -134,6 +134,7 @@ for (const mode of ["self", "explicit", "invalid-owner", "other-operator"]) test
   const actorId = mode === "other-operator" ? "other-operator" : ownerConfiguration.operatorId;
   const calls = [], db = dbFor();
   const action = serverModule("../../app/dashboard/operator/bookings/actions.js", {
+    "@/lib/visits/reviewMissedVisit": {},
     "@/lib/db": { prisma: db }, "@/auth": { requireRole: async () => ({ user: { id: actorId } }) },
     "next/cache": { revalidatePath() {} }, "next/navigation": {},
     "@/lib/bookings/cancellation/canonicalCancellation": {}, "@/lib/bookings/economics/bookingEconomics": {},

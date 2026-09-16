@@ -1,3 +1,5 @@
+import { visitFinancialInclude } from "@/lib/bookings/visitCompensation/contract";
+import { actionableCareUnavailable } from "@/lib/bookings/visitCompensation/readiness";
 import { bookingCompletionReview, readBookingEconomics, clientTotalDisplay, sitterPayoutDisplay as displaySitterPayout, economicsInclude } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/sitter/bookings/[id]/page.jsx
 import Link from "next/link";
@@ -127,6 +129,7 @@ export default async function SitterBookingDetailPage({ params }) {
       client: true,
       sitter: true,
       visits: {
+        include: visitFinancialInclude,
         orderBy: { startTime: "asc" },
       },
       lineItems: {
@@ -139,6 +142,14 @@ export default async function SitterBookingDetailPage({ params }) {
     notFound();
   }
 
+  if (actionableCareUnavailable(booking)) return (
+    <main className="mx-auto max-w-3xl p-6">
+      <h1 className="text-xl font-semibold">Unavailable for service</h1>
+      <p className="mt-3">This booking needs operator review before care can proceed. Financial preparation is incomplete.</p>
+      <p className="mt-3">Booking status: {booking.status}</p>
+      <p className="mt-3">{booking.serviceSummary}</p>
+    </main>
+  );
   const now = new Date();
   const address = buildAddress(booking);
   const visitGroups = groupVisitsByDay(booking.visits || []);

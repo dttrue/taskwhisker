@@ -1,3 +1,4 @@
+import { cleanupVisitFinance } from "../../../../scripts/visit-compensation-qa.mjs";
 import "dotenv/config";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -196,6 +197,7 @@ test("guarded PostgreSQL compensation persistence, lifecycle, concurrency and ro
       const bookings = await db.booking.findMany({ where: { operatorId }, select: { id: true, clientId: true } });
       const bookingIds = bookings.map((b) => b.id), clientIds = bookings.map((b) => b.clientId);
       await db.$transaction(async (tx) => {
+        await cleanupVisitFinance(tx, bookingIds);
         await tx.bookingSitterCompensationPetCharge.deleteMany({ where: { compensation: { bookingId: { in: bookingIds } } } });
         await tx.bookingSitterCompensation.deleteMany({ where: { bookingId: { in: bookingIds } } });
         await tx.sitterRewardReservation.deleteMany({ where: { bookingId: { in: bookingIds } } });

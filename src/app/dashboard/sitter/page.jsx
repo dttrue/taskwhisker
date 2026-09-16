@@ -1,3 +1,5 @@
+import { visitFinancialInclude } from "@/lib/bookings/visitCompensation/contract";
+import { actionableCareUnavailable } from "@/lib/bookings/visitCompensation/readiness";
 import { economicsInclude, economicsSelect, visitPayoutEstimate, visitPayoutStatus, sumKnownAmounts } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/sitter/page.jsx
 import { requireRole } from "@/auth";
@@ -56,6 +58,7 @@ export default async function SitterDashboardPage({ searchParams }) {
         ...economicsInclude,
         client: true,
         visits: {
+          include: visitFinancialInclude,
           orderBy: { startTime: "asc" },
         },
         conversation: {
@@ -141,6 +144,7 @@ export default async function SitterDashboardPage({ searchParams }) {
     booking: {
       include: {
         ...economicsInclude,
+        visits: { include: visitFinancialInclude },
         client: true,
         conversation: {
           include: {
@@ -213,7 +217,8 @@ export default async function SitterDashboardPage({ searchParams }) {
     return value;
   }
 
-  const serializedBookings = serializeForClient(bookings);
+  const unavailableBookings = bookings.filter(actionableCareUnavailable);
+  const serializedBookings = serializeForClient(bookings.filter((b) => !actionableCareUnavailable(b)));
   function toVisitEntry(visit) {
     const booking = visit.booking;
     const totalVisits = booking._count.visits || 1;
@@ -248,10 +253,12 @@ export default async function SitterDashboardPage({ searchParams }) {
     });
   }
 
-  const upcomingVisitEntries = upcomingVisits.map(toVisitEntry);
+  const upcomingVisitEntries = upcomingVisits.filter((v) => !actionableCareUnavailable(v.booking)).map(toVisitEntry);
   const completedVisitEntries = completedVisits.map(toVisitEntry);
 
   return (
+    <>
+    {unavailableBookings.length > 0 && <p className="m-4 rounded border p-4" role="status">{unavailableBookings.length} booking(s) unavailable for service pending operator financial review.</p>}
     <SitterDashboardLive
       bookings={serializedBookings}
       upcomingVisitEntries={upcomingVisitEntries}
@@ -265,5 +272,6 @@ export default async function SitterDashboardPage({ searchParams }) {
       earnedTodayCents={earnedTodayCents}
       acknowledgedCompletedVisitIds={acknowledgedCompletedVisitIds}
     />
+    </>
   );
 }

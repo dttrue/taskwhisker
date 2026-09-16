@@ -4,6 +4,7 @@ import { cancelCanonicalBookingWithDb } from "@/lib/bookings/cancellation/canoni
 import { economicsSelect, cancellationGuard, isCanonicalBooking } from "@/lib/bookings/economics/bookingEconomics";
 
 
+import { reviewMissedVisitWithDb } from "@/lib/visits/reviewMissedVisit";
 import { prisma } from "@/lib/db";
 import { resolveBusinessOwnerSelfAssignment } from "@/lib/bookings/businessOwnerIdentity";
 import { BusinessOwnerIdentityError } from "@/lib/bookings/businessOwnerIdentityContract";
@@ -60,54 +61,9 @@ export async function reviewMissedVisit({
     return { ok: false, error: "Invalid review status." };
   }
 
-  const visit = await prisma.visit.findUnique({
-    where: { id: visitId },
-    select: {
-      id: true,
-      bookingId: true,
-      status: true,
-      endTime: true,
-    },
-  });
-
-  if (!visit) {
-    return { ok: false, error: "Visit not found." };
-  }
-
-  if (visit.status !== "CONFIRMED") {
-    return {
-      ok: false,
-      error: "Only unresolved confirmed visits can be reviewed.",
-    };
-  }
-
-  const now = new Date();
-  const end = new Date(visit.endTime);
-
-  if (Number.isNaN(end.getTime()) || end >= now) {
-    return { ok: false, error: "This visit is not overdue yet." };
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.visit.update({
-      where: { id: visit.id },
-      data: {
-        status: "CANCELED",
-      },
-    });
-
-    await tx.bookingHistory.create({
-      data: {
-        bookingId: visit.bookingId,
-        changedByUserId: actorId,
-        note: note || "Operator reviewed overdue missed visit.",
-        missedVisitReviewStatus: status,
-        missedVisitReviewedAt: now,
-        missedVisitReviewedById: actorId,
-        missedVisitReviewNote: note || null,
-      },
-    });
-  });
+  const result = await reviewMissedVisitWithDb({ db: prisma, visitId, actorId, status, note });
+  if (!result.ok) return result;
+  const visit = { bookingId: result.bookingId };
 
   revalidatePath("/dashboard/operator");
   revalidatePath(`/dashboard/operator/bookings/${visit.bookingId}`);

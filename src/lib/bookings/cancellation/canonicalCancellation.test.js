@@ -14,6 +14,10 @@ async function fixture({ reward = null, committed = false, requested = false, bu
 function runtime(f) {
   const state = { booking: f.booking, history: [], messages: [], account: { id: "account", version: 1 }, now: f.now, actor: "OPERATOR", request: true, fail: null, clocks: 0, calls: [] };
   const tx = {
+    visitCompensationAuthorizationVoid: { async create({ data }) {
+      for (const v of state.booking.visits) for (const a of v.compensationAuthorizations ?? []) if (a.id === data.authorizationId) a.void = data;
+      return data;
+    } },
     async $queryRaw(parts) {
       const sql = parts.join("?"); state.calls.push(sql);
       if (sql.includes("clock_timestamp")) { state.clocks++; return [{ now: state.fail === "crossStart" && state.clocks > 1 ? state.booking.visits[0].startTime : state.now }]; }

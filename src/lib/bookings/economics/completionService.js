@@ -1,4 +1,7 @@
-import { economicsInclude, completionGuard } from "./bookingEconomics.js";
+import { visitFinancialInclude } from "../visitCompensation/contract.js";
+import { careReadiness } from "../visitCompensation/readiness.js";
+import { allocateCompletedVisit, recordFinancialReview } from "../visitCompensation/writes.js";
+import { economicsInclude, completionGuard, isCanonicalBooking } from "./bookingEconomics.js";
 import { buildOperatorCompletionData, buildSitterCompletionData, resolveSitterCompletionOutcome } from "../../visits/visitPerformerAttribution.js";
 
 async function transaction(db, work) {
@@ -13,7 +16,7 @@ async function transaction(db, work) {
 async function loadLockedBooking(tx, bookingId) {
   await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${bookingId} FOR UPDATE`;
   await tx.$queryRaw`SELECT id FROM "Visit" WHERE "bookingId" = ${bookingId} ORDER BY id FOR UPDATE`;
-  return tx.booking.findUnique({ where: { id: bookingId }, include: { ...economicsInclude, visits: true } });
+  return tx.booking.findUnique({ where: { id: bookingId }, include: { ...economicsInclude, visits: { include: visitFinancialInclude } } });
 }
 export function blockedBookingCompletion(booking) {
   const gate = completionGuard(booking, { legacyInvariant: false });
@@ -49,8 +52,19 @@ export async function completeVisitWithDb({ db, visitId, actorId, actorRole, lat
       const outcome = resolveSitterCompletionOutcome(visit, actorId);
       if (!["COMPLETE", "ALREADY_COMPLETED"].includes(outcome)) return { ok: false, error: outcome === "NOT_AUTHORIZED" ? "Not authorized for this visit." : outcome === "PERFORMER_CONFLICT" ? "This visit was already completed by another sitter." : "Only confirmed visits can be marked complete." };
     }
+    const canonical = isCanonicalBooking(booking);
+    if (actorRole === "SITTER" && canonical) {
+      const readiness = careReadiness(booking, visitId);
+      if (!readiness.ok) {
+        await recordFinancialReview(tx, { visit, actorUserId: actorId, reason: "FINANCIAL_READINESS_MISSING" });
+        return readiness;
+      }
+    }
     // A retry reports the same financial block without rewriting operational history.
-    if (visit.status === "COMPLETED") return { ok: true, alreadyCompleted: true, bookingId: booking.id, ...blockedBookingCompletion(booking) };
+    if (visit.status === "COMPLETED") {
+      const finance = canonical ? await allocateCompletedVisit(tx, { booking, visit, actorUserId: actorId }) : {};
+      return { ok: true, alreadyCompleted: true, bookingId: booking.id, ...finance, ...blockedBookingCompletion(booking) };
+    }
     if (visit.status !== "CONFIRMED") return { ok: false, error: "Only confirmed visits can be completed." };
     const missed = visit.endTime && new Date(visit.endTime) < now;
     if (actorRole === "SITTER") {
@@ -63,12 +77,13 @@ export async function completeVisitWithDb({ db, visitId, actorId, actorRole, lat
     Object.assign(visit, data);
     if (actorRole === "SITTER") await tx.bookingHistory.create({ data: { bookingId: booking.id, fromStatus: null, toStatus: null, changedByUserId: actorId,
       note: missed ? `Sitter completed missed visit late. Reason: ${lateReason}` : "Sitter completed visit." } });
+    const finance = canonical ? await allocateCompletedVisit(tx, { booking, visit, actorUserId: actorId }) : {};
     const allDone = booking.visits.every((v) => ["COMPLETED", "CANCELED"].includes(v.status));
     if (allDone && !["COMPLETED", "CANCELED"].includes(booking.status)) {
       const blocked = blockedBookingCompletion(booking);
-      if (blocked.completionBlocked) return { ok: true, bookingId: booking.id, ...blocked };
+      if (blocked.completionBlocked) return { ok: true, bookingId: booking.id, ...finance, ...blocked };
       await markBookingCompleted(tx, booking, actorId, now, actorRole === "SITTER" ? "Auto-completed after all visits finished." : "Operator completed overdue visit and auto-completed booking.");
     }
-    return { ok: true, bookingId: booking.id };
+    return { ok: true, bookingId: booking.id, ...finance };
   });
 }

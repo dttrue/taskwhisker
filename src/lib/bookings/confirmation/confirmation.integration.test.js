@@ -1,3 +1,4 @@
+import { cleanupVisitFinance } from "../../../../scripts/visit-compensation-qa.mjs";
 import "dotenv/config";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -192,7 +193,7 @@ test("guarded PostgreSQL confirmation, assignment races and cleanup", {
       assert.equal((await confirm(b.id, wrapped)).code, "BOOKING_PERSISTENCE_ERROR");
       assert.deepEqual(await state(b.id), before); assert.equal((await confirm(b.id)).code, "CONFIRMED");
     });
-    for (const code of ["DROP_IN_DOG_30", "OVERNIGHT_DOG_HOME"]) await t.test(`real canonical ${code} confirms without changing immutable contracts or creating compensation`, async () => {
+    for (const code of ["DROP_IN_DOG_30", "OVERNIGHT_DOG_HOME"]) await t.test(`real canonical ${code} confirms with atomic financial preparation and unchanged client/attribution snapshots`, async () => {
       process.env.DEFAULT_PUBLIC_BOOKING_SITTER_USER_ID = sitterId;
       const f = optionFixture(code);
       const { id: _offeringId, speciesPolicies, ...offering } = f.offering;
@@ -201,6 +202,7 @@ test("guarded PostgreSQL confirmation, assignment races and cleanup", {
         code: `${marker}-${code}`, label: f.label, primarySpecies: f.primarySpecies, durationMinutes: f.durationMinutes,
         offering: { create: { ...offering, code: `${marker}-${code}-offering`, speciesPolicies: { create: speciesPolicies } } },
         clientRate: { create: { ...rate, setByUserId: operatorId, petCharges: { create: petCharges } } },
+        defaultSitterRate: { create: { baseCompensationCents: 1000, setByUserId: operatorId, defaultAdditionalCents: 100 } },
       } });
       const b = await createCanonicalBookingWithDb({ db, operatorId, creationKey: randomUUID(), input: bookingInput({
         careOptionCode: option.code, client: { name: "Confirmation QA", email: `${marker}-${code}@example.invalid` },
@@ -208,16 +210,22 @@ test("guarded PostgreSQL confirmation, assignment races and cleanup", {
       }) });
       const immutable = async () => db.booking.findUnique({ where: { id: b.id }, select: {
         canonicalSchedule: true, canonicalInputHash: true, clientTotalCents: true, platformFeeCents: true, sitterPayoutCents: true,
-        pricingSnapshot: true, attributionSnapshot: true, sitterCompensation: true,
+        pricingSnapshot: true, attributionSnapshot: true,
       } });
       const before = await immutable(); assert.equal((await confirm(b.id)).code, "CONFIRMED");
-      assert.deepEqual(await immutable(), before); assert.equal(before.sitterCompensation, null);
+      assert.deepEqual(await immutable(), before);
+      assert.equal(await db.bookingSitterCompensation.count({ where: { bookingId: b.id } }), 1);
+      assert.equal(await db.visitSitterCompensationAuthorization.count({ where: { bookingId: b.id } }), b.quantity);
       assert.equal((await state(b.id)).history.filter((h) => h.toStatus === "CONFIRMED").length, 1);
     });
   } finally {
     // Every delete is scoped to this run's random fixture identities.
     try {
       await db.$transaction(async (tx) => {
+      const bookingIds = (await tx.booking.findMany({ where: { operatorId }, select: { id: true } })).map((b) => b.id);
+      await cleanupVisitFinance(tx, bookingIds);
+      await tx.bookingSitterCompensationPetCharge.deleteMany({ where: { compensation: { bookingId: { in: bookingIds } } } });
+      await tx.bookingSitterCompensation.deleteMany({ where: { bookingId: { in: bookingIds } } });
       const where = { booking: { operatorId } };
       await tx.bookingHistory.deleteMany({ where });
       await tx.visit.deleteMany({ where });

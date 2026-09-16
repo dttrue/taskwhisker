@@ -1,5 +1,7 @@
 # Canonical Booking V1: internal contract and activation audit
 
+Current continuation: [Visit compensation and atomic canonical financial readiness](../visitCompensation/README.md) adds owner economics, positioned authorizations, allocation/review, and confirmation integration. Earlier phase records below remain historical context.
+
 Current reader/completion integration is documented in [Canonical / legacy reader guarding](../economics/README.md). The phase-specific reader/activation audit below describes the earlier checkpoint; use that current audit for consumer status.
 
 This service is internal and unwired. No public action, route, preview submit,

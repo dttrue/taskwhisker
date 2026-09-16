@@ -1,3 +1,4 @@
+import { cleanupVisitFinance } from "../../../../scripts/visit-compensation-qa.mjs";
 import { economicsInclude, readBookingEconomics } from "../economics/bookingEconomics.js";
 import { cancelCanonicalBookingWithDb } from "../cancellation/canonicalCancellation.js";
 import { confirmBookingWithDb, assignBookingSitterWithDb } from "../confirmation/confirmationService.js";
@@ -209,7 +210,13 @@ test("reassignment PostgreSQL effective lanes, immutable compensation and forced
     });
     for (const assignmentFirst of [true, false]) await t.test(`forced assignment/confirmation race: assignment first=${assignmentFirst}`, async () => {
       const b = await create({ confirmed: false }); const a = (database) => assign(b, database), c = (database) => confirmBookingWithDb({ db: database, bookingId: b.id, actorId: operatorId });
-      const results = await orderedRace(assignmentFirst ? a : c, assignmentFirst ? c : a); assert(results.every((r) => r.status === "fulfilled" && r.value.ok)); const after = await load(b.id); assert.equal(after.status, "CONFIRMED"); assert.equal(after.sitterId, otherId); assert(after.visits.every((v) => v.sitterId === otherId));
+      const results = await orderedRace(assignmentFirst ? a : c, assignmentFirst ? c : a);
+      assert(results.every((r) => r.status === "fulfilled")); assert.equal(results[0].value.ok, true);
+      assert.equal(results[1].value.ok, assignmentFirst);
+      if (!assignmentFirst) assert.equal(results[1].value.code, "COMPENSATION_COMMITTED_REASSIGNMENT_REQUIRES_REVIEW");
+      const after = await load(b.id); assert.equal(after.status, "CONFIRMED");
+      assert.equal(after.sitterId, assignmentFirst ? otherId : sitterId); assert(after.visits.every((v) => v.sitterId === after.sitterId));
+      assert(after.sitterCompensation);
     });
     for (const assignmentFirst of [true, false]) await t.test(`forced assignment/Visit completion race: assignment first=${assignmentFirst}`, async () => {
       const b = await create(); const a = (database) => assign(b, database), c = (database) => finish(b, database);
@@ -245,6 +252,7 @@ test("reassignment PostgreSQL effective lanes, immutable compensation and forced
       const bookings = await db.booking.findMany({ where: { operatorId }, select: { id: true, clientId: true } });
       const bookingIds = bookings.map((b) => b.id), clientIds = bookings.map((b) => b.clientId);
       await db.$transaction(async (tx) => {
+        await cleanupVisitFinance(tx, bookingIds);
         await tx.bookingSitterCompensationPetCharge.deleteMany({ where: { compensation: { bookingId: { in: bookingIds } } } });
         await tx.bookingSitterCompensation.deleteMany({ where: { bookingId: { in: bookingIds } } });
         await tx.sitterRewardReservation.deleteMany({ where: { bookingId: { in: bookingIds } } });

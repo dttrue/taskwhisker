@@ -1,5 +1,7 @@
 # Owner identity and lead-sitter foundation
 
+Current continuation: [Visit compensation and atomic canonical financial readiness](visitCompensation/README.md) adds owner economics, positioned authorizations, allocation/review, and confirmation integration. Earlier phase records below remain historical context.
+
 This foundation does not enable split work, owner compensation math, Visit
 authorization/allocation, or public canonical booking. No schema change is needed.
 

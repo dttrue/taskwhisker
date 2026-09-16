@@ -51,16 +51,16 @@ export function validateCanonicalCompensationBooking(booking) {
   return { sitterId, compensationLane, pricing: p };
 }
 
-export function validateInitialCommitment(booking, sitterId, now) {
+export function validateInitialCommitment(booking, sitterId, now, { confirmation = false } = {}) {
   if (!validDate(now)) reject("INVALID_DATABASE_TIME", "Database time is unavailable.");
-  if (booking.status !== "CONFIRMED" || booking.canceledAt || booking.completedAt) reject("BOOKING_NOT_COMMITTABLE", "Initial compensation requires an active CONFIRMED Booking.");
+  if (booking.status !== (confirmation ? "REQUESTED" : "CONFIRMED") || booking.canceledAt || booking.completedAt) reject("BOOKING_NOT_COMMITTABLE", "Initial compensation requires an active CONFIRMED Booking.");
   if (!Array.isArray(booking.visits) || !booking.visits.length) reject("VISITS_MISSING", "At least one Visit is required.");
   if (booking.visits.length !== booking.quantity) reject("VISIT_CONTRACT_MISMATCH", "Visit count differs from frozen quantity.");
   for (const v of booking.visits) {
     if (v.bookingId !== booking.id || v.sitterId !== sitterId || v.operatorId !== booking.operatorId) reject("VISIT_ASSIGNMENT_MISMATCH", "All Visits must agree with the authoritative Booking assignment.");
     // Enum has no IN_PROGRESS. CONFIRMED plus the strict time gate is the only
     // supported pre-service state; PENDING/CANCELED/COMPLETED fail closed.
-    if (v.status !== "CONFIRMED" || v.completedAt || v.performedBySitterId || !validDate(v.startTime) || !validDate(v.endTime) || v.endTime <= v.startTime) reject("INVALID_VISIT_STATE", "Visit state and timestamps must describe unperformed confirmed care.");
+    if (!(confirmation ? ["PENDING", "CONFIRMED"] : ["CONFIRMED"]).includes(v.status) || v.completedAt || v.performedBySitterId || !validDate(v.startTime) || !validDate(v.endTime) || v.endTime <= v.startTime) reject("INVALID_VISIT_STATE", "Visit state and timestamps must describe unperformed confirmed care.");
     if (now >= v.startTime) reject("CARE_ALREADY_STARTED", "Compensation must be committed strictly before the earliest Visit start.");
   }
 }
@@ -86,6 +86,15 @@ export function validateExistingCompensation(row, booking, identity, reservation
   if (row.bookingId !== booking.id || row.sitterId !== identity.sitterId || row.compensationLane !== identity.compensationLane || row.currency !== identity.pricing.currency || row.quantity !== booking.quantity || !validDate(row.committedAt)) reject("COMPENSATION_IDENTITY_CONFLICT", "Existing compensation contradicts authoritative Booking identity.");
   for (const key of ["sitterCompensationSubtotalCents", "sitterFeeCents", "sitterPayoutCents"]) money(row[key]);
   if (row.sitterCompensationSubtotalCents !== row.sitterFeeCents + row.sitterPayoutCents) reject("COMPENSATION_INVARIANT", "Stored compensation does not balance.");
+  if (row.performerPolicy === "OWNER_OPERATOR") {
+    if (row.feePolicy !== "OWNER_0_PERCENT" || row.sitterFeeBasisPoints !== 0 || row.sitterFeeCents !== 0 ||
+        row.sitterPayoutCents !== identity.pricing.serviceSubtotalCents || row.sitterCompensationSubtotalCents !== identity.pricing.serviceSubtotalCents ||
+        row.rateSource !== "OWNER_FROZEN_CLIENT_SERVICE" || row.clientServiceSubtotalCents !== identity.pricing.serviceSubtotalCents ||
+        row.sourceRateId !== null || row.rateVersion !== null || row.rewardApplied || row.rewardReservationId !== null || row.rewardGrantId !== null ||
+        (reservation && reservation.status !== "RELEASED")) reject("COMPENSATION_INVARIANT", "Stored owner commitment is inconsistent.");
+    return row;
+  }
+  if (row.performerPolicy != null && (row.performerPolicy !== "ORDINARY" || row.feePolicy !== (row.rewardApplied ? "REWARD_5_PERCENT" : "STANDARD_10_PERCENT"))) reject("COMPENSATION_INVARIANT", "Stored ordinary policy is inconsistent.");
   if (row.rewardApplied) {
     if (!reservation || reservation.status !== "CONSUMED" || row.compensationLane !== "SITTER_ORIGINATED" || row.rewardReservationId !== reservation.id || row.rewardGrantId !== reservation.grantId || row.rewardLevel !== reservation.grant.rewardLevel || row.sitterFeeBasisPoints !== reservation.grant.feeBasisPoints || +row.committedAt !== +reservation.consumedAt) reject("COMPENSATION_REWARD_CONFLICT", "Reward compensation and consumed reservation disagree.");
   } else if (row.sitterFeeBasisPoints !== SITTER_FEE_BPS || row.rewardReservationId !== null || row.rewardGrantId !== null || row.rewardLevel !== null || (reservation && reservation.status !== "RELEASED")) reject("COMPENSATION_REWARD_CONFLICT", "Standard compensation contradicts reward state.");

@@ -1,5 +1,7 @@
 # Operator confirmation workflow
 
+Current continuation: [Visit compensation and atomic canonical financial readiness](../visitCompensation/README.md) adds owner economics, positioned authorizations, allocation/review, and confirmation integration. Earlier phase records below remain historical context.
+
 Current reader/completion integration is documented in [Canonical / legacy reader guarding](../economics/README.md). The phase-specific reader/activation audit below describes the earlier checkpoint; use that current audit for consumer status.
 
 `confirmBooking()` retains its existing operator authorization, Booking ID / form

@@ -13,6 +13,7 @@ export function reject(code, message) {
 // Operational data only: persisted Visits, never schedule labels or money.
 export const CONFIRMATION_SELECT = {
   id: true, status: true, sitterId: true, operatorId: true,
+  canonicalCreationKey: true, canonicalInputHash: true, careOptionId: true, careOfferingId: true, careOptionCode: true, careOfferingCode: true, quantity: true, billingUnit: true, scheduleKind: true, pricingSnapshot: true, sitterCompensation: true,
   confirmedAt: true, canceledAt: true, completedAt: true,
   sitter: { select: { id: true, role: true } },
   visits: {

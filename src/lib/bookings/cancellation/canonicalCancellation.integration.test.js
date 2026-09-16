@@ -1,3 +1,4 @@
+import { cleanupVisitFinance } from "../../../../scripts/visit-compensation-qa.mjs";
 import { economicsInclude } from "../economics/bookingEconomics.js";
 import { cancelCanonicalBookingWithDb, CANCELLATION_REVIEW } from "./canonicalCancellation.js";
 import { confirmBookingWithDb, assignBookingSitterWithDb } from "../confirmation/confirmationService.js";
@@ -248,6 +249,7 @@ test("canonical cancellation PostgreSQL guardrails and forced lock races", {
       const bookings = await db.booking.findMany({ where: { operatorId }, select: { id: true, clientId: true } });
       const bookingIds = bookings.map((b) => b.id), clientIds = bookings.map((b) => b.clientId);
       await db.$transaction(async (tx) => {
+        await cleanupVisitFinance(tx, bookingIds);
         await tx.bookingSitterCompensationPetCharge.deleteMany({ where: { compensation: { bookingId: { in: bookingIds } } } });
         await tx.bookingSitterCompensation.deleteMany({ where: { bookingId: { in: bookingIds } } });
         await tx.sitterRewardReservation.deleteMany({ where: { bookingId: { in: bookingIds } } });

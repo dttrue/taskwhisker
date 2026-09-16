@@ -14,8 +14,17 @@ async function canonical({ committed = false, reward = false } = {}) {
 }
 function harness(booking) {
   const state = { booking: structuredClone(booking), history: [], visitWrites: 0, bookingWrites: 0, selects: [] };
+  const reviews = new Map(), allocations = new Map();
   const tx = {
-    async $queryRaw() { return []; },
+    visitFinancialReview: {
+      async findUnique({ where }) { return reviews.get(JSON.stringify(where.visitId_reason_evidenceKey)); },
+      async create({ data }) { const key = JSON.stringify({ visitId: data.visitId, reason: data.reason, evidenceKey: data.evidenceKey }); reviews.set(key, data); return data; },
+    },
+    visitSitterCompensationAllocation: {
+      async findUnique({ where }) { return allocations.get(where.visitId); },
+      async create({ data }) { allocations.set(data.visitId, data); return data; },
+    },
+    async $queryRaw() { return [{ now: new Date() }]; },
     booking: {
       async findUnique(args) { state.selects.push(args); return state.booking; },
       async update({ data }) { state.bookingWrites++; Object.assign(state.booking, data); return state.booking; },
@@ -76,7 +85,9 @@ test("historical readers neither recalculate rates nor mutate frozen input", asy
 });
 for (const role of ["SITTER", "OPERATOR"]) {
   test(`${role} final visit persists with stable booking block; retry has no duplicate writes`, async () => {
-    const h = harness(await canonical()); const result = await complete(h, role); assert.equal(result.ok, true); assert.equal(result.code, "COMPENSATION_REQUIRED_FOR_COMPLETION"); assert.equal(result.completionBlocked, true); assert.equal(h.state.booking.visits[0].status, "COMPLETED"); assert.equal(h.state.booking.status, "CONFIRMED"); assert.equal(h.state.bookingWrites, 0);
+    const h = harness(await canonical()); const result = await complete(h, role);
+    if (role === "SITTER") { assert.equal(result.ok, false); assert.equal(result.code, "FINANCIAL_READINESS_MISSING"); assert.equal(h.state.visitWrites, 0); return; }
+    assert.equal(result.ok, true); assert.equal(result.code, "COMPENSATION_REQUIRED_FOR_COMPLETION"); assert.equal(result.completionBlocked, true); assert.equal(h.state.booking.visits[0].status, "COMPLETED"); assert.equal(h.state.booking.status, "CONFIRMED"); assert.equal(h.state.bookingWrites, 0);
     const before = structuredClone(h.state); const retry = await complete(h, role); assert.equal(retry.alreadyCompleted, true); assert.equal(retry.code, result.code); assert.equal(h.state.visitWrites, 1); assert.deepEqual(h.state.history, before.history);
   });
   test(`${role} valid canonical compensation permits normal auto-completion without rewriting money`, async () => { const h = harness(await canonical({ committed: true })); assert.equal((await complete(h, role)).ok, true); assert.equal(h.state.booking.status, "COMPLETED"); assert.deepEqual([h.state.booking.clientTotalCents, h.state.booking.platformFeeCents, h.state.booking.sitterPayoutCents], [null, null, null]); assert.equal(h.state.booking.sitterCompensation.sitterPayoutCents, 2250); });
@@ -85,8 +96,8 @@ for (const role of ["SITTER", "OPERATOR"]) {
 test("whole-booking completion enforces required compensation", async () => { const b = await canonical(); b.visits[0].status = "COMPLETED"; const h = harness(b); assert.equal((await completeWholeBookingWithDb({ db: h.db, bookingId: b.id, actorId: "operator" })).code, "COMPENSATION_REQUIRED_FOR_COMPLETION"); assert.equal(h.state.bookingWrites, 0); });
 test("whole-booking canonical completion uses independent snapshots, not legacy equation", async () => { const b = await canonical({ committed: true }); b.visits[0].status = "COMPLETED"; const h = harness(b); assert.equal((await completeWholeBookingWithDb({ db: h.db, bookingId: b.id, actorId: "operator" })).ok, true); assert.equal(h.state.visitWrites, 0); });
 test("legacy whole-booking equation remains enforced", async () => { const b = legacy(); b.visits[0].status = "COMPLETED"; b.platformFeeCents++; const h = harness(b); assert.equal((await completeWholeBookingWithDb({ db: h.db, bookingId: b.id, actorId: "operator" })).code, "LEGACY_PAYMENT_INCONSISTENT"); assert.equal(h.state.bookingWrites, 0); });
-test("contradictory compensation persists visit but blocks booking", async () => { const b = await canonical({ committed: true }); b.sitterCompensation.sitterId = "other"; const h = harness(b); assert.equal((await complete(h)).code, "COMPENSATION_REQUIRED_FOR_COMPLETION"); assert.equal(h.state.booking.visits[0].status, "COMPLETED"); assert.equal(h.state.booking.status, "CONFIRMED"); });
-test("missing pricing persists operational completion but blocks booking", async () => { const b = await canonical(); b.pricingSnapshot = null; const h = harness(b); assert.equal((await complete(h)).code, "PRICING_SNAPSHOT_REQUIRED"); assert.equal(h.state.booking.visits[0].status, "COMPLETED"); });
+test("contradictory compensation persists visit but blocks booking", async () => { const b = await canonical({ committed: true }); b.sitterCompensation.sitterId = "other"; const h = harness(b); assert.equal((await complete(h, "OPERATOR")).code, "COMPENSATION_REQUIRED_FOR_COMPLETION"); assert.equal(h.state.booking.visits[0].status, "COMPLETED"); assert.equal(h.state.booking.status, "CONFIRMED"); });
+test("missing pricing persists operational completion but blocks booking", async () => { const b = await canonical(); b.pricingSnapshot = null; const h = harness(b); assert.equal((await complete(h, "OPERATOR")).code, "PRICING_SNAPSHOT_REQUIRED"); assert.equal(h.state.booking.visits[0].status, "COMPLETED"); });
 test("legacy cancellation math remains 15 percent with rounding", () => { assert.equal(calculateCancellationFeeCents(2750), 413); assert.equal(calculateCancellationFeeCents(0), 0); assert.throws(() => calculateCancellationFeeCents(null)); assert.equal(cancellationGuard(legacy()).ok, true); });
 test("canonical cancellation transaction guards even waived fees before any writes", async () => { const b = await canonical(); const tx = { booking: { async findUnique() { return b; } } }; const result = await cancelBookingTransaction({ tx, bookingId: b.id, cancellationFeeCents: 0, cancellationFeeWaived: true }); assert.equal(result.reason, "CANONICAL_CANCELLATION_REQUIRES_REVIEW"); assert.equal(result.ok, false); });
 test("all retained completion actions delegate to the canonical gate, with no retroactive commitment", async () => {
@@ -112,7 +123,7 @@ test("confirmed visit with prior performer evidence cannot be overwritten by sit
 });
 test("later whole-booking completion reads approved existing compensation without rewriting completed visits", async () => {
   const b = await canonical({ committed: true }); const snapshot = b.sitterCompensation; b.sitterCompensation = null;
-  const h = harness(b); await complete(h); const visits = structuredClone(h.state.booking.visits);
+  const h = harness(b); await complete(h, "OPERATOR"); const visits = structuredClone(h.state.booking.visits);
   // Represents an externally approved state; the completion service never creates it.
   h.state.booking.sitterCompensation = snapshot;
   assert.equal((await completeWholeBookingWithDb({ db: h.db, bookingId: b.id, actorId: "operator" })).ok, true);

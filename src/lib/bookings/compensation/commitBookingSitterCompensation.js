@@ -1,3 +1,5 @@
+import { resolveBusinessOwnerIdentityWithDb } from "../businessOwnerIdentityContract.js";
+import { buildInitialAuthorizations, inspectFinancialReadiness, visitFinancialInclude, reject as rejectVisit } from "../visitCompensation/contract.js";
 import { calculateBusinessAssignedSitterCompensation, selectBusinessAssignedSitterRate, BusinessAssignedSitterCompensationError } from "../../pricing/calculateBusinessAssignedSitterCompensation.js";
 import { SITTER_FEE_BPS } from "../../pricing/calculatePricing.js";
 import { isRetryableRewardTransactionError, REWARD_TRANSACTION_ATTEMPTS } from "../../rewards/rewardProgressGrantWrites.js";
@@ -6,15 +8,20 @@ import { BookingSitterCompensationError, reject, money, validDate, validateCanon
 const compensationInclude = { petCharges: { orderBy: { petPosition: "asc" } } };
 const bookingInclude = {
   sitter: { select: { id: true, role: true } }, pricingSnapshot: true, attributionSnapshot: true,
-  bookingPets: { orderBy: { position: "asc" } }, visits: { orderBy: { startTime: "asc" } },
+  bookingPets: { orderBy: { position: "asc" } }, visits: { orderBy: { startTime: "asc" }, include: visitFinancialInclude },
   sitterCompensation: { include: compensationInclude },
 };
 const reservationFor = (tx, bookingId) => tx.sitterRewardReservation.findUnique({ where: { bookingId }, include: { grant: true } });
 
-export async function resolveBookingSitterCompensationEconomics({ tx, booking, identity, reservation }) {
+export async function resolveBookingSitterCompensationEconomics({ tx, booking, identity, reservation, ownerConfiguration }) {
   const { sitterId, compensationLane, pricing } = identity;
-  const rewardApplied = compensationLane === "SITTER_ORIGINATED" && reservation?.status === "RESERVED";
+  const owner = await resolveBusinessOwnerIdentityWithDb({ db: tx, configuration: ownerConfiguration });
+  const isOwner = sitterId === owner.sitterId;
+  if (isOwner && reservation && reservation.status !== "RELEASED") reject("OWNER_REWARD_REQUIRES_REVIEW", "Existing owner entitlement requires manual review.");
+  const rewardApplied = !isOwner && compensationLane === "SITTER_ORIGINATED" && reservation?.status === "RESERVED";
   const common = {
+    performerPolicy: isOwner ? "OWNER_OPERATOR" : "ORDINARY",
+    feePolicy: isOwner ? "OWNER_0_PERCENT" : rewardApplied ? "REWARD_5_PERCENT" : "STANDARD_10_PERCENT",
     bookingId: booking.id, sitterId, compensationLane, currency: pricing.currency, quantity: booking.quantity,
     clientBaseAggregateCents: null, clientServiceSubtotalCents: null,
     sourceRateId: null, rateVersion: null, baseUnitCompensationCents: null,
@@ -24,6 +31,9 @@ export async function resolveBookingSitterCompensationEconomics({ tx, booking, i
     rewardGrantId: rewardApplied ? reservation.grantId : null,
     rewardLevel: rewardApplied ? reservation.grant.rewardLevel : null,
   };
+  if (isOwner) return { ...common, clientServiceSubtotalCents: pricing.serviceSubtotalCents,
+    rateSource: "OWNER_FROZEN_CLIENT_SERVICE", sitterFeeBasisPoints: 0,
+    sitterCompensationSubtotalCents: pricing.serviceSubtotalCents, sitterFeeCents: 0, sitterPayoutCents: pricing.serviceSubtotalCents, petCharges: [] };
   if (compensationLane === "SITTER_ORIGINATED") {
     const sitterFeeBasisPoints = rewardApplied ? reservation.grant.feeBasisPoints : SITTER_FEE_BPS;
     return { ...common, clientServiceSubtotalCents: pricing.serviceSubtotalCents,
@@ -61,7 +71,7 @@ export async function resolveBookingSitterCompensationEconomics({ tx, booking, i
     sitterFeeCents: quote.sitterFeeCents, sitterPayoutCents: quote.sitterPayoutCents, petCharges };
 }
 
-async function commitInTransaction(tx, bookingId) {
+async function commitInTransaction(tx, bookingId, { confirmation = false, actorUserId = null, ownerConfiguration } = {}) {
   // Same ordering as reserve: Booking, Visits, then shared reward account.
   await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${bookingId} FOR UPDATE`;
   await tx.$queryRaw`SELECT "id" FROM "Visit" WHERE "bookingId" = ${bookingId} ORDER BY "id" FOR UPDATE`;
@@ -81,20 +91,30 @@ async function commitInTransaction(tx, bookingId) {
     validateReservation(reservation, bookingId, identity.sitterId, identity.compensationLane, booking.attributionSnapshot);
   }
   if (booking.sitterCompensation) {
+    if (confirmation && booking.status !== "CONFIRMED") rejectVisit("FINANCIAL_READINESS_MISSING");
     if (booking.visits.some((v) => v.sitterId !== identity.sitterId)) reject("VISIT_ASSIGNMENT_MISMATCH", "Current Visit assignment contradicts frozen compensation.");
-    return validateExistingCompensation(booking.sitterCompensation, booking, identity, reservation);
+    const existing = validateExistingCompensation(booking.sitterCompensation, booking, identity, reservation);
+    // Historical standalone replay remains read-only. Confirmation never repairs.
+    if (confirmation || existing.performerPolicy) {
+      const ready = inspectFinancialReadiness({ ...booking, rewardReservation: reservation });
+      if (!ready.ok) rejectVisit(ready.code);
+    }
+    return existing;
   }
   if (reservation?.status === "CONSUMED") reject("CONSUMED_WITHOUT_COMPENSATION", "Consumed reservation has no compensation snapshot; history cannot be recreated.");
-  const data = await resolveBookingSitterCompensationEconomics({ tx, booking, identity, reservation });
+  const data = await resolveBookingSitterCompensationEconomics({ tx, booking, identity, reservation, ownerConfiguration });
   // Sample after all locks and rate reads, immediately before the pre-service
   // decision and write. This instant records acceptance inside this transaction.
   const [clock] = await tx.$queryRaw`SELECT date_trunc('milliseconds', clock_timestamp()) AS "now"`;
-  validateInitialCommitment(booking, identity.sitterId, clock?.now);
+  validateInitialCommitment(booking, identity.sitterId, clock?.now, { confirmation });
   if (reservation?.status === "RESERVED" && (!validDate(reservation.reservedAt) || reservation.reservedAt > clock.now)) reject("INVALID_REWARD_STATE", "Reservation cannot postdate compensation commitment.");
   const { petCharges, ...scalars } = data;
   const result = await tx.bookingSitterCompensation.create({ data: {
     ...scalars, committedAt: clock.now, petCharges: { create: petCharges },
   }, include: compensationInclude });
+  const authorizations = buildInitialAuthorizations({ booking, commitment: result, authorizedAt: clock.now,
+    actorUserId: actorUserId ?? booking.operatorId, operationId: `initial:${result.id}` });
+  for (const data of authorizations) await tx.visitSitterCompensationAuthorization.create({ data });
   if (data.rewardApplied) {
     const changed = await tx.sitterRewardReservation.updateMany({ where: {
       id: reservation.id, bookingId, sitterId: identity.sitterId, grantId: reservation.grantId,
@@ -104,19 +124,21 @@ async function commitInTransaction(tx, bookingId) {
     // Shared write makes stale Serializable reservation/progress snapshots retry.
     await tx.sitterRewardAccount.update({ where: { id: account.id }, data: { version: { increment: 1 } } });
   }
+  const [finalClock] = await tx.$queryRaw`SELECT date_trunc('milliseconds', clock_timestamp()) AS "now"`;
+  validateInitialCommitment(booking, identity.sitterId, finalClock?.now, { confirmation });
   return result;
 }
 
 // Internal dependency-injectable boundary. No user-controlled transaction hooks,
 // sitter, lane, rates, money, currency, reward identity, or timestamps are read.
-export async function commitBookingSitterCompensationWithDb({ db, bookingId } = {}) {
+export async function commitBookingSitterCompensationWithDb({ db, bookingId, ownerConfiguration } = {}) {
   const id = typeof bookingId === "string" ? bookingId.trim() : "";
   if (!id || typeof db?.$transaction !== "function") reject("INVALID_INPUT", "A Booking ID and transaction-capable database are required.");
   for (let attempt = 0; attempt < REWARD_TRANSACTION_ATTEMPTS; attempt++) {
     try {
-      return await db.$transaction((tx) => commitInTransaction(tx, id), { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
+      return await db.$transaction((tx) => commitInTransaction(tx, id, { ownerConfiguration }), { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
     } catch (error) {
-      if (error instanceof BookingSitterCompensationError) throw error;
+      if (error instanceof BookingSitterCompensationError || ["BusinessOwnerIdentityError", "VisitCompensationError"].includes(error?.name)) throw error;
       if (error instanceof BusinessAssignedSitterCompensationError) reject(error.code, error.message);
       // Start a fresh transaction after unique/serialization errors; winner
       // replay runs the same identity checks and never leaks raw Prisma errors.
@@ -127,4 +149,10 @@ export async function commitBookingSitterCompensationWithDb({ db, bookingId } = 
       reject("COMPENSATION_PERSISTENCE_ERROR", "Compensation could not be persisted.");
     }
   }
+}
+
+// Transaction composition only, imported by the operator confirmation service.
+// No public/server-action export accepts a caller lifecycle override.
+export function prepareBookingSitterCompensationWithinConfirmationTx({ tx, bookingId, actorUserId }) {
+  return commitInTransaction(tx, bookingId, { confirmation: true, actorUserId });
 }
