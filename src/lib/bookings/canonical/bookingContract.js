@@ -1,3 +1,4 @@
+import { captureCareInstructions } from "../careSnapshot/contract.js";
 import { createHash } from "node:crypto";
 import { BUSINESS_TIME_ZONE } from "../../visits/visitOperations.js";
 import { normalizeCanonicalQuotePets } from "../../pricing/calculateCanonicalClientQuote.js";
@@ -113,7 +114,7 @@ export function normalizeBookingIntent(input, operatorId) {
     operatorId: requiredText(operatorId, "operatorId"), client,
     careOptionCode: requiredText(input?.careOptionCode, "careOptionCode"),
     pets: normalizeCanonicalQuotePets(input?.pets), schedule, timeZone: BUSINESS_TIME_ZONE,
-    location, petDetails, notes: optionalText(input?.notes, "notes"), referralCodeHash,
+    location, petDetails, notes: captureCareInstructions(input?.notes).careInstructions, referralCodeHash,
     sitterIntent: requestReferringSitter ? "REFERRING_SITTER" : "CONFIGURED_DEFAULT",
   };
   return { intent, publicCode, inputHash: createHash("sha256").update(JSON.stringify(intent)).digest("hex") };

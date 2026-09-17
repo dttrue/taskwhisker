@@ -1,8 +1,12 @@
 # Selected-Visit handoff and bounded participation
 
-This phase implements an **internal-only** handoff transaction and participant DTO.
-There is no operator action, API endpoint, or UI control that invokes the writer.
-There is no schema change or migration. Public canonical booking remains disabled.
+The operator Booking detail now exposes selected-Visit handoff through a thin
+authenticated server action. A dedicated participant Visit page, dashboard cards
+and Today route stops consume bounded participant DTOs. The additive care snapshot
+migration is required before deploying this code. Public canonical booking remains disabled.
+
+See [care snapshot and UI verification](UI_VERIFICATION.md) for this phase. The
+original backend foundation checkpoint and decisions below remain historical context.
 
 ## Audit and checkpoint
 
@@ -27,8 +31,9 @@ The audit found lead-only checks in sitter booking detail, messaging reads,
 sends, polling, unread state, and cancellation approval. These stay lead-only.
 Visit completion already authenticates the scheduled sitter through the server
 action; the transaction rechecks Visit assignment and financial readiness.
-Operator assignment UI accepts a whole Booking and cannot safely express a
-selected-unit operation, so it remains unwired. Client UI remains unchanged.
+The existing whole-Booking assignment form remains separate and retains its
+commitment guard. Visit Coverage invokes only explicit selected-Visit handoff.
+Client UI remains unchanged.
 
 ## Transaction and retry contract
 
@@ -97,17 +102,22 @@ There is no broadening of the existing lead page payload.
 
 For LEAD, participantCareDto returns only a useLeadView routing marker; the existing
 lead path retains whole-booking permissions. For VISIT_PARTICIPANT it is an explicit allowlist: Booking ID/status; service label and
-duration; client name/phone; pet names/details; access/location instructions;
+duration; client name/phone; pet names/details; trusted careInstructions; access/location instructions;
 service address/coordinates; and only that sitter's noncanceled Visit IDs,
 times/status/completion timestamp and own expected/earned amount/currency.
 General Booking.notes is excluded because it is not a dedicated participant care
-field. There is no client email, client-link token, other Visit list, other sitter
+field. Participant readiness additionally requires careInstructionsVersion 1;
+null provenance returns an unavailable shell with no care/contact/location data.
+There is no client email, client-link token, other Visit list, other sitter
 money, raw authorization/allocation, reward identity, history, conversation,
 operator note, or cancellation/reassignment permission in this DTO. Missing
 readiness returns an unavailable shell without care/contact/location details.
 The helper is an internal authenticated-server seam, not a browser action.
 
-Existing dashboard queries remain lead-only until the participant UI is reviewed.
+Existing whole-Booking dashboard queries remain lead-only. Participant discovery
+queries current Visit assignment, resolves the bounded DTO server-side, and renders
+separate Coverage visits lists with Today, Upcoming, Missed and Completed views.
+Participant visits join the existing Today route through a one-Visit stop projection.
 Lead route/card payloads preserve every Booking Visit through a safe operational
 projection containing scheduled sitter ID/name, interval/status and an own-execution
 flag. Raw financial relations are stripped; only the lead's own Visit money is
@@ -147,13 +157,26 @@ unresolved care, whereas handoff requires future care.
 
 ## Activation blockers
 
-Before operational/public activation: build and review an operator selected-Visit
-picker with stable operation keys and conflict feedback; wire a dedicated bounded
-participant detail/list/route/own-earnings UI to the DTO; verify navigation and
-contact instructions in browser; decide the source of participant-specific care
-notes; and separately decide whether bounded messaging is needed. Keep generic
-lead detail and historical conversations restricted. Do not activate the internal
-writer through an ad-hoc endpoint or widen a lead query with an OR condition.
+Legacy bookings without a version 1 care snapshot remain unavailable to the new
+handoff UI. A separately approved remediation workflow must capture reviewed
+care text and provenance; no editor, heuristic parsing or automatic backfill is
+provided. The UI/action always requests requireCareSnapshot; the service checks
+it after Booking/Visit locks and before any writes. Existing internal historical
+callers can omit that option, but their unverified participant data is still denied
+by the DTO. Immutable operation replay only returns a receipt and never rewrites
+assignments or care provenance.
+
+Care capture happens only at public and canonical booking creation, using the
+client's notes input, not stored Booking.notes. Existing notes are dual-written for
+lead compatibility. Generic notes, fixture markers, history, conversations and
+reward details never enter the participant projection. Trusted null text renders
+"No additional care instructions provided." Medication text is not truncated.
+
+Messaging expansion and legacy remediation require separate approval. Participant
+detail redirects leads to their existing full Booking view and denies nonparticipants.
+The sitter completion action still derives actor identity from the session, calls
+the locked completion service, and now strips raw allocation/reward/review objects
+from its response. Only assigned-Visit expected/earned payout is rendered.
 
 Production deployment/migrations, client repricing, settlement, Stripe transfers,
 refunds, clawbacks and attribution rewrites are outside this phase. Public canonical

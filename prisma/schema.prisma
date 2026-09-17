@@ -85,6 +85,8 @@ model Booking {
   operatorId String // who owns this booking
 
   clientLinkToken   String        @unique @default(cuid())
+  careInstructions        String?
+  careInstructionsVersion Int?
   notes             String?
   petDetails        Json?
   petNames          String[]      @default([])

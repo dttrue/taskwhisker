@@ -13,9 +13,12 @@ export async function completeVisitAsSitter(formData) {
     actorRole: "SITTER", lateReason: formData.get("lateReason")?.toString().trim() || "" });
   if (result.ok) {
     revalidatePath("/dashboard/sitter");
+    revalidatePath(`/dashboard/sitter/visits/${visitId}`);
     revalidatePath("/dashboard/operator");
     revalidatePath(`/dashboard/operator/bookings/${result.bookingId}`);
     revalidatePath(`/dashboard/sitter/bookings/${result.bookingId}`);
   }
-  return result;
+  // No raw allocation, reward references or booking financial state crosses the action boundary.
+  return { ok: result.ok, error: result.error, alreadyCompleted: result.alreadyCompleted,
+    completionBlocked: result.completionBlocked, bookingCompletion: result.bookingCompletion ? { error: result.bookingCompletion.error } : undefined };
 }

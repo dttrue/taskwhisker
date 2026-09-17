@@ -1,58 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-import { createRequire } from "node:module";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import swc from "next/dist/build/swc/index.js";
 import { compensationFixture } from "../compensation/fixtures.js";
 
-// Render the real JSX and helpers with the project's compiler. Only framework
-// boundaries (auth, database, navigation and write actions) are substituted.
-const require = createRequire(import.meta.url);
-const src = fileURLToPath(new URL("../../../", import.meta.url));
-await swc.loadBindings();
-function surfaceLoader(booking, actorId = "sitter") {
-  const cache = new Map();
-  const queries = [];
-  const db = {
-    booking: {
-      async findUnique(args) { queries.push(args); return booking; },
-      async findMany() { return []; },
-      async findFirst() { return null; },
-    },
-    user: { async findUnique() { return { id: "sitter", role: "SITTER" }; }, async findMany() { return []; } },
-  };
-  const actions = new Proxy({}, { get: () => async () => ({ ok: true }) });
-  function load(path) {
-    if (cache.has(path)) return cache.get(path).exports;
-    const evaluatedModule = { exports: {} }; cache.set(path, evaluatedModule);
-    const { code } = swc.transformSync(readFileSync(path, "utf8"), {
-      filename: path,
-      jsc: { target: "es2022", parser: { syntax: "ecmascript", jsx: true }, transform: { react: { runtime: "automatic" } } },
-      module: { type: "commonjs" },
-    });
-    function dependency(name) {
-      if (name === "next/link") return { __esModule: true, default: ({ children, ...props }) => React.createElement("a", props, children) };
-      if (name === "next/navigation") return { notFound() { throw new Error("Not found"); }, useRouter: () => ({ refresh() {} }), usePathname: () => "/dashboard/sitter" };
-      if (name === "@/auth" || name === "@/lib/auth") return { requireRole: async () => ({ user: { id: actorId, email: "sitter@example.invalid" } }), auth: async () => ({ user: { id: actorId } }) };
-      if (name === "@/lib/db") return { prisma: db };
-      if (/actions(?:\.js)?$/.test(name) || /approveCancellationActions$/.test(name)) return actions;
-      if (name.startsWith("@/") || name.startsWith(".")) {
-        const base = name.startsWith("@/") ? resolve(src, name.slice(2)) : resolve(dirname(path), name);
-        const target = [base, `${base}.js`, `${base}.jsx`].find((p) => existsSync(p));
-        if (!target) throw new Error(`Unresolved test dependency: ${name}`);
-        return load(target);
-      }
-      return require(name);
-    }
-    new Function("require", "module", "exports", code)(dependency, evaluatedModule, evaluatedModule.exports);
-    return evaluatedModule.exports;
-  }
-  return { load: (path) => load(resolve(src, path)), queries };
-}
+import { surfaceLoader } from "../surfaceTestSupport.js";
 async function bookingFixture(kind) {
   const f = compensationFixture({ reward: kind === "reward" ? "RESERVED" : null });
   if (["committed", "reward"].includes(kind)) await f.commit();

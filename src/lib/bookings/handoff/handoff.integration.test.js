@@ -1,3 +1,5 @@
+import { submitOperatorHandoff, previewOperatorHandoff, coverageRows } from "./operatorSurface.js";
+import { loadParticipantVisit, loadParticipantDashboard } from "./participantSurface.js";
 import "dotenv/config";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -34,11 +36,11 @@ test("PostgreSQL selected handoff, bounded participation and synchronized lifecy
   const load=id=>db.booking.findUnique({where:{id},include:{...economicsInclude,visits:{orderBy:{canonicalUnitPosition:"asc"},include:visitFinancialInclude},sitterCompensation:{include:{petCharges:true}}}});
   const confirm=(b,database=db)=>confirmBookingWithDb({db:database,bookingId:b.id,actorId:operatorId});
   const finish=(b,{database=db,role="SITTER",performer=sitterId,index=0}={})=>completeVisitWithDb({db:database,visitId:b.visits[index].id,actorId:role==="SITTER"?performer:operatorId,actorRole:role,now:new Date(+b.visits[index].startTime+1000)});
-  async function create({business=false,owner=false,quantity=1,pets=bookingInput().pets}={}) {
+  async function create({business=false,owner=false,quantity=1,pets=bookingInput().pets,notes=null}={}) {
     process.env.DEFAULT_PUBLIC_BOOKING_SITTER_USER_ID=owner?ownerId:sitterId;
     const schedule=timedSchedule(quantity), offset=++ordinal*7*86400000;
     schedule.visits=schedule.visits.map(v=>({...v,date:new Date(Date.parse(`${v.date}T00:00:00Z`)+offset).toISOString().slice(0,10)}));
-    return createCanonicalBookingWithDb({db,operatorId,creationKey:randomUUID(),input:bookingInput({client:{name:"Visit finance QA",email:`${marker}-${randomUUID()}@example.invalid`},careOptionCode:option.code,pets,schedule,...(business||owner?{}:{referralCode:publicCode,requestReferringSitter:true})})});
+    return createCanonicalBookingWithDb({db,operatorId,creationKey:randomUUID(),input:bookingInput({client:{name:"Visit finance QA",email:`${marker}-${randomUUID()}@example.invalid`},careOptionCode:option.code,pets,schedule,notes,...(business||owner?{}:{referralCode:publicCode,requestReferringSitter:true})})});
   }
   const handoff=(b,{database=db,ids=b.visits.slice(-1).map(v=>v.id),replacement=otherId,key=randomUUID(),reason="Coverage",actor=operatorId}={})=>handoffSelectedVisitsWithDb({db:database,bookingId:b.id,visitIds:ids,sitterId:replacement,actorId:actor,operationId:key,reason});
   async function ready(options){const b=await create(options);assert.equal((await confirm(b)).ok,true);return load(b.id);}
@@ -103,6 +105,35 @@ test("PostgreSQL selected handoff, bounded participation and synchronized lifecy
       defaultSitterRate:{create:{baseCompensationCents:2000,version:4,setByUserId:operatorId,petCharges:{create:[{species:"Dog",includedCount:1,additionalCents:400}]}}}
     },include:{defaultSitterRate:true,clientRate:true}});
     ({publicCode}=await createSitterReferralCode({db,sitterId,operatorUserId:operatorId}));
+
+    await t.test("UI activation: trusted snapshot, atomic multi-selection, retry, participant loader, own earnings and denied legacy", async () => {
+      const b=await ready({quantity:3,notes:"  Feeding instructions.\nMedication instructions.\nRoutine instructions.  "});
+      assert.equal(b.careInstructionsVersion,1);assert.equal(b.careInstructions,"Feeding instructions.\nMedication instructions.\nRoutine instructions.");
+      const input={bookingId:b.id,visitIds:b.visits.slice(1).map(v=>v.id),sitterId:otherId,operationId:randomUUID()};
+      assert(coverageRows(b).every(v=>v.eligible));
+      assert.equal((await previewOperatorHandoff({db,actorId:operatorId,input})).ok,true);
+      assert.deepEqual(await submitOperatorHandoff({db,actorId:operatorId,input}),{ok:true,replay:false,count:2});
+      assert.deepEqual(await submitOperatorHandoff({db,actorId:operatorId,input}),{ok:true,replay:true,count:2});
+      const dto=await loadParticipantVisit({db,visitId:input.visitIds[0],userId:otherId});
+      assert.equal(dto.visits.length,1);assert.equal(dto.careInstructions,b.careInstructions);assert.equal(dto.visits[0].money.payoutCents,1800);
+      assert.equal(await loadParticipantVisit({db,visitId:b.visits[0].id,userId:otherId}),null);
+      assert.equal(await loadParticipantVisit({db,visitId:input.visitIds[0],userId:ownerId}),null);
+      assert.equal((await loadParticipantVisit({db,visitId:input.visitIds[0],userId:sitterId})).kind,"LEAD");
+      assert.equal((await loadParticipantDashboard({db,userId:otherId})).filter(e=>e.bookingId===b.id).length,2);
+      assert.equal((await finish(b,{performer:sitterId,index:1})).ok,false);
+      const completed=await finish(b,{performer:otherId,index:1});assert.equal(completed.ok,true);
+      const earned=await loadParticipantVisit({db,visitId:input.visitIds[0],userId:otherId});assert.equal(earned.visits[0].money.status,"EARNED");assert.equal(earned.visits[0].money.payoutCents,1800);
+      const current=await load(b.id);assert.equal(current.visits[1].performedBySitterId,otherId);assert.equal(current.visits[1].compensationAllocation.authorizationId,current.visits[1].compensationAuthorizations.at(-1).id);
+      const legacy=await ready();assert.equal(legacy.careInstructionsVersion,1);assert.equal(legacy.careInstructions,null);
+      await db.booking.update({where:{id:legacy.id},data:{careInstructionsVersion:null,careInstructions:null,notes:"Internal fixture metadata"}});
+      const legacyInput={bookingId:legacy.id,visitIds:legacy.visits.map(v=>v.id),sitterId:otherId,operationId:randomUUID()};
+      const result=await submitOperatorHandoff({db,actorId:operatorId,input:legacyInput});assert.equal(result.ok,false);assert.match(result.error,/Care instructions need review/);
+      const unchanged=await load(legacy.id);assert.equal(unchanged.visits[0].sitterId,sitterId);assert.equal(unchanged.careInstructionsVersion,null);
+      // An old internal assignment still cannot open the newly activated care surface.
+      assert.equal((await handoff(legacy)).ok,true);
+      assert.equal((await loadParticipantVisit({db,visitId:legacy.visits[0].id,userId:otherId})).unavailable,true);
+      assert(!(await loadParticipantDashboard({db,userId:otherId})).some(e=>e.bookingId===legacy.id));
+    });
 
     for(const count of [1,2]) await t.test(`${count} selected units hand off atomically, preserving lead, history, unselected and earned rows`,async()=>{
       const b=await ready({quantity:4});assert.equal((await finish(b)).ok,true);const before=await load(b.id);

@@ -5,7 +5,7 @@ import { normalizeHandoff, validateHandoff } from "./contract.js";
 import { participantCareDto, participationKind, ownVisitMoney, leadVisibleVisits } from "./participation.js";
 import { activeAuthorization } from "../visitCompensation/contract.js";
 const input = () => normalizeHandoff({ bookingId: "booking", visitIds: ["visit-1", "visit-0"], sitterId: "bob", actorId: "operator", operationId: "operation", reason: "Coverage" });
-async function fixture() { const f = compensationFixture({ quantity: 4 }); await f.commit(); f.state.booking.rewardReservation = null; return f; }
+async function fixture() { const f = compensationFixture({ quantity: 4 }); await f.commit(); f.state.booking.rewardReservation = null; f.state.booking.careInstructionsVersion = 1; f.state.booking.careInstructions = null; return f; }
 test("operation identity is stable for reordered selections and distinct for payload changes", () => {
  const a=input(); assert.deepEqual(a.visitIds,["visit-0","visit-1"]);
  assert.equal(a.fingerprint,normalizeHandoff({...a,operationId:"operation",visitIds:a.visitIds.toReversed()}).fingerprint);
@@ -32,7 +32,7 @@ test("participant DTO exposes only assigned units and own amounts, no generic no
  assert.equal(participationKind(b,"sitter"),"LEAD");assert.equal(participationKind(b,"bob"),"VISIT_PARTICIPANT");assert.equal(participantCareDto(b,"nobody"),null);
  const dto=participantCareDto(b,"bob");assert.equal(dto.visits.length,1);assert.equal(dto.visits[0].id,v.id);assert.equal(dto.visits[0].money.payoutCents,1800);
  assert(!JSON.stringify(dto).includes("PRIVATE"));assert.equal(ownVisitMoney(b,b.visits[0],"bob"),null);
- assert.deepEqual(Object.keys(dto).sort(),["bookingId","care","client","kind","location","service","status","visits"].sort());
+ assert.deepEqual(Object.keys(dto).sort(),["bookingId","care","careInstructions","client","kind","location","service","status","visits"].sort());
  v.sitterId="sitter";assert.equal(participantCareDto(b,"bob"),null);
 });
 

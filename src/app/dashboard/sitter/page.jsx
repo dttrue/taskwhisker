@@ -1,3 +1,4 @@
+import { loadParticipantDashboard } from "@/lib/bookings/handoff/participantSurface";
 import { leadVisibleVisits, ownVisitMoney } from "@/lib/bookings/handoff/participation";
 import { visitFinancialInclude } from "@/lib/bookings/visitCompensation/contract";
 import { actionableCareUnavailable } from "@/lib/bookings/visitCompensation/readiness";
@@ -45,6 +46,7 @@ export default async function SitterDashboardPage({ searchParams }) {
 
   const [
     bookings,
+    coverageVisitEntries,
     upcomingVisitTotal,
     completedVisitTotal,
     completedMetricVisits,
@@ -74,6 +76,7 @@ export default async function SitterDashboardPage({ searchParams }) {
         },
       },
     }),
+    loadParticipantDashboard({ db: prisma, userId }),
     prisma.visit.count({
       where: {
         sitterId: userId,
@@ -105,6 +108,8 @@ export default async function SitterDashboardPage({ searchParams }) {
         booking: {
           select: {
             ...economicsSelect,
+            status: true,
+            visits: { include: visitFinancialInclude },
             _count: { select: { visits: true } },
           },
         },
@@ -112,7 +117,8 @@ export default async function SitterDashboardPage({ searchParams }) {
     }),
   ]);
 
-  const completedThisWeek = completedMetricVisits.length;
+  const completedCoverageThisWeek = coverageVisitEntries.filter(e => e.visit.status === "COMPLETED" && new Date(e.visit.completedAt) >= weekStartsAt && new Date(e.visit.completedAt) < upcomingStartsAt);
+  const completedThisWeek = completedMetricVisits.length + completedCoverageThisWeek.length;
   const acknowledgedCompletedVisitIds = completedMetricVisits.map(
     (visit) => visit.id
   );
@@ -121,9 +127,9 @@ export default async function SitterDashboardPage({ searchParams }) {
 
     const totalVisits = visit.booking._count.visits || 1;
     return (
-      sumKnownAmounts([total, visitPayoutEstimate(visit.booking, totalVisits)])
+      sumKnownAmounts([total, ownVisitMoney(visit.booking, visit.booking.visits.find(v => v.id === visit.id), userId)?.payoutCents ?? visitPayoutEstimate(visit.booking, totalVisits)])
     );
-  }, 0);
+  }, sumKnownAmounts(completedCoverageThisWeek.filter(e => new Date(e.visit.completedAt) >= todayStartsAt).map(e => e.visit.money?.payoutCents ?? null)));
 
   const upcomingPageCount = Math.max(
     1,
@@ -268,6 +274,7 @@ export default async function SitterDashboardPage({ searchParams }) {
     {unavailableBookings.length > 0 && <p className="m-4 rounded border p-4" role="status">{unavailableBookings.length} booking(s) unavailable for service pending operator financial review.</p>}
     <SitterDashboardLive
       bookings={serializedBookings}
+      coverageVisitEntries={coverageVisitEntries}
       upcomingVisitEntries={upcomingVisitEntries}
       upcomingVisitTotal={upcomingVisitTotal}
       upcomingPage={upcomingPage}

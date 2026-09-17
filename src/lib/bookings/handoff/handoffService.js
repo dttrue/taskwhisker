@@ -1,3 +1,4 @@
+import { participantCareReady } from "../careSnapshot/contract.js";
 import { normalizeHandoff, validateHandoff } from "./contract.js";
 import { replacementAuthorization } from "./economics.js";
 import { economicsInclude } from "../economics/bookingEconomics.js";
@@ -9,8 +10,8 @@ import { isRetryableRewardTransactionError } from "../../rewards/rewardProgressG
 
 export const handoffInclude = { ...economicsInclude, rewardReservation: { include: { grant: true } }, bookingPets: { orderBy: { position: "asc" } }, visits: { orderBy: { id: "asc" }, include: visitFinancialInclude } };
 const receipt = rows => rows.map(a => ({ visitId: a.visitId, sitterId: a.sitterId, authorizationId: a.id, revision: a.revision })).sort((a,b) => a.visitId.localeCompare(b.visitId));
-// Internal only: intentionally no server action or operator UI imports this writer.
-export async function handoffSelectedVisitsWithDb({ db, ...args }) {
+// UI callers require trusted care inside the same locked transaction. Internal historical callers retain their contract.
+export async function handoffSelectedVisitsWithDb({ db, requireCareSnapshot = false, ...args }) {
   let input;
   try { input = normalizeHandoff(args); } catch (e) { return { ok: false, code: e.code }; }
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -35,6 +36,7 @@ export async function handoffSelectedVisitsWithDb({ db, ...args }) {
           if (!await tx.sitterRewardAccount.findUnique({ where: { sitterId } })) reject("REWARD_STATE_CONFLICT");
           booking = await tx.booking.findUnique({ where: { id: input.bookingId }, include: handoffInclude });
         }
+        if (requireCareSnapshot && !participantCareReady(booking)) reject("CARE_INSTRUCTIONS_REQUIRED");
         const selected = validateHandoff(booking, input, await financialDatabaseTime(tx));
         const sitter = await tx.user.findUnique({ where: { id: input.sitterId }, select: { role: true } });
         if (sitter?.role !== "SITTER") reject("INVALID_SITTER");

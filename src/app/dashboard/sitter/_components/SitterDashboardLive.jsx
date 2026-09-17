@@ -3,6 +3,8 @@
 import { completionGuard, sumKnownAmounts } from "@/lib/bookings/economics/bookingEconomics";
 
 
+import CoverageVisits from "./CoverageVisits";
+import { coverageRouteStops } from "../lib/coverageRouteStops";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -15,6 +17,7 @@ import ShiftStatusCard from "./ShiftStatusCard";
 import CompletedVisitsSection from "./CompletedVisitsSection";
 import { Notice, PageHeader, PageShell } from "@/components/ui/Foundation";
 import {
+  isSameDay,
   formatMoney,
   formatDateTime,
   groupBookings,
@@ -34,6 +37,7 @@ import {
 
 export default function SitterDashboardLive({
   bookings = [],
+  coverageVisitEntries = [],
   upcomingVisitEntries = [],
   upcomingVisitTotal = 0,
   upcomingPage = 1,
@@ -153,7 +157,7 @@ export default function SitterDashboardLive({
       completedVisitTotal + pendingOptimisticCompletedEntries.length;
     const canceledVisitCount = canceledVisitEntries.length;
 
-    const sitterMapBookings = getSitterMapBookings(today, now);
+    const sitterMapBookings = [...getSitterMapBookings(today, now), ...coverageRouteStops(coverageVisitEntries, now)];
     const remainingSitterMapBookings = getRemainingMapStops(
       sitterMapBookings,
       now
@@ -173,8 +177,9 @@ export default function SitterDashboardLive({
       remainingSitterMapBookings.find((b) => b.id === lastGraceStop?.id) ??
       null;
 
-    const todayVisitCount = getRemainingVisitCountForToday(localBookings, now);
-    const remainingTodayPayout = getRemainingPayoutForToday(localBookings, now);
+    const coverageToday = coverageVisitEntries.filter(e => e.visit.canExecute && e.visit.status === "CONFIRMED" && isSameDay(new Date(e.visit.startTime), now) && new Date(e.visit.endTime) >= now);
+    const todayVisitCount = getRemainingVisitCountForToday(localBookings, now) + coverageToday.length;
+    const remainingTodayPayout = sumKnownAmounts([getRemainingPayoutForToday(localBookings, now), ...coverageToday.map(e => e.visit.money?.payoutCents ?? null)]);
     const optimisticEarnedToday = pendingOptimisticCompletedEntries.reduce(
       // Preserve the existing legacy optimistic metric; canonical allocation is unavailable.
       (sum, v) => sumKnownAmounts([sum, v.payoutStatus === "LEGACY" ? 0 : null]),
@@ -218,7 +223,7 @@ export default function SitterDashboardLive({
         }) || [];
 
       return count + visits.length;
-    }, 0);
+    }, coverageVisitEntries.filter(e => e.visit.canExecute && e.visit.status === "CONFIRMED" && isSameDay(new Date(e.visit.startTime), tomorrow)).length);
 
     return {
       todayVisitEntries,
@@ -249,6 +254,7 @@ export default function SitterDashboardLive({
       hasBlockingMissedVisits,
     };
   }, [
+    coverageVisitEntries,
     localBookings,
     now,
     completedVisitEntries,
@@ -293,6 +299,8 @@ export default function SitterDashboardLive({
           title="Your day at a glance"
           description="Track today’s route, upcoming visits, and completed care in one place."
         />
+
+        <CoverageVisits entries={coverageVisitEntries} now={now} />
 
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <StatCard
@@ -364,6 +372,7 @@ export default function SitterDashboardLive({
         ) : derived.hasActiveRoute ? (
           <div ref={routePanelRef}>
             <SitterRoutePanel
+              now={now}
               bookings={derived.remainingSitterMapBookings}
               defaultBooking={derived.defaultBooking}
               lastGraceStop={derived.safeLastGraceStop}

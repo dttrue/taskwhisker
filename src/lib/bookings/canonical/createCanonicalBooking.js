@@ -1,3 +1,4 @@
+import { captureCareInstructions } from "../careSnapshot/contract.js";
 import { normalizeBookingIntent, deriveSchedule, requiredText, reject } from "./bookingContract.js";
 import { calculateCanonicalClientQuote } from "../../pricing/calculateCanonicalClientQuote.js";
 import { aggregateCanonicalQuote, createBookingPricingSnapshotWithDb } from "./pricingSnapshot.js";
@@ -61,7 +62,7 @@ export async function createCanonicalBookingWithDb({ db, operatorId, creationKey
           durationMinutes: careOption.durationMinutes, quantity: schedule.quantity,
           canonicalSchedule: intent.schedule, scheduleTimeZone: intent.timeZone,
           petDetails: intent.petDetails ?? undefined,
-          notes: intent.notes, petNames: intent.pets.map((pet) => pet.name),
+          notes: intent.notes, ...captureCareInstructions(intent.notes), petNames: intent.pets.map((pet) => pet.name),
           serviceSummary: `${careOption.offering.name} · ${careOption.label}`,
           serviceAddressLine1: location.addressLine1, serviceAddressLine2: location.addressLine2,
           serviceCity: location.city, serviceState: location.state, servicePostalCode: location.postalCode,

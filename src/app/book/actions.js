@@ -1,6 +1,7 @@
 // app/book/actions.js
 "use server";
 
+import { captureCareInstructions } from "@/lib/bookings/careSnapshot/contract";
 import { prisma } from "@/lib/db";
 import { BookingStatus, VisitStatus } from "@prisma/client";
 import { createSystemMessage } from "@/lib/messaging/createSystemMessage";
@@ -431,6 +432,7 @@ export async function createPublicBooking(rawInput) {
         locationNotes: bookingServiceAddress.locationNotes,
 
         notes: notes || null,
+        ...captureCareInstructions(notes),
         petNames,
         petDetails: petDetails || undefined,
         bookingPets: {

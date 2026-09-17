@@ -1,3 +1,6 @@
+import VisitCoverage from "../../_components/VisitCoverage";
+import { coverageRows } from "@/lib/bookings/handoff/operatorSurface";
+import { participantCareReady } from "@/lib/bookings/careSnapshot/contract";
 import { visitFinancialInclude } from "@/lib/bookings/visitCompensation/contract";
 import { readBookingEconomics, formatFinancialCents, bookingCompletionReview, clientTotalDisplay, sitterPayoutDisplay as displaySitterPayout, economicsInclude } from "@/lib/bookings/economics/bookingEconomics";
 // src/app/dashboard/operator/bookings/[id]/page.jsx
@@ -189,7 +192,7 @@ export default async function OperatorBookingDetailPage({
       sitter: true,
       lineItems: true,
       visits: {
-        include: { ...visitFinancialInclude, sitter: { select: { name: true, email: true } } },
+        include: { ...visitFinancialInclude, performedBySitter: { select: { name: true } }, sitter: { select: { name: true, email: true } } },
         orderBy: [{ date: "asc" }, { startTime: "asc" }],
       },
       history: {
@@ -580,6 +583,8 @@ export default async function OperatorBookingDetailPage({
             </div>
           </CollapsibleCard>
         ) : null}
+
+        <VisitCoverage bookingId={booking.id} visits={coverageRows(booking)} sitters={sitters} careReady={participantCareReady(booking)} />
 
         {/* Visit schedule */}
         <CollapsibleCard title="Visit schedule" defaultOpen={true}>

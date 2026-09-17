@@ -1,6 +1,7 @@
 // src/app/dashboard/sitter/_components/SitterRoutePanel.jsx
 "use client";
-import { sitterPayoutDisplay as displaySitterPayout } from "@/lib/bookings/economics/bookingEconomics";
+import Link from "next/link";
+import { formatFinancialCents, sitterPayoutDisplay as displaySitterPayout } from "@/lib/bookings/economics/bookingEconomics";
 
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +19,7 @@ import { FormFeedback, StatusBadge } from "@/components/ui/Foundation";
 
 export default function SitterRoutePanel({
   bookings = [],
+  now: clockNow,
   defaultBooking = null,
   lastGraceStop = null,
   selectedBookingId = null,
@@ -47,7 +49,7 @@ export default function SitterRoutePanel({
     return bookings[0] || null;
   }, [bookings, selectedBookingId, defaultBooking]);
 
-  const now = new Date();
+  const now = useMemo(() => clockNow || new Date(), [clockNow]);
 
   const getStopState = useCallback(
     (booking) => {
@@ -215,10 +217,11 @@ export default function SitterRoutePanel({
         <div className="text-left md:text-right">
           <div className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--task-text-muted)]">Payout</div>
           <div className="mt-1 text-lg font-bold text-[var(--task-text)]">
-            {displaySitterPayout(selectedBooking)}
+            {selectedBooking.coverageVisitId ? formatFinancialCents(selectedBooking.coverageMoney?.payoutCents, selectedBooking.coverageMoney?.currency) : displaySitterPayout(selectedBooking)}
           </div>
 
           <div className="mt-3">
+            {selectedBooking.coverageVisitId && <Link className="mb-3 block underline" href={`/dashboard/sitter/visits/${selectedBooking.coverageVisitId}`}>Coverage visit details and care instructions</Link>}
             <button
               type="button"
               onClick={handleCompleteVisit}

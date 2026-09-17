@@ -1,3 +1,4 @@
+import { participantCareReady } from "../careSnapshot/contract.js";
 import { economicsInclude, isCanonicalBooking } from "../economics/bookingEconomics.js";
 import { activeAuthorization, visitFinancialInclude } from "../visitCompensation/contract.js";
 import { careReadiness } from "../visitCompensation/readiness.js";
@@ -36,8 +37,9 @@ export function participantCareDto(booking, userId) {
   if (kind === "NONE") return null;
   if (kind === "LEAD") return { kind, bookingId: booking.id, useLeadView: true };
   const visits = booking.visits.filter(v => v.sitterId === userId && v.status !== "CANCELED");
-  if (!isCanonicalBooking(booking) || !visits.length || visits.some(v => !careReadiness(booking, v.id).ok)) return { kind, bookingId: booking.id, unavailable: true };
+  if (!participantCareReady(booking) || !isCanonicalBooking(booking) || !visits.length || visits.some(v => !careReadiness(booking, v.id).ok)) return { kind, bookingId: booking.id, unavailable: true };
   return { kind, bookingId: booking.id, status: booking.status,
+    careInstructions: booking.careInstructions ?? null,
     service: { label: booking.serviceSummary, durationMinutes: booking.durationMinutes },
     client: { name: booking.client?.name ?? null, phone: booking.client?.phone ?? null },
     care: { petDetails: booking.petDetails, petNames: booking.petNames, accessInstructions: booking.accessInstructions, locationNotes: booking.locationNotes },
@@ -48,7 +50,7 @@ export function participantCareDto(booking, userId) {
   };
 }
 // Internal authenticated-server seam; userId must come from the session, never a browser role flag.
-// Intentionally unwired until a dedicated participant UI has been reviewed.
+// Returns only the approved projection; generic lead pages stay lead-only.
 export async function resolveSitterBookingParticipationWithDb({ db, bookingId, userId }) {
   const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
   if (user?.role !== "SITTER") return null;
