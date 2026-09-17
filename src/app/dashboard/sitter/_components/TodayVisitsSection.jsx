@@ -3,27 +3,32 @@
 
 import { useState } from "react";
 
+import { ParticipantVisitCard } from './ParticipantVisit';
 import VisitCard from "./VisitCard";
 import { Notice, SectionHeader, StatusBadge } from "@/components/ui/Foundation";
 
 export default function TodayVisitsSection({
   visits = [],
+  coverageVisits = [],
   now = new Date(),
   onCompleteVisit,
 }) {
   const [isOpen, setIsOpen] = useState(true);
 
+  const count = visits.length + coverageVisits.length;
+  const entries = [...visits.map(entry => ({ entry, coverage: false })), ...coverageVisits.map(entry => ({ entry, coverage: true }))].sort((a, b) => new Date(a.entry.visit.startTime) - new Date(b.entry.visit.startTime));
+
   return (
     <section className="space-y-4">
       <SectionHeader
         title="Today"
-        meta={<StatusBadge tone={visits.length ? "success" : "neutral"}>{visits.length} remaining</StatusBadge>}
+        meta={<StatusBadge tone={count ? "success" : "neutral"}>{count} remaining</StatusBadge>}
         description={
-          visits.length === 0
+          count === 0
             ? "You're all caught up for today."
-            : visits.length === 1
+            : count === 1
             ? "1 stop remaining today."
-            : `${visits.length} stops remaining today.`
+            : `${count} stops remaining today.`
         }
       />
 
@@ -39,11 +44,11 @@ export default function TodayVisitsSection({
 
       {isOpen ? (
         <div id="today-visits-content">
-          {visits.length === 0 ? (
+          {count === 0 ? (
             <Notice>No remaining stops for today.</Notice>
           ) : (
             <div className="grid gap-3">
-              {visits.map((entry) => (
+              {entries.map(({ entry, coverage }) => coverage ? <ParticipantVisitCard key={entry.id} entry={entry} /> : (
                 <VisitCard
                   key={entry.id}
                   entry={entry}

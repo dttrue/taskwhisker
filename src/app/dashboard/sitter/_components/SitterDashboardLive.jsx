@@ -410,12 +410,14 @@ export default function SitterDashboardLive({
 
         <TodayVisitsSection
           visits={derived.todayVisitEntries}
+          coverageVisits={coverageVisitEntries.filter(e => e.visit.status === "CONFIRMED" && isSameDay(new Date(e.visit.startTime), now) && new Date(e.visit.endTime) >= now)}
           now={now}
           onCompleteVisit={handleVisitCompleted}
         />
 
         <UpcomingVisitsSection
           visits={derived.upcomingVisitEntries}
+          coverageVisits={coverageVisitEntries.filter(e => e.visit.status === "CONFIRMED" && new Date(e.visit.startTime) > now && !isSameDay(new Date(e.visit.startTime), now))}
           totalCount={derived.upcomingVisitCount}
           page={upcomingPage}
           pageSize={visitPageSize}

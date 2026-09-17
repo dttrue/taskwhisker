@@ -30,7 +30,7 @@ test('operator actual JSX: eligible checkboxes, unavailable reasons, sitter rost
   const disabled=coverageRows(b);assert(disabled.every(r=>!r.eligible));assert.equal(disabled[0].reason,'Completed');assert.equal(disabled[1].reason,'Already started');
   const C=surfaceLoader(b).load('app/dashboard/operator/_components/VisitCoverage.jsx').default;
   const html=renderToStaticMarkup(React.createElement(C,{bookingId:b.id,visits:disabled,sitters:[{id:'bob',name:'Bob'}],careReady:true}));
-  assert.match(html,/type="checkbox"[^>]*disabled/);assert.match(html,/Scheduled: Bob/);assert.match(html,/Replacement sitter/);
+  assert.match(html,/type="checkbox"[^>]*disabled/);assert.match(html, /Scheduled: <strong[^>]*>Bob<\/strong>/);assert.match(html,/Replacement sitter/);
   b.careInstructionsVersion=null;assert(coverageRows(b).every(r=>!r.eligible));
 });
 test('real picker handlers select multiple visits, choose sitter, prevent double-click, keep retry identity and refresh names',async()=>{
@@ -49,7 +49,7 @@ test('real picker handlers select multiple visits, choose sitter, prevent double
   assert.deepEqual(calls[0],calls[1]);assert.equal(calls[0].visitIds.length,2);
   finish({ok:true,replay:true,count:2});await second;
   props.visits=props.visits.map(v=>({...v,scheduledSitterName:'Bob'}));
-  const html=renderToStaticMarkup(ui.render());assert.match(html,/already saved/);assert.match(html,/2 visits reassigned to Bob/);assert.equal(ui.refreshes(),1);
+  const html=renderToStaticMarkup(ui.render());assert.match(html,/already saved/);assert.match(html,/2 visits reassigned to Bob/);assert.equal(ui.refreshes(),1);assert.equal((html.match(/Scheduled: <strong[^>]*>Bob<\/strong>/g)||[]).length,2);
   assert(nodes(ui.render()).filter(n=>n.type==='input').every(n=>!n.props.checked));
 });
 test('participant single-Visit loader, discovery and actual page exclude unrelated care/visits/money/actions',async()=>{

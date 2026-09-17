@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ParticipantVisitCard } from './ParticipantVisit';
 import { isSameDay } from '../lib/sitterDashboardUtils';
 export default function CoverageVisits({ entries, now }) {
-  const [tab, setTab] = useState('Today');
+  const [tab, setTab] = useState(() => entries.some(e => e.visit.status !== 'COMPLETED' && isSameDay(new Date(e.visit.startTime), now)) ? 'Today' : entries.some(e => e.visit.status !== 'COMPLETED' && new Date(e.visit.startTime) > now) ? 'Upcoming' : 'Today');
   const [page, setPage] = useState(1);
   if (!entries.length) return null;
   const groups = {

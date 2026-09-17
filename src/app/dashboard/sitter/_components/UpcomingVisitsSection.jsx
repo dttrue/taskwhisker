@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { ParticipantVisitCard } from './ParticipantVisit';
 import VisitCard from "./VisitCard";
 import { Notice, SectionHeader, StatusBadge } from "@/components/ui/Foundation";
 
@@ -22,6 +23,7 @@ function pageHref(pathname, searchParams, page) {
 
 export default function UpcomingVisitsSection({
   visits = [],
+  coverageVisits = [],
   totalCount = 0,
   page = 1,
   pageSize = 10,
@@ -33,17 +35,20 @@ export default function UpcomingVisitsSection({
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
   const showPagination = totalCount > pageSize;
 
+  const count = totalCount + coverageVisits.length;
+  const entries = [...visits.map(entry => ({ entry, coverage: false })), ...coverageVisits.map(entry => ({ entry, coverage: true }))].sort((a, b) => new Date(a.entry.visit.startTime) - new Date(b.entry.visit.startTime));
+
   return (
     <section className="space-y-4">
       <SectionHeader
         title="Upcoming"
-        meta={<StatusBadge>{totalCount} scheduled</StatusBadge>}
+        meta={<StatusBadge>{count} scheduled</StatusBadge>}
         description={
-          totalCount === 0
+          count === 0
             ? "Nothing is scheduled after today."
-            : totalCount === 1
+            : count === 1
             ? "1 upcoming visit scheduled."
-            : `${totalCount} upcoming visits scheduled.`
+            : `${count} upcoming visits scheduled.`
         }
       />
 
@@ -59,11 +64,11 @@ export default function UpcomingVisitsSection({
 
       {isOpen ? (
         <div id="upcoming-visits-content" className="space-y-4">
-          {visits.length === 0 ? (
+          {entries.length === 0 ? (
             <Notice>No upcoming visits scheduled.</Notice>
           ) : (
             <div className="grid gap-3">
-              {visits.map((entry) => (
+              {entries.map(({ entry, coverage }) => coverage ? <ParticipantVisitCard key={entry.id} entry={entry} /> : (
                 <VisitCard key={entry.id} entry={entry} now={now} />
               ))}
             </div>
@@ -88,7 +93,7 @@ export default function UpcomingVisitsSection({
               )}
 
               <span className="text-sm font-semibold text-[var(--task-text-muted)]">
-                Page {page} of {pageCount}
+                {coverageVisits.length > 0 ? "Lead visits · " : ""}Page {page} of {pageCount}
               </span>
 
               {page >= pageCount ? (

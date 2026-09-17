@@ -1,3 +1,4 @@
+import { formatPetCareDetails } from '@/lib/bookings/carePresentation';
 import { leadVisibleVisits } from "@/lib/bookings/handoff/participation";
 import { visitFinancialInclude } from "@/lib/bookings/visitCompensation/contract";
 import { actionableCareUnavailable } from "@/lib/bookings/visitCompensation/readiness";
@@ -469,7 +470,7 @@ export default async function SitterBookingDetailPage({ params }) {
                         Pet details
                       </div>
                       <p className="mt-2 text-sm text-zinc-700">
-                        {formatReadableText(booking.petDetails)}
+                        {formatPetCareDetails(booking.petDetails) || 'No additional pet details provided.'}
                       </p>
                     </div>
                   ) : null}

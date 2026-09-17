@@ -39,7 +39,7 @@ export default function VisitCoverage({ bookingId, visits, sitters, careReady })
           aria-describedby={`eligibility-${visit.id}`} onChange={event => changeSelection(event.target.checked ? [...selected, visit.id] : selected.filter(id => id !== visit.id))} />
         <span className="min-w-0 break-words text-sm">
           <span className="block font-semibold">{new Date(visit.startTime).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })} – {new Date(visit.endTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })} ET</span>
-          <span className="block">Scheduled: {visit.scheduledSitterName} · {visit.status}</span>
+          <span className="mt-1 block">Scheduled: <strong className="font-semibold text-[var(--task-primary)]">{visit.scheduledSitterName}</strong></span><span className="block text-xs text-[var(--task-text-muted)]">{visit.status}</span>
           {visit.performedByName && <span className="block">Performed by: {visit.performedByName}</span>}
           <span id={`eligibility-${visit.id}`} className="block text-[var(--task-text-muted)]">{visit.reason || 'Eligible for handoff'}</span>
         </span>
