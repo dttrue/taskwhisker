@@ -1,5 +1,7 @@
 // src/app/dashboard/sitter/messages/actions.js
 "use server";
+import { ensureBookingConversation } from "@/lib/messaging/bookingThread";
+
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -65,15 +67,7 @@ export async function sendSitterBookingMessage(formData) {
     );
   }
 
-  const conversation = await prisma.conversation.upsert({
-    where: {
-      bookingId,
-    },
-    update: {},
-    create: {
-      bookingId,
-    },
-  });
+  const conversation = await ensureBookingConversation(prisma, bookingId);
 
   await prisma.message.create({
     data: {

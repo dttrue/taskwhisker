@@ -170,6 +170,7 @@ for (const surface of ["page", "send"]) for (const role of [null, "SITTER", "OPE
     "@/lib/db": { prisma: { conversation: { upsert: async () => { writes++; return { id: "conversation" }; } }, message: { create: async () => { writes++; } } } },
     "next/cache": { revalidatePath() {} }, "next/navigation": { notFound() { throw new Error("NOT_FOUND"); } },
     "next/link": () => null, "./MessageForm": () => null, "@/components/messaging/MessageAutoRefresh": () => null,
+    "@/lib/messaging/bookingThread": { ensureBookingConversation: async () => { writes++; return { id: "conversation" }; } },
     "@/lib/messaging/getBookingConversation": { getBookingConversation: async () => { reads++; return null; } },
     "@/lib/messaging/pollingFingerprint": {},
   };

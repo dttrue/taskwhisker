@@ -89,7 +89,7 @@ export async function cancelCanonicalBookingWithDb({ db, bookingId, actorId, rea
         if (!outcome.ok || outcome.status === "ALREADY_CANCELED") return outcome;
         const normalizedReason = typeof reason === "string" ? reason.trim().slice(0, 1000) : "";
         if (requireClientRequest || actor.role === "SITTER") {
-          const request = await tx.message.findFirst({ where: { conversation: { bookingId }, senderType: "CLIENT", body: { startsWith: "Cancellation request:", mode: "insensitive" } }, select: { id: true } });
+          const request = await tx.message.findFirst({ where: { conversation: { bookingId, scope: "BOOKING" }, senderType: "CLIENT", body: { startsWith: "Cancellation request:", mode: "insensitive" } }, select: { id: true } });
           if (!request) return { ...outcome, ok: false, status: "REQUEST_REQUIRED", error: "No client cancellation request was found." };
         } else if (!normalizedReason) return { ...outcome, ok: false, status: "REASON_REQUIRED", error: "A cancellation reason is required." };
         // Only operational columns. Legacy fee/waiver/review columns stay untouched.

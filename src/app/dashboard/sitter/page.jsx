@@ -64,7 +64,9 @@ export default async function SitterDashboardPage({ searchParams }) {
           include: { ...visitFinancialInclude, sitter: { select: { id: true, name: true } } },
           orderBy: { startTime: "asc" },
         },
-        conversation: {
+        conversations: {
+          where: { scope: "BOOKING" },
+          take: 1,
           include: {
             messages: {
               orderBy: {
@@ -155,7 +157,9 @@ export default async function SitterDashboardPage({ searchParams }) {
         ...economicsInclude,
         visits: { include: visitFinancialInclude },
         client: true,
-        conversation: {
+        conversations: {
+          where: { scope: "BOOKING" },
+          take: 1,
           include: {
             messages: {
               orderBy: { createdAt: "desc" },

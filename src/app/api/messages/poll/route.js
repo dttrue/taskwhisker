@@ -28,14 +28,16 @@ async function getAuthenticatedUser(requiredRole) {
 function threadFingerprint(booking) {
   return createThreadPollingFingerprintFromMetadata({
     status: booking.status,
-    messageCount: booking.conversation?._count?.messages || 0,
-    latestMessage: booking.conversation?.messages?.[0] ?? null,
+    messageCount: booking.conversations?.[0]?._count?.messages || 0,
+    latestMessage: booking.conversations?.[0]?.messages?.[0] ?? null,
   });
 }
 
 const THREAD_SELECT = {
   status: true,
-  conversation: {
+  conversations: {
+    where: { scope: "BOOKING" },
+    take: 1,
     select: {
       _count: { select: { messages: true } },
       messages: {

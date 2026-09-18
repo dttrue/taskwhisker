@@ -83,7 +83,7 @@ export async function approveClientCancellationRequestAsSitter({
 
   const cancellationRequest = await prisma.message.findFirst({
     where: {
-      conversation: { bookingId: booking.id },
+      conversation: { bookingId: booking.id, scope: "BOOKING" },
       senderType: "CLIENT",
       body: {
         startsWith: "Cancellation request:",

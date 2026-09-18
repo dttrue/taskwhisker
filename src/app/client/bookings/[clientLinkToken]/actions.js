@@ -1,5 +1,7 @@
 // src/app/client/bookings/[clientLinkToken]/actions.js
 "use server";
+import { ensureBookingConversation } from "@/lib/messaging/bookingThread";
+
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
@@ -109,11 +111,7 @@ export async function requestClientBookingCancellation(formData) {
       },
     });
 
-    const conversation = await tx.conversation.upsert({
-      where: { bookingId: booking.id },
-      update: {},
-      create: { bookingId: booking.id },
-    });
+    const conversation = await ensureBookingConversation(tx, booking.id);
 
     await tx.message.create({
       data: {
@@ -309,6 +307,7 @@ export async function requestClientScheduleChange(formData) {
     const conversation = await tx.conversation.findFirst({
       where: {
         bookingId: booking.id,
+        scope: "BOOKING",
       },
       select: {
         id: true,

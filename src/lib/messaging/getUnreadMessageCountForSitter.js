@@ -17,6 +17,7 @@ export async function getUnreadMessageCountForSitter({ sitterId }) {
 
   const conversations = await prisma.conversation.findMany({
     where: {
+      scope: "BOOKING",
       booking: {
         sitterId,
       },

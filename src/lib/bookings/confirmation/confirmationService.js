@@ -106,6 +106,7 @@ export async function assignBookingSitterWithDb({ db, bookingId, actorId, sitter
       validateVisitIntervals(booking.visits);
       await assertSitterAvailable(tx, booking.id, sitterId, booking.visits);
     }
+    // Visit_assignment_revision DB trigger atomically advances each changed assignment.
     await tx.booking.update({ where: { id: booking.id }, data: { sitterId } });
     await tx.visit.updateMany({
       where: { bookingId: booking.id, status: { in: REASSIGNABLE_VISIT_STATUSES } }, data: { sitterId },

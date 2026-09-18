@@ -155,6 +155,7 @@ export async function loadOperatorInterventions({
     }),
     prisma.conversation.findMany({
       where: {
+        scope: "BOOKING",
         booking: {
           operatorId,
           status: { in: ["REQUESTED", "CONFIRMED"] },

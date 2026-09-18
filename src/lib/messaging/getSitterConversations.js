@@ -9,6 +9,7 @@ export async function getSitterConversations({ sitterId }) {
 
   return prisma.conversation.findMany({
     where: {
+      scope: "BOOKING",
       booking: {
         sitterId,
       },
@@ -47,7 +48,7 @@ export async function getSitterInboxPollingConversations({ sitterId }) {
   }
 
   const conversations = await prisma.conversation.findMany({
-    where: { booking: { sitterId } },
+    where: { scope: "BOOKING", booking: { sitterId } },
     select: {
       id: true,
       participants: {

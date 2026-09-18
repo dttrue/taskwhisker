@@ -61,7 +61,7 @@ export function hasOpenCancellationRequest(booking) {
     return false;
   }
 
-  const messages = booking.conversation?.messages || [];
+  const messages = (booking.conversations?.[0] ?? booking.conversation)?.messages || [];
 
   return messages.some((message) => {
     return (

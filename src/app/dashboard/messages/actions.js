@@ -1,5 +1,7 @@
 // src/app/dashboard/messages/actions.js
 "use server";
+import { ensureBookingConversation } from "@/lib/messaging/bookingThread";
+
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
@@ -18,15 +20,7 @@ export async function sendBookingMessage(formData) {
     throw new Error("Message cannot be empty.");
   }
 
-  const conversation = await prisma.conversation.upsert({
-    where: {
-      bookingId,
-    },
-    update: {},
-    create: {
-      bookingId,
-    },
-  });
+  const conversation = await ensureBookingConversation(prisma, bookingId);
 
   await prisma.message.create({
     data: {

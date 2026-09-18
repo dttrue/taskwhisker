@@ -98,7 +98,7 @@ function revalidateCancellationViews(bookingId, clientLinkToken) {
 async function hasClientCancellationRequest(bookingId) {
   const message = await prisma.message.findFirst({
     where: {
-      conversation: { bookingId },
+      conversation: { bookingId, scope: "BOOKING" },
       senderType: "CLIENT",
       body: {
         startsWith: "Cancellation request:",

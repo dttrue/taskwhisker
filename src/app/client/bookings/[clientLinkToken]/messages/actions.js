@@ -1,5 +1,6 @@
 // src/app/client/bookings/[clientLinkToken]/messages/actions.js
 "use server";
+import { ensureBookingConversation } from "@/lib/messaging/bookingThread";
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
@@ -50,7 +51,7 @@ export async function sendClientBookingMessage(formData) {
     select: {
       id: true,
       status: true,
-      conversation: true,
+
     },
   });
 
@@ -68,13 +69,7 @@ export async function sendClientBookingMessage(formData) {
     };
   }
 
-  const conversation =
-    booking.conversation ||
-    (await prisma.conversation.create({
-      data: {
-        bookingId: booking.id,
-      },
-    }));
+  const conversation = await ensureBookingConversation(prisma, booking.id);
 
   await prisma.message.create({
     data: {

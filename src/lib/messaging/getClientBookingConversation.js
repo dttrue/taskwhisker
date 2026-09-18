@@ -1,3 +1,4 @@
+import { historicalConversation } from "./bookingThread.js";
 // src/lib/messaging/getClientBookingConversation.js
 import { prisma } from "@/lib/db";
 
@@ -14,7 +15,9 @@ export async function getClientBookingConversation(clientLinkToken) {
       client: true,
       sitter: true,
       operator: true,
-      conversation: {
+      conversations: {
+        where: { scope: "BOOKING" },
+        take: 1,
         include: {
           messages: {
             orderBy: {
@@ -30,5 +33,5 @@ export async function getClientBookingConversation(clientLinkToken) {
     return null;
   }
 
-  return booking;
+  return historicalConversation(booking);
 }

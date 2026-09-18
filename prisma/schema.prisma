@@ -162,7 +162,7 @@ model Booking {
   operator User  @relation("BookingOperator", fields: [operatorId], references: [id])
   sitter   User? @relation("BookingSitter", fields: [sitterId], references: [id])
 
-  conversation Conversation?
+  conversations Conversation[]
 
   // 🔹 CHILD VISITS
   visits Visit[]
@@ -384,6 +384,8 @@ model BookingLineItem {
 }
 
 model Visit {
+  assignmentRevision Int @default(1)
+  coverageConversations Conversation[]
   id          String    @id @default(cuid())
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -411,6 +413,7 @@ model Visit {
   compensationAllocation VisitSitterCompensationAllocation?
   financialReviews VisitFinancialReview[]
 
+  @@unique([id, bookingId])
   @@unique([bookingId, canonicalUnitPosition])
 
   @@index([bookingId])
@@ -521,6 +524,7 @@ model User {
 
   sentMessages Message[] @relation("MessageSender")
 
+  coverageConversations Conversation[] @relation("CoverageConversationSitter")
   conversationParticipants ConversationParticipant[]
 
   clientCareRatesSet        ClientCareRate[]        @relation("ClientCareRateSetBy")
@@ -666,9 +670,20 @@ model SitterRewardReservation {
   @@index([sitterId, status])
 }
 
+enum ConversationScope {
+  BOOKING
+  COVERAGE_VISIT
+}
+
 model Conversation {
   id        String  @id @default(cuid())
-  bookingId String  @unique
+  bookingId String
+  scope ConversationScope @default(BOOKING)
+  visitId String?
+  coverageSitterId String?
+  assignmentRevision Int?
+  visit Visit? @relation(fields: [visitId, bookingId], references: [id, bookingId], onDelete: Cascade)
+  coverageSitter User? @relation("CoverageConversationSitter", fields: [coverageSitterId], references: [id], onDelete: Restrict)
   booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   messages     Message[]
@@ -677,6 +692,9 @@ model Conversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([visitId, assignmentRevision])
+  @@index([bookingId, scope])
+  @@index([coverageSitterId])
   @@index([updatedAt])
 }
 

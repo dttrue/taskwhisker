@@ -1,3 +1,5 @@
+import CoverageInbox from "@/components/messaging/CoverageInbox";
+import { coverageInboxWithDb } from "@/lib/messaging/coverage";
 // src/app/dashboard/sitter/messages/page.jsx
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -95,6 +97,7 @@ export default async function SitterMessagesInboxPage() {
     redirect("/dashboard/operator");
   }
 
+  const coverageThreads = await coverageInboxWithDb({ db: prisma, actorId: sitter.id });
   const conversations = await getSitterConversations({
     sitterId: sitter.id,
   });
@@ -135,12 +138,14 @@ export default async function SitterMessagesInboxPage() {
           <h1 className="mt-1 text-2xl font-bold text-zinc-950">Messages</h1>
 
           <p className="mt-2 text-sm text-zinc-500">
-            Conversations for bookings assigned to{" "}
+            Booking and coverage visit conversations for{" "}
             {sitter.name || "this sitter"}.
           </p>
         </section>
 
+        <CoverageInbox threads={coverageThreads} />
         <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Booking conversations</h2>
           {conversations.length === 0 ? (
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-500 shadow-sm">
               No assigned booking conversations yet.

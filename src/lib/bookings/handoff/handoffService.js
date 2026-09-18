@@ -47,6 +47,7 @@ export async function handoffSelectedVisitsWithDb({ db, requireCareSnapshot = fa
           // Recheck time after rate reads as well as immediately before transaction return.
           validateHandoff(booking, input, await financialDatabaseTime(tx));
           rows.push(await tx.visitSitterCompensationAuthorization.create({ data, include: authorizationInclude }));
+          // Visit_assignment_revision DB trigger advances tenure only on actual sitter change.
           await tx.visit.update({ where: { id: visit.id }, data: { sitterId: input.sitterId } });
         }
         await tx.bookingHistory.create({ data: { bookingId: booking.id, changedByUserId: input.actorId, toSitterId: input.sitterId,

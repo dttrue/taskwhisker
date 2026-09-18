@@ -1,3 +1,4 @@
+import { coverageInboxWithDb } from "@/lib/messaging/coverage";
 // src/app/api/sitter/unread-messages/route.js
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
@@ -47,8 +48,9 @@ export async function GET() {
     sitterId: sitter.id,
   });
 
+  const coverage = await coverageInboxWithDb({ db: prisma, actorId: sitter.id });
   return NextResponse.json(
-    { count },
+    { count: count + coverage.reduce((sum, thread) => sum + thread.unreadCount, 0) },
     {
       headers: NO_STORE_HEADERS,
     }

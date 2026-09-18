@@ -1,3 +1,4 @@
+import { ensureBookingConversation } from "./bookingThread.js";
 // src/lib/messaging/createSystemMessage.js
 import { prisma } from "../db.js";
 
@@ -15,15 +16,7 @@ export async function createSystemMessage({
     throw new Error("createSystemMessage requires body.");
   }
 
-  const conversation = await tx.conversation.upsert({
-    where: {
-      bookingId,
-    },
-    update: {},
-    create: {
-      bookingId,
-    },
-  });
+  const conversation = await ensureBookingConversation(tx, bookingId);
 
   return tx.message.create({
     data: {

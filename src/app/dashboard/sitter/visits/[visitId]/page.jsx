@@ -17,6 +17,7 @@ export default async function ParticipantVisitPage({ params }) {
     <Link href="/dashboard/sitter" className="underline">Back to dashboard</Link>
     <h1 className="text-2xl font-bold">Coverage visit details</h1>
     <ParticipantVisitCard entry={entry} showDetailLink={false} />
+    <Link className="inline-flex min-h-11 items-center rounded-xl bg-[var(--task-primary)] px-5 py-3 font-semibold text-white" href={`/dashboard/sitter/visits/${visitId}/messages`}>Message operator</Link>
     <CareInstructions text={dto.careInstructions} />
     <section className="space-y-3 rounded-[var(--task-radius-card)] border border-[var(--task-border)] bg-white p-4"><h2 className="text-lg font-bold">Access and client contact</h2>
       {dto.care.accessInstructions && <p className="whitespace-pre-wrap break-words">{dto.care.accessInstructions}</p>}

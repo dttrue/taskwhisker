@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 const NAV_ITEMS = [
+  { label: "Messages", href: "/dashboard/operator/messages", section: "messages" },
   { label: "Dashboard", href: "/dashboard/operator", section: "dashboard" },
   {
     label: "Operations",
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
 ];
 
 function getActiveSection(pathname) {
+  if (pathname.startsWith("/dashboard/operator/messages")) return "messages";
   if (pathname.startsWith("/dashboard/operator/operations")) {
     return "operations";
   }

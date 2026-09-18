@@ -197,7 +197,7 @@ export default async function OperatorOperationsPage({ searchParams }) {
               serviceLat: true,
               serviceLng: true,
               client: { select: { name: true } },
-              conversation: { select: { id: true } },
+              conversations: { where: { scope: "BOOKING" }, take: 1, select: { id: true } },
               _count: { select: { visits: true } },
             },
           },
@@ -218,7 +218,7 @@ export default async function OperatorOperationsPage({ searchParams }) {
     return {
       id: visit.id,
       bookingId: visit.bookingId,
-      hasConversation: Boolean(visit.booking.conversation),
+      hasConversation: Boolean(visit.booking.conversations?.length),
       sitterId: visit.sitterId,
       sitterName: visit.sitter?.name || visit.sitter?.email || null,
       ownerName: visit.booking.client?.name || "Client",

@@ -6,9 +6,10 @@ export async function getBookingConversation(bookingId) {
     throw new Error("bookingId is required.");
   }
 
-  return prisma.conversation.findUnique({
+  return prisma.conversation.findFirst({
     where: {
       bookingId,
+      scope: "BOOKING",
     },
     include: {
       messages: {
@@ -28,36 +29,4 @@ export async function getBookingConversation(bookingId) {
       },
     },
   });
-}
-
-export async function getClientBookingConversation(clientLinkToken) {
-  if (!clientLinkToken) {
-    throw new Error("clientLinkToken is required.");
-  }
-
-  const booking = await prisma.booking.findUnique({
-    where: {
-      clientLinkToken,
-    },
-    include: {
-      client: true,
-      sitter: true,
-      operator: true,
-      conversation: {
-        include: {
-          messages: {
-            orderBy: {
-              createdAt: "asc",
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!booking) {
-    return null;
-  }
-
-  return booking;
 }
