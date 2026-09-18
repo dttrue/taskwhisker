@@ -37,7 +37,7 @@ export function surfaceLoader(booking, actorId = "sitter", options = {}) {
       if (name === "next/navigation") return { redirect(path) { throw new Error(`Redirect: ${path}`); }, notFound() { throw new Error("Not found"); }, useRouter: () => ({ refresh: options.refresh || (() => {}) }), usePathname: () => "/dashboard/sitter" };
       if (name === "@/auth" || name === "@/lib/auth") return { requireRole: async () => ({ user: { id: actorId, email: "sitter@example.invalid" } }), auth: async () => ({ user: { id: actorId, email: "sitter@example.invalid" } }) };
       if (name === "@/lib/db") return { prisma: db };
-      if (/\/(?:actions|handoffActions)(?:\.js)?$/.test(name) || /approveCancellationActions$/.test(name)) return actions;
+      if (/\/(?:actions|handoffActions|careActions)(?:\.js)?$/.test(name) || /approveCancellationActions$/.test(name)) return actions;
       if (name.startsWith("@/") || name.startsWith(".")) {
         const base = name.startsWith("@/") ? resolve(src, name.slice(2)) : resolve(dirname(path), name);
         const target = [base, `${base}.js`, `${base}.jsx`].find((p) => existsSync(p));

@@ -1,3 +1,4 @@
+import { approveCareInstructionsWithDb, careReviewKey } from '../careSnapshot/remediation.js';
 import { submitOperatorHandoff, previewOperatorHandoff, coverageRows } from "./operatorSurface.js";
 import { loadParticipantVisit, loadParticipantDashboard } from "./participantSurface.js";
 import "dotenv/config";
@@ -105,6 +106,48 @@ test("PostgreSQL selected handoff, bounded participation and synchronized lifecy
       defaultSitterRate:{create:{baseCompensationCents:2000,version:4,setByUserId:operatorId,petCharges:{create:[{species:"Dog",includedCount:1,additionalCents:400}]}}}
     },include:{defaultSitterRate:true,clientRate:true}});
     ({publicCode}=await createSitterReferralCode({db,sitterId,operatorUserId:operatorId}));
+
+    const reviewLoad = id => db.booking.findUnique({where:{id},include:{history:true}});
+    const approve = (b, text, database=db, actor=operatorId) => approveCareInstructionsWithDb({db:database, actorId:actor, bookingId:b.id, careInstructions:text, operationId:careReviewKey(b)});
+    await t.test("legacy remediation preserves all other booking fields, metadata audit and participant boundary", async () => {
+      const b=await ready({quantity:2});
+      await db.booking.update({where:{id:b.id},data:{careInstructionsVersion:null,careInstructions:null,notes:"Private admin dispute\r\n  $42 unchanged"}});
+      const before=await reviewLoad(b.id), financialBefore=await load(b.id);
+      assert(coverageRows(financialBefore).every(v=>!v.eligible));
+      assert.equal((await approve(before,"  Feed twice.\nGive medicine.  ")).ok,true);
+      const after=await reviewLoad(b.id), financialAfter=await load(b.id);
+      assert.equal(after.careInstructionsVersion,1);assert.equal(after.careInstructions,"Feed twice.\nGive medicine.");
+      for(const key of Object.keys(before).filter(k=>!["careInstructionsVersion","careInstructions","updatedAt","history"].includes(k))) assert.deepEqual(after[key],before[key]);
+      for(const key of ["visits","pricingSnapshot","sitterCompensation","rewardReservation"]) assert.deepEqual(financialAfter[key],financialBefore[key]);
+      const events=after.history.filter(h=>h.note?.startsWith("CARE_INSTRUCTIONS_APPROVED"));
+      assert.equal(events.length,1);assert.equal(events[0].changedByUserId,operatorId);assert(events[0].createdAt instanceof Date);
+      assert.equal(events[0].note,"CARE_INSTRUCTIONS_APPROVED · manual legacy review · non-empty");
+      assert(coverageRows(financialAfter).every(v=>v.eligible));
+      assert.equal((await approve(before,"Feed twice.\nGive medicine.")).replay,true);
+      assert.equal((await reviewLoad(b.id)).history.length,after.history.length);
+      assert.equal((await handoff(b)).ok,true);
+      const dto=await resolveSitterBookingParticipationWithDb({db,bookingId:b.id,userId:otherId});
+      assert.equal(dto.careInstructions,after.careInstructions);assert(!JSON.stringify(dto).includes("Private admin"));assert(!Object.hasOwn(dto,"notes"));
+      const current=await reviewLoad(b.id);
+      assert.equal((await approve(current," \n ")).ok,true);
+      const empty=await reviewLoad(b.id);assert.equal(empty.careInstructions,null);assert.equal(empty.careInstructionsVersion,1);
+      assert.equal((await approve(current," ")).replay,true);
+      assert.equal((await approve(before,"stale")).code,"CARE_REVIEW_CONFLICT");
+      for(const actor of [null,sitterId,otherId,ownerId]) assert.equal((await approve(empty,"forbidden",db,actor)).ok,false);
+      assert.deepEqual(await reviewLoad(b.id),empty);
+    });
+    await t.test("care approval and audit roll back together on history failure",async()=>{
+      const b=await ready(), before=await reviewLoad(b.id);
+      assert.equal((await approve(before,"new instructions",wrapped("bookingHistory","create"))).ok,false);
+      assert.deepEqual(await reviewLoad(b.id),before);
+    });
+    for(const identical of [false,true]) await t.test(`care review synchronized row-lock race, identical=${identical}`,async()=>{
+      const b=await ready(), before=await reviewLoad(b.id);
+      const results=await orderedRace(d=>approve(before,"First",d),d=>approve(before,identical?"First":"Second",d));
+      assert.equal(results[0].value.ok,true);assert.equal(results[1].value.ok,identical);
+      if(!identical)assert.equal(results[1].value.code,"CARE_REVIEW_CONFLICT");
+      const after=await reviewLoad(b.id);assert.equal(after.careInstructions,"First");assert.equal(after.history.length,before.history.length+1);
+    });
 
     await t.test("UI activation: trusted snapshot, atomic multi-selection, retry, participant loader, own earnings and denied legacy", async () => {
       const b=await ready({quantity:3,notes:"  Feeding instructions.\nMedication instructions.\nRoutine instructions.  "});

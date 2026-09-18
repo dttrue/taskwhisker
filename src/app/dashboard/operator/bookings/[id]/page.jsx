@@ -1,4 +1,6 @@
 import VisitCoverage from "../../_components/VisitCoverage";
+import CareInstructionsReview from "../../_components/CareInstructionsReview";
+import { careReviewKey } from "@/lib/bookings/careSnapshot/remediation";
 import { coverageRows } from "@/lib/bookings/handoff/operatorSurface";
 import { participantCareReady } from "@/lib/bookings/careSnapshot/contract";
 import { visitFinancialInclude } from "@/lib/bookings/visitCompensation/contract";
@@ -65,6 +67,7 @@ function formatHistoryTimestamp(value) {
 }
 
 function getHistoryEventTitle(history) {
+  if (history.note?.startsWith("CARE_INSTRUCTIONS_APPROVED")) return "Care instructions approved";
   if (history.toStatus) {
     const statusLabel = STATUS_LABELS[history.toStatus] || history.toStatus;
     return `Booking ${statusLabel.toLowerCase()}`;
@@ -575,14 +578,9 @@ export default async function OperatorBookingDetailPage({
           </SummaryCard>
         </section>
 
-        {/* Notes */}
-        {booking.notes ? (
-          <CollapsibleCard title="Notes / Add-ons" defaultOpen={false}>
-            <div className="whitespace-pre-wrap text-sm text-zinc-900">
-              {booking.notes}
-            </div>
-          </CollapsibleCard>
-        ) : null}
+        <CareInstructionsReview key={careReviewKey(booking)} bookingId={booking.id}
+          historicalNotes={booking.notes} careInstructions={booking.careInstructions}
+          ready={participantCareReady(booking)} operationId={careReviewKey(booking)} />
 
         <VisitCoverage bookingId={booking.id} visits={coverageRows(booking)} sitters={sitters} careReady={participantCareReady(booking)} />
 
