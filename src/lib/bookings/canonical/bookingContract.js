@@ -1,3 +1,4 @@
+import { dateNumber as sharedDateNumber, timeMinutes as sharedTimeMinutes, businessWallTime as sharedBusinessWallTime } from "../../calendar/businessTime.js";
 import { captureCareInstructions } from "../careSnapshot/contract.js";
 import { createHash } from "node:crypto";
 import { BUSINESS_TIME_ZONE } from "../../visits/visitOperations.js";
@@ -15,36 +16,10 @@ export function requiredText(value, label, max = 200) {
 }
 function optionalText(value, label) { return value == null || value === "" ? null : requiredText(value, label, 1000); }
 
-export function dateNumber(value) {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) reject("INVALID_SCHEDULE", "Expected a calendar date YYYY-MM-DD.");
-  const n = Date.parse(`${value}T00:00:00Z`);
-  if (!Number.isFinite(n) || new Date(n).toISOString().slice(0, 10) !== value || +value.slice(0, 4) < 2000) reject("INVALID_SCHEDULE", "Invalid calendar date.");
-  return n;
-}
-function timeMinutes(value) {
-  if (typeof value !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) reject("INVALID_SCHEDULE", "Expected local time HH:MM.");
-  return +value.slice(0, 2) * 60 + +value.slice(3);
-}
-const wallFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: BUSINESS_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
-  hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-});
-function wallNumber(instant) {
-  const p = Object.fromEntries(wallFormatter.formatToParts(instant).map(({ type, value }) => [type, value]));
-  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
-}
-// Enumerate nearby IANA offsets and round-trip every candidate. Zero matches is
-// a DST gap; two matches is a fold. Neither is silently shifted or disambiguated.
-export function businessWallTime(date, time) {
-  const wall = dateNumber(date) + timeMinutes(time) * 60_000;
-  const offsets = new Set([-36, -12, 0, 12, 36].map((h) => {
-    const instant = wall + h * 3_600_000;
-    return wallNumber(new Date(instant)) - instant;
-  }));
-  const matches = [...offsets].map((offset) => wall - offset).filter((n) => wallNumber(new Date(n)) === wall);
-  if (matches.length !== 1) reject("INVALID_LOCAL_TIME", "Local time is nonexistent or ambiguous in the business timezone.");
-  return new Date(matches[0]);
-}
+// Keep canonical error types stable while sharing the timezone conversion.
+export function dateNumber(value) { try { return sharedDateNumber(value); } catch (error) { reject(error.code, error.message); } }
+function timeMinutes(value) { try { return sharedTimeMinutes(value); } catch (error) { reject(error.code, error.message); } }
+export function businessWallTime(date, time) { try { return sharedBusinessWallTime(date, time); } catch (error) { reject(error.code, error.message); } }
 
 export function normalizeSchedule(schedule) {
   if (!schedule || typeof schedule !== "object") reject("INVALID_SCHEDULE", "Schedule is required.");

@@ -38,6 +38,9 @@
 @import "react-day-picker/dist/style.css";
 
 :root {
+  /* Preserve the font-variable contract without build-time network requests. */
+  --font-geist-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-geist-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --task-canvas: #f8f6f1;
   --task-surface: #ffffff;
   --task-surface-soft: #f2efe8;

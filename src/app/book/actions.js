@@ -15,6 +15,8 @@ import { sendClientBookingConfirmationEmail } from "@/lib/email/sendClientBookin
 import { checkBlockedClient } from "@/lib/blocklist/checkBlockedClient";
 import { sendSitterBookingNotificationEmail } from "@/lib/email/sendSitterBookingNotificationEmail";
 import { resolveDefaultPublicBookingSitter } from "@/lib/bookings/resolveDefaultPublicBookingSitter";
+import { bookingTransaction, assertBookingAvailability, ScheduleConflictError } from "@/lib/calendar/bookingTransaction";
+import { legacyBookingPrice } from "@/lib/bookings/legacyPricing";
 const BUFFER_MINUTES = 15;
 
 
@@ -233,7 +235,7 @@ export async function createPublicBooking(rawInput) {
   
 
   const visitsCount = visitWindows.length;
-  const baseServiceTotalCents = pricePerVisitCents * visitsCount;
+
 
   const submittedAddOns = Array.isArray(addOns) ? addOns : [];
   const selectedAddOnCodes = submittedAddOns
@@ -277,14 +279,8 @@ export async function createPublicBooking(rawInput) {
     };
   });
 
-  const addOnTotalCents = resolvedAddOns.reduce(
-    (sum, addOn) => sum + addOn.totalPriceCents,
-    0
-  );
-
-  const clientTotalCents = baseServiceTotalCents + addOnTotalCents;
-  const platformFeeCents = Math.round(clientTotalCents * 0.1);
-  const sitterPayoutCents = clientTotalCents - platformFeeCents;
+  const { baseServiceTotalCents, clientTotalCents, platformFeeCents, sitterPayoutCents } =
+    legacyBookingPrice(pricePerVisitCents, visitsCount, resolvedAddOns);
 
   const normalizedClientAddress = {
     addressLine1: client.addressLine1?.trim() || null,
@@ -366,7 +362,10 @@ export async function createPublicBooking(rawInput) {
     }
   }
 
-  const fullBooking = await prisma.$transaction(async (tx) => {
+  let fullBooking;
+  try {
+    fullBooking = await bookingTransaction(prisma, async (tx) => {
+    await assertBookingAvailability(tx, defaultSitterId, visitWindows);
     const dbClient = await tx.client.upsert({
       where: { email: client.email },
       update: {
@@ -521,7 +520,17 @@ export async function createPublicBooking(rawInput) {
     }
 
     return result;
-  });
+    });
+  } catch (error) {
+    if (!(error instanceof ScheduleConflictError)) throw error;
+    const availability = error.availability;
+    return {
+      ok: false,
+      error: "Selected time slot is no longer available.",
+      reason: availability.reason || null,
+      conflicts: (availability.conflicts || []).map(({ id, startTime, endTime, status }) => ({ id, startTime, endTime, status })),
+    };
+  }
 
   const appUrl = process.env.APP_URL || "http://localhost:3000";
 
