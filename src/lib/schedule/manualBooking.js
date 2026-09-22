@@ -1,40 +1,14 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { scheduleAccess, clientScope, fail } from "./access.js";
-import { normalizeSchedule, deriveSchedule } from "../bookings/canonical/bookingContract.js";
+import { deriveSchedule } from "../bookings/canonical/bookingContract.js";
 import { captureCareInstructions } from "../bookings/careSnapshot/contract.js";
 import { legacyBookingPrice } from "../bookings/legacyPricing.js";
 import { checkBlockedClientWithDb } from "../blocklist/blockedClientContract.js";
 import { bookingTransaction, assertBookingAvailability } from "../calendar/bookingTransaction.js";
 import { validatePreService } from "../bookings/confirmation/confirmationContract.js";
 
-function text(value, label, max = 200, optional = false) {
-  if (optional && (value == null || value === "")) return null;
-  if (typeof value !== "string" || !value.trim() || value.trim().length > max) fail("INVALID_INPUT", `Enter a valid ${label}.`);
-  return value.trim();
-}
-
-export function normalizeManualInput(input) {
-  const clientId = text(input?.clientId, "client", 200, true);
-  let client = null;
-  if (!clientId) {
-    client = { name: text(input?.client?.name, "client name"), email: text(input?.client?.email, "email", 254, true)?.toLowerCase() || null,
-      phone: text(input?.client?.phone, "phone", 50, true) };
-    if (client.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(client.email)) fail("INVALID_INPUT", "Enter a valid email address.");
-    for (const key of ["addressLine1", "addressLine2", "city", "state", "postalCode"]) client[key] = text(input?.client?.[key], key, 200, true);
-  }
-  const petIds = input?.petIds ?? [];
-  if (!Array.isArray(petIds) || petIds.length > 20 || petIds.some((id) => typeof id !== "string" || !id || id.length > 200)) fail("INVALID_INPUT", "Invalid pet selection.");
-  const extras = input?.extras ?? [];
-  if (!Array.isArray(extras) || extras.length > 30) fail("INVALID_INPUT", "Invalid extras.");
-  const normalizedExtras = extras.map((item) => {
-    const code = text(item?.code, "extra");
-    if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 366) fail("INVALID_INPUT", "Extra quantities must be between 1 and 366.");
-    return { code, quantity: item.quantity };
-  }).sort((a, b) => a.code.localeCompare(b.code));
-  if (new Set(normalizedExtras.map((item) => item.code)).size !== normalizedExtras.length) fail("INVALID_INPUT", "Select each extra once.");
-  return { clientId, client, petIds: [...new Set(petIds)].sort(), serviceCode: text(input?.serviceCode, "service"),
-    schedule: normalizeSchedule(input?.schedule), notes: text(input?.notes, "care notes", 1000, true), extras: normalizedExtras };
-}
+import { normalizeManualInput } from "./manualInput.js";
+export { normalizeManualInput } from "./manualInput.js";
 
 export async function manualOptions(db, actorId, search = "") {
   const access = await scheduleAccess(db, actorId);

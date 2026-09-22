@@ -7,13 +7,10 @@ function monthStart(date, offset = 0) {
   return value.toISOString().slice(0, 10);
 }
 
-// Pure calendar arithmetic: no identities, database access or process-local dates.
-export function calendarRange(params = {}, now = new Date()) {
-  const view = ["week", "today", "day"].includes(params.view)
-    ? (params.view === "day" ? "today" : params.view) : "month";
-  const today = businessDateKey(now);
-  let date = today, selectedDate = null;
-  try { dateNumber(params.date); date = params.date; selectedDate = date; } catch { /* Invalid links reset to today. */ }
+// Civil dates follow businessTime's 2000–9999 contract. A view is usable only
+// when its entire grid and exclusive query endpoint fit that same range.
+function rangeFor(date, view) {
+  dateNumber(date);
   const month = monthStart(date);
   let first, count, previous, next;
   if (view === "month") {
@@ -28,9 +25,25 @@ export function calendarRange(params = {}, now = new Date()) {
     previous = addCalendarDays(first, -count); next = addCalendarDays(first, count);
   }
   const days = Array.from({ length: count }, (_, i) => addCalendarDays(first, i));
-  return { view, date, selectedDate, today, month: month.slice(0, 7), days,
+  return { view, date, month: month.slice(0, 7), days,
     label: new Intl.DateTimeFormat("en-US", { timeZone: BUSINESS_TIME_ZONE, month: "long", year: "numeric" }).format(businessWallTime(month, "00:00")),
     startsAt: businessWallTime(first, "00:00"), endsAt: businessWallTime(addCalendarDays(first, count), "00:00"), previous, next };
+}
+function usableRange(date, view) {
+  try { return rangeFor(date, view); } catch { return null; }
+}
+
+// Invalid or incomplete ranges reset to Today, matching malformed-link behavior.
+// Navigation is disabled at an endpoint rather than linking to that fallback.
+export function calendarRange(params = {}, now = new Date()) {
+  const view = ["week", "today", "day"].includes(params?.view)
+    ? (params.view === "day" ? "today" : params.view) : "month";
+  const today = businessDateKey(now);
+  const requested = usableRange(params?.date, view);
+  const range = requested || usableRange(today, view) || rangeFor("2000-02-01", view);
+  return { ...range, today, selectedDate: requested ? requested.date : null,
+    previous: usableRange(range.previous, view) ? range.previous : null,
+    next: usableRange(range.next, view) ? range.next : null };
 }
 
 export const CALENDAR_STATUSES = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELED"];

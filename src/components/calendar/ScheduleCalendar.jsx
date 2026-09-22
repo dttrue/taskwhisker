@@ -19,8 +19,8 @@ export default function ScheduleCalendar({ range, visits = [], monthDays = [], t
         <Button variant="secondary" href={url(range.view, range.today)}>Today</Button>
       </div>
       <div className="flex justify-between gap-2">
-        <Button variant="secondary" href={url(range.view, range.previous)} aria-label={`Previous ${unit}`}>Previous</Button>
-        <Button variant="secondary" href={url(range.view, range.next)} aria-label={`Next ${unit}`}>Next</Button>
+        <Button variant="secondary" disabled={!range.previous} href={range.previous ? url(range.view, range.previous) : undefined} aria-label={`Previous ${unit}`}>Previous</Button>
+        <Button variant="secondary" disabled={!range.next} href={range.next ? url(range.view, range.next) : undefined} aria-label={`Next ${unit}`}>Next</Button>
       </div>
     </nav>
     {range.view === "month" ? <MonthCalendar range={range} days={monthDays} basePath={basePath} /> :

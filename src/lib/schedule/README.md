@@ -249,3 +249,34 @@ New files:
 - `src/lib/schedule/schedule.integration.test.js`
 - `src/lib/schedule/surfaces.test.js`
 - `src/lib/schedule/README.md`
+
+## Review polish regression checks
+
+The manual form wraps long labels locally and associates server validation with
+controls. Error keys are generated from the submitted array positions by the
+server; editing or adding/removing rows discards the previous submission's errors.
+The announced summary remains. Conflict, retry and review-token failures remain
+general alerts. Input normalization is isolated in `manualInput.js`; database
+queries, pricing and transaction/write behavior remain unchanged.
+
+Calendar civil dates retain the shared 2000–9999 range. A displayed view must fit
+its full grid and exclusive query endpoint inside that range. Incomplete boundary
+views reset to New York Today, just like malformed links; Previous/Next controls
+are disabled when their destination cannot be displayed. Queries remain at most
+42 calendar days. January 2000 and December 9999 Month URLs therefore reset safely.
+
+After an offline production build, run the database-free browser regression:
+
+```sh
+SCHEDULE_BROWSER_MODULE=/absolute/path/to/installed/playwright/index.mjs \
+SCHEDULE_BROWSER_EXECUTABLE=/absolute/path/to/installed/browser \
+SCHEDULE_VISUAL_OUTPUT=/absolute/path/outside/repository \
+node src/lib/schedule/manualForm.browser.mjs
+```
+
+The module/executable overrides are optional when Playwright and its browser are
+already installed normally. No dependencies or browsers are downloaded. The runner
+uses actual components and built CSS with synthetic hook/action state, aborts page
+network requests, and checks 390×844 and 1440×900 layouts. Screenshots are optional
+and must remain outside the repository. Unit tests separately exercise the real
+form's handlers, error clearing, and row removal with an in-memory action seam.

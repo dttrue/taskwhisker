@@ -60,3 +60,19 @@ test("selected empty Day uses the existing agenda and preserves all navigation a
   assert.ok(html.includes('href="/example/calendar?view=month&amp;date=2027-01-06"'));
   assert.ok(html.includes('href="/example/calendar?view=today&amp;date=2027-01-05"'));
 });
+
+test("boundary fallback and disabled navigation render and query only a bounded authorized range", async () => {
+  for (const date of ["2000-01-01", "2000-02-01", "9999-11-01", "9999-12-01"]) {
+    const { db } = fixture(); let query;
+    db.visit.findMany = async (args) => { query = args; return []; };
+    const result = await loadAgenda(db, "bridget", { date }, now);
+    assert.ok(query.where.startTime.lt - query.where.endTime.gt <= 43 * 86400000);
+    assert.equal(query.where.operatorId, "owner");
+    const html = render({ date });
+    assert.ok(html.includes("<table"));
+    assert.ok(!html.includes("date=null"));
+    if (date === "2000-02-01") assert.match(html, /<button[^>]*disabled=""[^>]*aria-label="Previous month"/);
+    if (date === "9999-11-01") assert.match(html, /<button[^>]*disabled=""[^>]*aria-label="Next month"/);
+    if (date === "2000-01-01" || date === "9999-12-01") assert.equal(result.range.date, "2027-01-05");
+  }
+});

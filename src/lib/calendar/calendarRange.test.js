@@ -82,3 +82,32 @@ test("empty calendar remains empty, and adjacent date links preserve exact Day s
   const day = calendarRange({ view: "today", date: "2026-12-27" });
   assert.deepEqual(day.days, ["2026-12-27"]);
 });
+
+test("unsupported complete grids reset safely; supported endpoints disable unsafe navigation", () => {
+  const now = new Date("2027-01-05T17:00:00Z");
+  for (const date of ["2000-01-01", "2000-01-31", "9999-12-01", "9999-12-31", "1999-12-31", "10000-01-01", "0000-01-01", "invalid"]) {
+    const range = calendarRange({ view: "month", date }, now);
+    assert.equal(range.date, "2027-01-05", date);
+    assert.equal(range.selectedDate, null);
+    assert.ok(range.days.length <= 42);
+    assert.doesNotThrow(() => aggregateMonth(range, []));
+  }
+  for (const [view, date, direction] of [
+    ["month", "2000-02-01", "previous"], ["month", "9999-11-01", "next"],
+    ["week", "2000-01-02", "previous"], ["week", "9999-12-19", "next"],
+    ["today", "2000-01-01", "previous"], ["today", "9999-12-30", "next"],
+  ]) {
+    const range = calendarRange({ view, date }, now);
+    assert.equal(range.date, date); assert.equal(range[direction], null, `${view} ${date}`);
+    assert.ok(range.days.length <= 42);
+    for (const day of range.days) assert.doesNotThrow(() => businessWallTime(day, "00:00"));
+    assert.doesNotThrow(() => aggregateMonth(range, []));
+    const other = direction === "previous" ? "next" : "previous";
+    assert.equal(calendarRange({ view, date: range[other] }, now).date, range[other]);
+  }
+  for (const view of ["month", "week", "today"]) {
+    for (const date of ["1999-12-31", "10000-01-01", "9999-12-31"]) {
+      assert.doesNotThrow(() => calendarRange({ view, date }, now));
+    }
+  }
+});
