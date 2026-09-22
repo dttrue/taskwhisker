@@ -1,3 +1,4 @@
+import ScheduleLink from "../schedule/ScheduleLink";
 // src/app/dashboard/operator/layout.jsx
 import { requireRole } from "@/auth";
 import { Toaster } from "react-hot-toast";
@@ -12,7 +13,7 @@ export default async function OperatorLayout({ children }) {
         <OperatorNavigation
           accountLabel={session.user.email || session.user.name || "Operator"}
         />
-        <div className="min-w-0">{children}</div>
+        <div className="min-w-0"><ScheduleLink actorId={session.user.id} />{children}</div>
       </div>
       <Toaster position="top-right" />
     </>

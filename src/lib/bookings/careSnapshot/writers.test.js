@@ -5,7 +5,7 @@ for(const notes of [undefined,'','   ','  Feeding: one bowl.\nMedication: as pro
   let stored;const noop=async()=>({});
   const db={user:{findFirst:async()=>({id:'operator'})},service:{findUnique:async()=>({id:'service',basePriceCents:2000,name:'Visit',category:'DROP_IN'})},
     client:{upsert:async()=>({id:'client'})},booking:{create:async({data})=>{stored=data;return{id:'booking'};},findUnique:async()=>({...stored,id:'booking',client:{name:'Client',email:'client@example.invalid'},visits:[],lineItems:[]})},
-    bookingLineItem:{createMany:noop},visit:{create:noop},bookingHistory:{create:noop},$transaction:async work=>work(db)};
+    bookingLineItem:{createMany:noop},visit:{create:noop,findMany:async()=>[]},bookingHistory:{create:noop},$transaction:async work=>work(db)};
   const dependencies={
     './bookingSchemas':{publicBookingSchema:{parse:value=>value}},
     '@/lib/messaging/createSystemMessage':{createSystemMessage:noop},
