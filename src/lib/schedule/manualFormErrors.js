@@ -9,18 +9,13 @@ export function displayFieldErrors(errors = {}, extras = []) {
     return [match ? (extras[Number(match[1])] ? `extra:${extras[Number(match[1])].code}` : "extras") : key, message];
   }));
 }
-export function recoverFieldErrors(errors, id) {
+export function recoverFieldErrors(errors, id, dependencies = {}) {
   const clear = new Set();
-  const related = (keys, edited) => {
-    clear.add(edited);
-    // Shared interval errors are dependent; independent syntax errors survive.
-    for (const key of keys) if (errors[edited] && errors[key] === errors[edited]) clear.add(key);
-  };
   const visit = /^(date|time|end)-(\d+)$/.exec(id || "");
   if (visit) {
     const prefix = `visits.${visit[2]}.`;
     const edited = prefix + ({ date: "date", time: "startTime", end: "endTime" }[visit[1]]);
-    related(["date", "startTime", "endTime"].map((key) => prefix + key), edited);
+    clear.add(edited);
     if (visit[1] === "time") clear.add(prefix + "endTime"); // Auto-calculated from start.
   } else if (id === "client-mode") {
     for (const key of Object.keys(errors)) if (key === "clientId" || key.startsWith("client.") || key === "petIds") clear.add(key);
@@ -31,17 +26,14 @@ export function recoverFieldErrors(errors, id) {
     clear.add("serviceCode"); clear.add("schedule");
     // Service changes replace visit end times and may switch schedule kind.
     for (const key of Object.keys(errors)) {
-      const date = /^visits\.(\d+)\.date$/.exec(key);
-      if (date && (errors[key] === errors[`visits.${date[1]}.startTime`] || errors[key] === errors[`visits.${date[1]}.endTime`])) clear.add(key);
-      if (id === "service-overnight" && key.startsWith("visits.")) clear.add(key);
+      if ((id === "service-overnight" && key.startsWith("visits.")) || /^visits\.\d+\.endTime$/.test(key) || (id === "service" && /^(arrival|departure)/.test(key))) clear.add(key);
     }
-    for (const key of Object.keys(errors)) {
-      const start = /^visits\.(\d+)\.startTime$/.exec(key);
-      if (start && errors[key] === errors[`visits.${start[1]}.endTime`]) clear.add(key);
-      if (/^visits\.\d+\.endTime$/.test(key) || (id === "service" && /^(arrival|departure)/.test(key))) clear.add(key);
-    }
-  } else if (/^(arrival|departure)(Date|Time)$/.test(id || "")) related(["arrivalDate", "departureDate", "arrivalTime", "departureTime"], id);
+  } else if (/^(arrival|departure)(Date|Time)$/.test(id || "")) clear.add(id);
   else if (id === "petIds" || id === "notes") clear.add(id);
+  // Only the server's explicit dependency metadata links unchanged controls.
+  // Keep the directly edited keys separate: dependencies do not cascade.
+  const edited = new Set(clear);
+  for (const key of Object.keys(errors)) if (dependencies[key]?.some((field) => edited.has(field))) clear.add(key);
   return Object.fromEntries(Object.entries(errors).filter(([key]) => !clear.has(key)));
 }
 export function removeVisitErrors(errors, removedIndex) {
@@ -54,4 +46,17 @@ export function removeVisitErrors(errors, removedIndex) {
 }
 export function validationSummary(errors) {
   return [...new Set(Object.values(errors))].join(" ");
+}
+
+export function removeVisitDependencies(dependencies, removedIndex) {
+  const remap = (key) => {
+    const match = /^visits\.(\d+)\.(.+)$/.exec(key);
+    if (!match) return key;
+    const index = Number(match[1]);
+    return index === removedIndex ? null : `visits.${index > removedIndex ? index - 1 : index}.${match[2]}`;
+  };
+  return Object.fromEntries(Object.entries(dependencies).flatMap(([key, fields]) => {
+    const next = remap(key);
+    return next ? [[next, fields.map(remap).filter(Boolean)]] : [];
+  }));
 }

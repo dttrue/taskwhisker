@@ -88,9 +88,9 @@ try {
         return { ok: true, token: "synthetic", summary: { service: "Synthetic walk", quantity: 1, unit: "visit", extras: [], unitPriceCents: 2500, clientTotalCents: 2500, platformFeeCents: 250, sitterPayoutCents: 2250 } };
       } catch (error) { return manualBookingFailure(error, input); }
     });
-    async function mount(overrides = {}) {
+    async function mount(overrides = {}, fixtureProps = props) {
       await page.setContent(`<html lang="en" data-theme="taskwhisker"><head><style>${css}</style></head><body><div id="root"></div></body></html>`);
-      await page.evaluate(({ props, overrides }) => { window.fixtureProps = props; window.fixtureOverrides = overrides; }, { props, overrides });
+      await page.evaluate(({ props, overrides }) => { window.fixtureProps = props; window.fixtureOverrides = overrides; }, { props: fixtureProps, overrides });
       await page.addScriptTag({ content: script });
       await page.locator("#service").waitFor();
       // Exercise server rejection even for values native constraints would catch.
@@ -138,6 +138,19 @@ try {
     await extras.locator("summary").click(); await submit(); await invalid("extra-OTHER");
     assert.equal(await extras.getAttribute("open"), "");
     await page.locator("#extra-OTHER").fill("1"); assert.equal(await page.getByRole("alert").count(), 0); assert.equal(await extras.getAttribute("open"), ""); await check("extras-recovery");
+
+    await mount({ 2: "synthetic", 7: { arrivalDate: "2027-03-13", departureDate: "2027-03-15", arrivalTime: "02:30", departureTime: "02:30" } }, { ...props, services: [{ ...props.services[0], category: "OVERNIGHT" }] });
+    await submit(); await invalid("arrivalTime"); await invalid("departureTime");
+    const dstMessage = await page.locator("#departureTime-error").innerText();
+    assert.equal(await page.locator("#arrivalTime-error").innerText(), dstMessage);
+    await page.locator("#arrivalTime").fill("03:30"); await invalid("arrivalTime", false); await invalid("departureTime");
+    assert.ok((await page.getByRole("alert").innerText()).includes(dstMessage));
+    await page.locator("#departureTime").focus(); await page.keyboard.press("Tab");
+    assert.equal(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle), "solid");
+    await check("overnight-dst-partial-correction");
+    await page.locator("#departureTime").fill("03:30"); await invalid("departureTime", false);
+    assert.equal(await page.getByRole("alert").count(), 0);
+    await check("overnight-dst-final-correction");
 
     const visits = [{ date: "2027-01-07", startTime: "09:00", endTime: "09:30" }, { date: "2027-01-05", startTime: "09:00", endTime: "10:00" }, { date: "2027-01-06", startTime: "09:00", endTime: "10:00" }];
     for (const count of [2, 3]) {

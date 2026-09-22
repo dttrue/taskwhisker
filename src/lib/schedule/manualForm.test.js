@@ -8,7 +8,7 @@ import { manualBookingFailure } from "./manualBookingErrors.js";
 
 // Exercise the real component handlers with persistent hook state and a local
 // validation action. DOM measurements live in the opt-in browser fixture test.
-function formHarness(overrides = {}) {
+function formHarness(overrides = {}, category = "WALK") {
   const states = Object.assign([], overrides), inFlight = { current: false };
   let cursor = 0;
   const react = { ...React, useRef: () => inFlight, useState(initial) {
@@ -21,7 +21,7 @@ function formHarness(overrides = {}) {
     catch (error) { return manualBookingFailure(error, input); }
   } };
   const Form = surfaceLoader(null, "synthetic", { react, actions }).load("app/dashboard/schedule/new/ManualBookingForm.jsx").default;
-  const props = { initialDate: "2027-01-05", sitterName: "Synthetic Sitter", clients: [{ id: "client", name: "Synthetic Client", pets: [] }], services: [{ code: "WALK", name: "Walk", category: "WALK", durationMinutes: 30, basePriceCents: 2500 }] };
+  const props = { initialDate: "2027-01-05", sitterName: "Synthetic Sitter", clients: [{ id: "client", name: "Synthetic Client", pets: [] }], services: [{ code: "WALK", name: "Walk", category, durationMinutes: 30, basePriceCents: 2500 }] };
   function render() { cursor = 0; return Form(props); }
   function find(predicate, node = render()) {
     if (!React.isValidElement(node)) return null;
@@ -97,10 +97,11 @@ test("general transactional failures survive unrelated edits", () => {
 test("production recovery helpers preserve independent errors and handle dependent controls", async () => {
   const { recoverFieldErrors, displayFieldErrors, removeVisitErrors } = await import("./manualFormErrors.js");
   const errors = { "client.name": "Name", "client.addressLine1": "Street", clientId: "Client", petIds: "Pets", notes: "Notes", "visits.0.date": "Bad date", "visits.0.startTime": "Interval", "visits.0.endTime": "Interval", "visits.1.startTime": "Other visit", arrivalDate: "Stay range", departureDate: "Stay range" };
-  const changed = recoverFieldErrors(errors, "time-0");
+  const dependencies = { arrivalDate: ["arrivalDate", "departureDate"], departureDate: ["arrivalDate", "departureDate"], "visits.0.startTime": ["visits.0.startTime", "visits.0.endTime"], "visits.0.endTime": ["visits.0.startTime", "visits.0.endTime"] };
+  const changed = recoverFieldErrors(errors, "time-0", dependencies);
   assert.equal(changed["visits.0.date"], "Bad date"); assert.equal(changed["visits.1.startTime"], "Other visit"); assert.equal(changed.notes, "Notes");
   assert.ok(!changed["visits.0.endTime"]);
-  assert.deepEqual(recoverFieldErrors({ arrivalDate: "Stay range", departureDate: "Stay range", arrivalTime: "Bad time" }, "arrivalDate"), { arrivalTime: "Bad time" });
+  assert.deepEqual(recoverFieldErrors({ arrivalDate: "Stay range", departureDate: "Stay range", arrivalTime: "Bad time" }, "arrivalDate", dependencies), { arrivalTime: "Bad time" });
   assert.equal(recoverFieldErrors(errors, "client-select")["client.name"], "Name");
   assert.ok(!recoverFieldErrors(errors, "client-select").petIds);
   assert.equal(recoverFieldErrors(errors, "petIds").clientId, "Client");
@@ -110,9 +111,31 @@ test("production recovery helpers preserve independent errors and handle depende
   assert.ok(!recoverFieldErrors(errors, "service-overnight")["visits.0.date"]);
   assert.equal(recoverFieldErrors(errors, "service-overnight").arrivalDate, "Stay range");
   assert.deepEqual(recoverFieldErrors({ "visits.0.startTime": "Bad time", "visits.0.endTime": "Bad end" }, "service"), { "visits.0.startTime": "Bad time" });
-  assert.deepEqual(recoverFieldErrors({ "visits.0.date": "Interval", "visits.0.startTime": "Interval", "visits.0.endTime": "Interval", notes: "Notes" }, "service"), { notes: "Notes" });
+  assert.deepEqual(recoverFieldErrors({ "visits.0.date": "Interval", "visits.0.startTime": "Interval", "visits.0.endTime": "Interval", notes: "Notes" }, "service", { "visits.0.date": ["visits.0.startTime", "visits.0.endTime"], "visits.0.startTime": ["visits.0.endTime"] }), { notes: "Notes" });
   const extras = displayFieldErrors({ "extras.0.quantity": "First", "extras.1.quantity": "Second" }, [{ code: "A" }, { code: "B" }]);
   assert.deepEqual(recoverFieldErrors(extras, "extra-A"), { "extra:B": "Second" });
   assert.equal(removeVisitErrors(errors, 0)["visits.0.startTime"], "Other visit");
   assert.equal(removeVisitErrors(errors, 1)["visits.0.startTime"], "Interval");
+});
+
+
+test("independent overnight DST errors survive partial correction in the actual component", async () => {
+  const form = formHarness({ 2: "client", 7: { arrivalDate: "2027-03-13", departureDate: "2027-03-15", arrivalTime: "02:30", departureTime: "02:30" } }, "OVERNIGHT");
+  await form.submit();
+  for (const id of ["arrivalTime", "departureTime"]) assert.match(form.html(), new RegExp(`id="${id}"[^>]*aria-describedby="${id}-error"[^>]*aria-invalid="true"`));
+  form.change("arrivalTime", "03:30");
+  assert.match(form.html(), /id="arrivalTime"[^>]*aria-invalid="false"/);
+  assert.match(form.html(), /id="departureTime"[^>]*aria-describedby="departureTime-error"[^>]*aria-invalid="true"/);
+  assert.ok(form.html().includes('role="alert"'));
+  form.change("departureTime", "03:30");
+  assert.ok(!form.html().includes('role="alert"'));
+  assert.ok(!form.html().includes('aria-invalid="true"'));
+});
+test("dependency metadata, never message equality, controls related recovery", async () => {
+  const { recoverFieldErrors, removeVisitDependencies } = await import("./manualFormErrors.js");
+  assert.deepEqual(recoverFieldErrors({ arrivalTime: "Same", departureTime: "Same" }, "arrivalTime"), { departureTime: "Same" });
+  for (const messages of [["Same", "Same"], ["First wording", "Different wording"]]) {
+    assert.deepEqual(recoverFieldErrors({ arrivalDate: messages[0], departureDate: messages[1] }, "arrivalDate", { departureDate: ["arrivalDate", "departureDate"] }), {});
+  }
+  assert.deepEqual(removeVisitDependencies({ "visits.1.startTime": ["visits.1.endTime"], "visits.0.date": ["visits.0.startTime"] }, 0), { "visits.0.startTime": ["visits.0.endTime"] });
 });

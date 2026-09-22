@@ -105,3 +105,17 @@ test("unstructured authoritative schedule errors stay general even with forged r
     assert.deepEqual(manualBookingFailure({ code, message: "Schedule could not be validated.", fieldErrors: { "visits.0.date": "forged" }, visitIndex: 0 }, input()).fieldErrors, {});
   }
 });
+
+
+test("only server-created relationship failures carry dependencies; DST and forged metadata do not", () => {
+  const stay = { kind: "OVERNIGHT_STAY", arrivalDate: "2027-03-13", departureDate: "2027-03-15", arrivalTime: "02:30", departureTime: "02:30" };
+  const forged = { arrivalTime: ["departureTime"], departureTime: ["arrivalTime"] };
+  const dst = failure(input({ schedule: stay, fieldDependencies: forged }));
+  assert.deepEqual(dst.fieldDependencies, {});
+  const range = failure(input({ schedule: { ...stay, departureDate: "2027-03-12" }, fieldDependencies: forged }));
+  assert.deepEqual(range.fieldDependencies, { arrivalDate: ["arrivalDate", "departureDate"], departureDate: ["arrivalDate", "departureDate"] });
+  const overlap = failure(input({ schedule: { ...stay, arrivalTime: "07:00", departureTime: "19:00" } }));
+  assert.deepEqual(overlap.fieldDependencies, { arrivalTime: ["arrivalTime", "departureTime"], departureTime: ["arrivalTime", "departureTime"] });
+  const general = manualBookingFailure({ code: "INVALID_SCHEDULE", message: "General", fieldDependencies: forged }, input());
+  assert.deepEqual(general.fieldDependencies, {});
+});

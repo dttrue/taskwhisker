@@ -16,7 +16,7 @@ function fieldErrors(error, input) {
 // conflict and retry failures have no field mapping, even if an error carries one.
 export function manualBookingFailure(error, input) {
   const safe = ["NOT_AUTHORIZED", "INVALID_INPUT", "INVALID_SCHEDULE", "INVALID_LOCAL_TIME", "INVALID_CONFIGURATION", "CLIENT_UNAVAILABLE", "CLIENT_EXISTS", "BLOCKED_CLIENT", "SERVICE_UNAVAILABLE", "PET_UNAVAILABLE", "INVALID_PRICE", "QUOTE_UNAVAILABLE", "REVIEW_REQUIRED", "PRICE_CHANGED", "VISIT_ALREADY_STARTED", "SCHEDULE_CONFLICT"];
-  if (safe.includes(error.code) || error.code?.startsWith("OWNER_")) return { ok: false, code: error.code, error: error.message, fieldErrors: fieldErrors(error, input) };
+  if (safe.includes(error.code) || error.code?.startsWith("OWNER_")) return { ok: false, code: error.code, error: error.message, fieldErrors: fieldErrors(error, input), fieldDependencies: error instanceof ManualInputError ? error.fieldDependencies : {} };
   if (error.code === "P2002") return { ok: false, error: "A matching record was just created. Search for the client or retry your reviewed booking.", fieldErrors: {} };
   if (error.code === "P2034") return { ok: false, error: "The schedule changed while saving. Retry to check availability again.", fieldErrors: {} };
   return { ok: false, error: "The booking could not be processed. Please retry.", fieldErrors: {} };

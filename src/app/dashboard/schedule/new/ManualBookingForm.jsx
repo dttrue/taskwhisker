@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, FormField, FormFeedback, Notice } from "@/components/ui/Foundation";
 import { addCalendarDays, timeMinutes } from "@/lib/calendar/businessTime";
-import { displayFieldErrors, recoverFieldErrors, removeVisitErrors, validationSummary, hasAddressError, hasExtrasError } from "@/lib/schedule/manualFormErrors";
+import { displayFieldErrors, recoverFieldErrors, removeVisitErrors, removeVisitDependencies, validationSummary, hasAddressError, hasExtrasError } from "@/lib/schedule/manualFormErrors";
 import { reviewManualBooking, saveManualBooking, searchScheduleClients } from "../actions";
 
 function BookingField({ className = "", ...props }) {
@@ -43,12 +43,14 @@ export default function ManualBookingForm({ clients: initialClients, services, s
   const [fieldErrors, setFieldErrors] = useState({});
   const [addressOpen, setAddressOpen] = useState(false);
   const [extrasOpen, setExtrasOpen] = useState(false);
+  const [fieldDependencies, setFieldDependencies] = useState({});
   const summary = [error, validationSummary(fieldErrors)].filter(Boolean).join(" ");
-  function recover(id) { setFieldErrors((current) => recoverFieldErrors(current, id)); }
+  function recover(id) { setFieldErrors((current) => recoverFieldErrors(current, id, fieldDependencies)); }
   function showFailure(result) {
     const fields = displayFieldErrors(result.fieldErrors, input().extras);
     setError(Object.keys(fields).length ? "" : result.error);
     setFieldErrors(fields);
+    setFieldDependencies(result.fieldDependencies || {});
     if (hasAddressError(fields)) setAddressOpen(true);
     if (hasExtrasError(fields)) setExtrasOpen(true);
   }
@@ -62,7 +64,7 @@ export default function ManualBookingForm({ clients: initialClients, services, s
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
-    if (reset) { setFieldErrors({}); setError(""); }
+    if (reset) { setFieldErrors({}); setFieldDependencies({}); setError(""); }
     try { await work(); }
     catch { setError("Connection interrupted. Retry with the same booking details."); }
     finally { inFlight.current = false; setBusy(false); }
@@ -143,7 +145,7 @@ export default function ManualBookingForm({ clients: initialClients, services, s
           {visits.map((visit, index) => <fieldset key={index} className="min-w-0 space-y-3 border-t border-[var(--task-border)] pt-3"><legend className="font-semibold">Visit {index + 1}</legend>
             <BookingField id={`date-${index}`} error={fieldErrors[`visits.${index}.date`]} label="Date" type="date" required value={visit.date} onChange={(event) => setVisits(visits.map((item, i) => i === index ? { ...item, date: event.target.value } : item))} />
             <div className="grid grid-cols-2 gap-3"><BookingField id={`time-${index}`} error={fieldErrors[`visits.${index}.startTime`]} label="Start time" type="time" min="07:00" max="22:00" required value={visit.startTime} onChange={(event) => setVisits(visits.map((item, i) => i === index ? { ...item, startTime: event.target.value, endTime: endTime(event.target.value, service?.durationMinutes) } : item))} /><BookingField id={`end-${index}`} error={fieldErrors[`visits.${index}.endTime`]} label="End time" type="time" value={visit.endTime} readOnly /></div>
-            {visits.length > 1 && <Button variant="quiet" onClick={() => { setFieldErrors((current) => removeVisitErrors(current, index)); setVisits(visits.filter((_, i) => i !== index)); }}>Remove visit {index + 1}</Button>}
+            {visits.length > 1 && <Button variant="quiet" onClick={() => { setFieldErrors((current) => removeVisitErrors(current, index)); setFieldDependencies((current) => removeVisitDependencies(current, index)); setVisits(visits.filter((_, i) => i !== index)); }}>Remove visit {index + 1}</Button>}
           </fieldset>)}
           <Button variant="secondary" disabled={visits.length >= 366} onClick={() => {
             const last = visits.at(-1);

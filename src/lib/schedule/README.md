@@ -255,7 +255,10 @@ New files:
 The manual form wraps long labels locally and associates server validation with
 controls. Error keys are generated from the submitted array positions by the
 server. Editing clears only the changed control and explicitly dependent interval
-errors. Unrelated errors keep their associations, and the announced validation
+errors. Dependencies are explicit per-field lists generated only by server
+validation, never inferred from message text or accepted from submitted metadata.
+Independent overnight DST errors therefore remain independent even when their
+messages match. Unrelated errors keep their associations, and the announced validation
 summary reflects the remaining messages until the last one clears. Added rows
 preserve errors; removed rows remap errors with their surviving visits. Extra
 errors use the submitted code locally so quantity removal cannot shift them.
@@ -300,7 +303,9 @@ This fixture bundles the actual form, UI primitives and recovery helpers using
 already installed React and Next/SWC. Only initial synthetic state, navigation and
 actions are substituted. The action invokes production input normalization,
 authoritative schedule derivation and error serialization in memory. Native HTML
-validation is disabled only in this fixture to exercise server rejection. Sixteen
+validation is disabled only in this fixture to exercise server rejection. Twenty
 mobile/desktop cases cover multi-error recovery, independently controlled
 disclosures, submitted-order duration mapping, dynamic rows, general failures,
-keyboard focus and document overflow. No database or network service is used.
+keyboard focus and document overflow, including partial and final correction of
+both overnight DST-gap errors for March 13–15, 2027. No database or network
+service is used.

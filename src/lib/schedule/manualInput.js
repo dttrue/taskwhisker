@@ -9,35 +9,42 @@ export function deriveManualSchedule(schedule, careOption) {
   catch (error) {
     const visits = submittedVisits.get(schedule);
     if (visits && error.code === "INVALID_SCHEDULE" && error.message === "Visit duration differs from the selected option.") {
-      const fields = {};
+      const fields = {}, dependencies = {};
       visits.forEach((visit, index) => {
         if (timeMinutes(visit.endTime) - timeMinutes(visit.startTime) !== careOption.durationMinutes) {
           fields[`visits.${index}.startTime`] = error.message;
           fields[`visits.${index}.endTime`] = error.message;
+          const keys = [`visits.${index}.startTime`, `visits.${index}.endTime`];
+          for (const key of keys) dependencies[key] = keys;
         }
       });
-      throw new ManualInputError(error.code, error.message, fields);
+      throw new ManualInputError(error.code, error.message, fields, dependencies);
     }
     throw error;
   }
 }
 
 export class ManualInputError extends Error {
-  constructor(code, message, fieldErrors) {
+  constructor(code, message, fieldErrors, fieldDependencies = {}) {
     super(message);
     this.code = code;
     this.fieldErrors = fieldErrors;
+    this.fieldDependencies = fieldDependencies;
   }
 }
 
 // Keys describe this request's array positions, never browser-provided IDs or
 // error mappings. Validate all independent controls before returning a summary.
 export function normalizeManualInput(input) {
-  const fieldErrors = {};
+  const fieldErrors = {}, fieldDependencies = {};
   let firstCode;
-  function error(keys, message, code = "INVALID_INPUT") {
+  function error(keys, message, code = "INVALID_INPUT", related = false) {
     firstCode ||= code;
-    for (const key of keys) fieldErrors[key] ||= message;
+    for (const key of keys) {
+      if (fieldErrors[key]) continue;
+      fieldErrors[key] = message;
+      if (related) fieldDependencies[key] = keys;
+    }
   }
   function text(value, key, label, max = 200, optional = false) {
     if (optional && (value == null || value === "")) return null;
@@ -87,7 +94,7 @@ export function normalizeManualInput(input) {
       const start = check(`${prefix}.startTime`, () => timeMinutes(visit?.startTime));
       const end = check(`${prefix}.endTime`, () => timeMinutes(visit?.endTime));
       if (start !== null && end !== null && (start < 420 || end > 1320 || end <= start)) {
-        error([`${prefix}.date`, `${prefix}.startTime`, `${prefix}.endTime`], "Daytime visits require increasing times within 07:00–22:00.", "INVALID_SCHEDULE");
+        error([`${prefix}.date`, `${prefix}.startTime`, `${prefix}.endTime`], "Daytime visits require increasing times within 07:00–22:00.", "INVALID_SCHEDULE", true);
       }
       if (date !== null && start !== null && end !== null) windows.push({ index, start: date + start * 60000, end: date + end * 60000 });
     });
@@ -95,7 +102,7 @@ export function normalizeManualInput(input) {
     for (let i = 1; i < windows.length; i++) {
       if (windows[i].start < windows[i - 1].end) {
         const keys = [windows[i - 1], windows[i]].flatMap(({ index }) => ["date", "startTime", "endTime"].map((field) => `visits.${index}.${field}`));
-        error(keys, "Duplicate or overlapping visits are not allowed.", "INVALID_SCHEDULE");
+        error(keys, "Duplicate or overlapping visits are not allowed.", "INVALID_SCHEDULE", true);
       }
     }
   } else if (submitted?.kind === "OVERNIGHT_STAY") {
@@ -105,17 +112,17 @@ export function normalizeManualInput(input) {
     const departureTime = check("departureTime", () => timeMinutes(submitted.departureTime));
     if (arrival !== null && departure !== null) {
       const nights = (departure - arrival) / 86400000;
-      if (nights < 1 || nights > 366) error(["arrivalDate", "departureDate"], "Stay must contain 1 to 366 nights.", "INVALID_SCHEDULE");
+      if (nights < 1 || nights > 366) error(["arrivalDate", "departureDate"], "Stay must contain 1 to 366 nights.", "INVALID_SCHEDULE", true);
       else {
         for (let i = 0; i < nights; i++) {
           if (arrivalTime !== null) check("arrivalTime", () => businessWallTime(addCalendarDays(submitted.arrivalDate, i), submitted.arrivalTime));
           if (departureTime !== null) check("departureTime", () => businessWallTime(addCalendarDays(submitted.arrivalDate, i + 1), submitted.departureTime));
         }
-        if (nights > 1 && arrivalTime !== null && departureTime !== null && departureTime > arrivalTime) error(["arrivalTime", "departureTime"], "Duplicate or overlapping visits are not allowed.", "INVALID_SCHEDULE");
+        if (nights > 1 && arrivalTime !== null && departureTime !== null && departureTime > arrivalTime) error(["arrivalTime", "departureTime"], "Duplicate or overlapping visits are not allowed.", "INVALID_SCHEDULE", true);
       }
     }
   } else error(["schedule"], "Select 1 to 366 timed visits or an overnight stay.", "INVALID_SCHEDULE");
-  if (Object.keys(fieldErrors).length) throw new ManualInputError(firstCode, Object.values(fieldErrors)[0], fieldErrors);
+  if (Object.keys(fieldErrors).length) throw new ManualInputError(firstCode, Object.values(fieldErrors)[0], fieldErrors, fieldDependencies);
   // Preserve canonical normalization, ordering, accepted values and hash shape.
   schedule = normalizeSchedule(submitted);
   if (submitted.kind === "TIMED_VISIT") submittedVisits.set(schedule, submitted.visits.map(({ startTime, endTime }) => ({ startTime, endTime })));
