@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { scheduleAccess, clientScope, fail } from "./access.js";
-import { deriveSchedule } from "../bookings/canonical/bookingContract.js";
+import { deriveManualSchedule as deriveSchedule } from "./manualInput.js";
 import { captureCareInstructions } from "../bookings/careSnapshot/contract.js";
 import { legacyBookingPrice } from "../bookings/legacyPricing.js";
 import { checkBlockedClientWithDb } from "../blocklist/blockedClientContract.js";

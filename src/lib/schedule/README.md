@@ -254,8 +254,15 @@ New files:
 
 The manual form wraps long labels locally and associates server validation with
 controls. Error keys are generated from the submitted array positions by the
-server; editing or adding/removing rows discards the previous submission's errors.
-The announced summary remains. Conflict, retry and review-token failures remain
+server. Editing clears only the changed control and explicitly dependent interval
+errors. Unrelated errors keep their associations, and the announced validation
+summary reflects the remaining messages until the last one clears. Added rows
+preserve errors; removed rows remap errors with their surviving visits. Extra
+errors use the submitted code locally so quantity removal cannot shift them.
+Address and Extras have independent open state; new errors reopen a closed section.
+Authoritative catalog-duration errors use server-only submitted-order metadata
+(without changing signed input JSON), marking only failing time controls. Unknown
+schedule errors remain general. Conflict, retry and review-token failures remain
 general alerts. Input normalization is isolated in `manualInput.js`; database
 queries, pricing and transaction/write behavior remain unchanged.
 
@@ -280,3 +287,20 @@ uses actual components and built CSS with synthetic hook/action state, aborts pa
 network requests, and checks 390×844 and 1440×900 layouts. Screenshots are optional
 and must remain outside the repository. Unit tests separately exercise the real
 form's handlers, error clearing, and row removal with an in-memory action seam.
+
+
+For live mounted-React interaction QA, use the same three environment variables
+(the installed module and browser paths are required) with:
+
+```sh
+node src/lib/schedule/manualForm.live.browser.mjs
+```
+
+This fixture bundles the actual form, UI primitives and recovery helpers using
+already installed React and Next/SWC. Only initial synthetic state, navigation and
+actions are substituted. The action invokes production input normalization,
+authoritative schedule derivation and error serialization in memory. Native HTML
+validation is disabled only in this fixture to exercise server rejection. Sixteen
+mobile/desktop cases cover multi-error recovery, independently controlled
+disclosures, submitted-order duration mapping, dynamic rows, general failures,
+keyboard focus and document overflow. No database or network service is used.

@@ -1,5 +1,26 @@
-import { normalizeSchedule } from "../bookings/canonical/bookingContract.js";
+import { normalizeSchedule, deriveSchedule } from "../bookings/canonical/bookingContract.js";
 import { dateNumber, timeMinutes, businessWallTime, addCalendarDays } from "../calendar/businessTime.js";
+
+// Server-only association: never serialized into the signed intent or accepted
+// from browser metadata. Canonical normalization is free to sort its own rows.
+const submittedVisits = new WeakMap();
+export function deriveManualSchedule(schedule, careOption) {
+  try { return deriveSchedule(schedule, careOption); }
+  catch (error) {
+    const visits = submittedVisits.get(schedule);
+    if (visits && error.code === "INVALID_SCHEDULE" && error.message === "Visit duration differs from the selected option.") {
+      const fields = {};
+      visits.forEach((visit, index) => {
+        if (timeMinutes(visit.endTime) - timeMinutes(visit.startTime) !== careOption.durationMinutes) {
+          fields[`visits.${index}.startTime`] = error.message;
+          fields[`visits.${index}.endTime`] = error.message;
+        }
+      });
+      throw new ManualInputError(error.code, error.message, fields);
+    }
+    throw error;
+  }
+}
 
 export class ManualInputError extends Error {
   constructor(code, message, fieldErrors) {
@@ -97,6 +118,7 @@ export function normalizeManualInput(input) {
   if (Object.keys(fieldErrors).length) throw new ManualInputError(firstCode, Object.values(fieldErrors)[0], fieldErrors);
   // Preserve canonical normalization, ordering, accepted values and hash shape.
   schedule = normalizeSchedule(submitted);
+  if (submitted.kind === "TIMED_VISIT") submittedVisits.set(schedule, submitted.visits.map(({ startTime, endTime }) => ({ startTime, endTime })));
   return { clientId, client, petIds: [...new Set(petIds)].sort(), serviceCode, schedule, notes,
     extras: normalizedExtras.sort((a, b) => a.code.localeCompare(b.code)) };
 }

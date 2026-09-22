@@ -66,8 +66,42 @@ test("actual server actions return structured errors from the authorized normali
       assert.equal(result.ok, false);
       assert.deepEqual(Object.keys(result.fieldErrors), ["visits.0.date", "visits.0.startTime", "visits.0.endTime"]);
     }
+    const mixed = input({ schedule: { kind: "TIMED_VISIT", visits: [
+      { date: "2027-01-07", startTime: "09:00", endTime: "09:30" },
+      { date: "2027-01-05", startTime: "09:00", endTime: "10:00" },
+    ] } });
+    const durationFailure = await actions.reviewManualBooking(mixed);
+    assert.deepEqual(Object.keys(durationFailure.fieldErrors), ["visits.1.startTime", "visits.1.endTime"]);
     assert.equal(state.bookings.length, 0);
   } finally {
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
+test("catalog duration errors retain every failing submitted position after canonical sorting", async () => {
+  const { deriveManualSchedule } = await import("./manualInput.js");
+  const option = { durationMinutes: 30, offering: { billingUnit: "VISIT", scheduleKind: "TIMED_VISIT" } };
+  const rows = [
+    { date: "2027-01-07", startTime: "09:00", endTime: "09:30" },
+    { date: "2027-01-05", startTime: "09:00", endTime: "10:00", index: 0, fieldErrors: { "visits.0.date": "forged" } },
+    { date: "2027-01-06", startTime: "09:00", endTime: "10:00" },
+  ];
+  for (const count of [2, 3]) {
+    const raw = input({ schedule: { kind: "TIMED_VISIT", visits: rows.slice(0, count) } });
+    const normalized = normalizeManualInput(raw);
+    assert.equal(normalized.schedule.visits[0].date, "2027-01-05");
+    // The server association is absent from the signed JSON shape.
+    const before = JSON.stringify(normalized);
+    assert.throws(() => deriveManualSchedule(normalized.schedule, option), (error) => {
+      const result = manualBookingFailure(error, raw);
+      assert.deepEqual(Object.keys(result.fieldErrors), count === 2 ? ["visits.1.startTime", "visits.1.endTime"] : ["visits.1.startTime", "visits.1.endTime", "visits.2.startTime", "visits.2.endTime"]);
+      return true;
+    });
+    assert.equal(JSON.stringify(normalized), before);
+  }
+});
+test("unstructured authoritative schedule errors stay general even with forged row metadata", () => {
+  for (const code of ["INVALID_SCHEDULE", "INVALID_LOCAL_TIME"]) {
+    assert.deepEqual(manualBookingFailure({ code, message: "Schedule could not be validated.", fieldErrors: { "visits.0.date": "forged" }, visitIndex: 0 }, input()).fieldErrors, {});
   }
 });

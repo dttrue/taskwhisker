@@ -8,12 +8,7 @@ function fieldErrors(error, input) {
     PET_UNAVAILABLE: ["petIds"], INVALID_CONFIGURATION: ["serviceCode"], INVALID_PRICE: ["serviceCode"],
     SERVICE_UNAVAILABLE: [error.message === "A selected extra is no longer available." ? "extras" : "serviceCode"],
   };
-  if (error.code === "INVALID_SCHEDULE" || error.code === "INVALID_LOCAL_TIME") {
-    if (error.message === "Schedule and catalog billing semantics disagree.") fields[error.code] = ["serviceCode"];
-    else if (input?.schedule?.kind === "OVERNIGHT_STAY") fields[error.code] = ["arrivalDate", "departureDate", "arrivalTime", "departureTime"];
-    else if (Array.isArray(input?.schedule?.visits)) fields[error.code] = input.schedule.visits.slice(0, 366).flatMap((_, i) => ["date", "startTime", "endTime"].map((key) => `visits.${i}.${key}`));
-    else fields[error.code] = ["schedule"];
-  }
+  // A schedule error without trusted row metadata belongs in the summary.
   return Object.fromEntries((fields[error.code] || []).map((key) => [key, error.message]));
 }
 
